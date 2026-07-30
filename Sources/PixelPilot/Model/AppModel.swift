@@ -17,11 +17,26 @@ final class AppModel {
   private(set) var mediaKeysActive = false
 
   let log = DiagnosticsLog()
-  let preferences = Preferences.shared
+  let preferences: Preferences
 
   let hotkeys = HotkeyStore()
   let presets = PresetStore.shared
   let systemAudio = SystemAudioModel()
+
+  /// Where displays come from. Injectable so reconnect and disappearance can be
+  /// tested without unplugging a cable.
+  @ObservationIgnored private let discovery: any DisplayDiscovering
+  @ObservationIgnored private let gamma: GammaDimmer
+
+  init(
+    discovery: any DisplayDiscovering = SystemDisplayDiscovery(),
+    gamma: GammaDimmer = .shared,
+    preferences: Preferences = .shared
+  ) {
+    self.discovery = discovery
+    self.gamma = gamma
+    self.preferences = preferences
+  }
 
   @ObservationIgnored private var presetTask: Task<Void, Never>?
   @ObservationIgnored private var audioObservation: SystemVolume.DefaultOutputObservation?
@@ -37,12 +52,12 @@ final class AppModel {
     events.onWake = { [weak self] in
       // Gamma does not survive sleep, and a display may have changed while we
       // were out. Both need handling, in that order.
-      GammaDimmer.shared.reassertAll()
+      self?.gamma.reassertAll()
       self?.refresh()
     }
-    events.onColorSettingsChanged = {
+    events.onColorSettingsChanged = { [weak self] in
       // Night Shift or a profile change just reset the gamma table.
-      GammaDimmer.shared.reassertAll()
+      self?.gamma.reassertAll()
     }
     events.onAppearanceChanged = { [weak self] isDark in
       self?.applyAppearancePreset(isDark: isDark)
@@ -86,7 +101,7 @@ final class AppModel {
     activationTask?.cancel()
     // Leaving a display dimmed after quitting would be indistinguishable from
     // a broken monitor.
-    GammaDimmer.shared.clearAll()
+    gamma.clearAll()
   }
 
   /// Rebuilds the display list.
@@ -96,9 +111,9 @@ final class AppModel {
   /// display" can only be established via `DisplayKey`, and the per-display
   /// state that matters is persisted under that key anyway.
   func refresh() {
-    let discovered = DisplayRegistry.discover(log: log)
+    let discovered = discovery.discoverDisplays(log: log)
 
-    GammaDimmer.shared.pruneOffline(
+    gamma.pruneOffline(
       onlineDisplayIDs: Set(discovered.map(\.displayID))
     )
 

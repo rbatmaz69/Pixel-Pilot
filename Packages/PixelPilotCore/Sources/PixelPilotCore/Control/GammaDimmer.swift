@@ -59,6 +59,46 @@ enum GammaRamp {
 public final class GammaDimmer: @unchecked Sendable {
   public static let shared = GammaDimmer()
 
+  /// What actually touches the display.
+  ///
+  /// Separated so the bookkeeping — which displays are dimmed, what survives a
+  /// reconfiguration, what gets restored — can be tested without darkening a
+  /// real screen. That bookkeeping is the part where a mistake leaves someone
+  /// staring at a black monitor, so it is the part that needs tests.
+  public protocol Backend: Sendable {
+    func applyRamp(_ ramp: [CGGammaValue], to displayID: CGDirectDisplayID)
+    func restore(_ displayID: CGDirectDisplayID)
+    func restoreAll()
+  }
+
+  struct CoreGraphicsBackend: Backend {
+    private let logger = Logger(subsystem: "dev.rb.pixelpilot", category: "gamma")
+
+    func applyRamp(_ ramp: [CGGammaValue], to displayID: CGDirectDisplayID) {
+      let result = ramp.withUnsafeBufferPointer { buffer -> CGError in
+        guard let base = buffer.baseAddress else { return .failure }
+        // The same ramp for all three channels: this is a luminance change,
+        // not a colour correction.
+        return CGSetDisplayTransferByTable(displayID, UInt32(buffer.count), base, base, base)
+      }
+      if result != .success {
+        logger.error(
+          "CGSetDisplayTransferByTable failed for \(displayID, privacy: .public): \(result.rawValue)"
+        )
+      }
+    }
+
+    func restore(_ displayID: CGDirectDisplayID) {
+      // CoreGraphics has no per-display restore; this is the only lever.
+      CGDisplayRestoreColorSyncSettings()
+    }
+
+    func restoreAll() {
+      CGDisplayRestoreColorSyncSettings()
+    }
+  }
+
+  private let backend: any Backend
   private let lock = NSLock()
   /// Desired dimming per display. Also the source of truth for reasserting.
   private var fractions: [CGDirectDisplayID: Double] = [:]
@@ -66,7 +106,14 @@ public final class GammaDimmer: @unchecked Sendable {
 
   private let logger = Logger(subsystem: "dev.rb.pixelpilot", category: "gamma")
 
-  public init() {}
+  public init(backend: (any Backend)? = nil) {
+    self.backend = backend ?? CoreGraphicsBackend()
+  }
+
+  /// Displays currently dimmed, for tests and diagnostics.
+  public var dimmedDisplays: Set<CGDirectDisplayID> {
+    lock.withLock { Set(fractions.keys) }
+  }
 
   /// `fraction` of 1.0 removes dimming; lower values darken. Values below the
   /// floor are clamped rather than rejected.
@@ -104,7 +151,7 @@ public final class GammaDimmer: @unchecked Sendable {
     for displayID in displays {
       apply(1.0, to: displayID)
     }
-    CGDisplayRestoreColorSyncSettings()
+    backend.restoreAll()
   }
 
   /// Reapplies dimming after something else clobbered the gamma table.
@@ -133,21 +180,10 @@ public final class GammaDimmer: @unchecked Sendable {
 
   private func apply(_ fraction: Double, to displayID: CGDirectDisplayID) {
     guard fraction < 1.0 else {
-      CGDisplayRestoreColorSyncSettings()
+      backend.restore(displayID)
       return
     }
-
-    let ramp = GammaRamp.linear(fraction: fraction)
-    let result = ramp.withUnsafeBufferPointer { buffer -> CGError in
-      guard let base = buffer.baseAddress else { return .failure }
-      // The same ramp for all three channels: this is a luminance change, not a
-      // colour correction.
-      return CGSetDisplayTransferByTable(displayID, UInt32(buffer.count), base, base, base)
-    }
-
-    if result != .success {
-      logger.error("CGSetDisplayTransferByTable failed for \(displayID, privacy: .public): \(result.rawValue)")
-    }
+    backend.applyRamp(GammaRamp.linear(fraction: fraction), to: displayID)
   }
 
   // MARK: - Safety net

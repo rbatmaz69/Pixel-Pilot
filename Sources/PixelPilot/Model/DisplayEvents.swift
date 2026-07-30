@@ -21,7 +21,7 @@ final class DisplayEvents {
 
   /// Coalesces the bursts of notifications macOS emits for a single physical
   /// event — plugging in one monitor can produce half a dozen.
-  private var pendingReconfiguration: Task<Void, Never>?
+  private let reconfiguration = Debouncer(delay: .milliseconds(400))
 
   var onDisplaysChanged: (() -> Void)?
   var onWake: (() -> Void)?
@@ -89,24 +89,19 @@ final class DisplayEvents {
     observers.removeAll()
     appearanceObservation?.invalidate()
     appearanceObservation = nil
-    pendingReconfiguration?.cancel()
-    pendingReconfiguration = nil
+
+    let debouncer = reconfiguration
+    Task { await debouncer.cancel() }
   }
 
-  deinit {
-    pendingReconfiguration?.cancel()
-  }
-
-  /// Debounces to the trailing edge. This is a short-lived task created in
-  /// response to a real event, not a recurring timer — it exists for a few
-  /// hundred milliseconds and then the app is quiescent again.
+  /// Hands the burst to the trailing-edge debouncer. Nothing stays scheduled
+  /// once it fires — see `Debouncer`, where that property is tested.
   private func scheduleReconfiguration() {
-    pendingReconfiguration?.cancel()
-    pendingReconfiguration = Task { [weak self] in
-      try? await Task.sleep(for: .milliseconds(400))
-      guard !Task.isCancelled else { return }
-      self?.pendingReconfiguration = nil
-      self?.onDisplaysChanged?()
+    let debouncer = reconfiguration
+    Task { [weak self] in
+      await debouncer.trigger {
+        await MainActor.run { self?.onDisplaysChanged?() }
+      }
     }
   }
 }

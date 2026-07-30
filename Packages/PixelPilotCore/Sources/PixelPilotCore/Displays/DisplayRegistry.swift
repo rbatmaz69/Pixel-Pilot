@@ -45,6 +45,49 @@ public struct DiscoveredDisplay: Sendable {
   public let transport: (any DDCTransport)?
 
   public var supportsDDC: Bool { transport != nil }
+
+  /// Public so tests can stand up a display set without hardware. The real
+  /// path builds these in `DisplayRegistry.discover`.
+  public init(
+    displayID: CGDirectDisplayID,
+    key: DisplayKey,
+    name: String,
+    isBuiltin: Bool,
+    vendorNumber: UInt32 = 0,
+    modelNumber: UInt32 = 0,
+    serialNumber: UInt32 = 0,
+    attributes: ProductAttributes? = nil,
+    transport: (any DDCTransport)? = nil
+  ) {
+    self.displayID = displayID
+    self.key = key
+    self.name = name
+    self.isBuiltin = isBuiltin
+    self.vendorNumber = vendorNumber
+    self.modelNumber = modelNumber
+    self.serialNumber = serialNumber
+    self.attributes = attributes
+    self.transport = transport
+  }
+}
+
+/// Where the list of displays comes from.
+///
+/// A seam, so the reconnect and disappearance paths can be exercised without
+/// physically unplugging a monitor. Those paths are hard to reach by hand and
+/// easy to get wrong: a `CGDirectDisplayID` is reassigned across
+/// reconfigurations, so "the same display" only means anything via `DisplayKey`.
+public protocol DisplayDiscovering: Sendable {
+  func discoverDisplays(log: DiagnosticsLog?) -> [DiscoveredDisplay]
+}
+
+/// The real one.
+public struct SystemDisplayDiscovery: DisplayDiscovering {
+  public init() {}
+
+  public func discoverDisplays(log: DiagnosticsLog?) -> [DiscoveredDisplay] {
+    DisplayRegistry.discover(log: log)
+  }
 }
 
 /// Enumerates displays and wires each one up to its DDC transport.

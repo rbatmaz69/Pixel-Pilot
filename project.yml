@@ -53,6 +53,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.rb.pixelpilot
         PRODUCT_NAME: Pixel Pilot
+        # The product name has a space, and the module name is derived from it —
+        # which would make the module "Pixel_Pilot" and unimportable from tests.
+        PRODUCT_MODULE_NAME: PixelPilot
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
 
@@ -99,12 +102,42 @@ targets:
         Release:
           SWIFT_COMPILATION_MODE: wholemodule
 
+  # The core package carries most of the tests, but the reconnect and
+  # disappearance paths live in AppModel and cannot be reached from there.
+  PixelPilotTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/PixelPilotTests
+    dependencies:
+      - target: PixelPilot
+      - package: PixelPilotCore
+        product: PixelPilotCore
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Pixel Pilot.app/Contents/MacOS/Pixel Pilot
+        # Must match the host app's team. A test bundle signed by anyone else is
+        # refused at load time — "mapping process and mapped file have different
+        # Team IDs" — because it is dlopen'd into the signed app.
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: UA98Q7K4JR
+
 schemes:
   PixelPilot:
     build:
       targets:
         PixelPilot: all
+        PixelPilotTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - PixelPilotTests
     archive:
       config: Release
