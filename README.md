@@ -138,6 +138,46 @@ guarantee the system already made. `atexit` is kept for the orderly-exit path.
 Both commands stay in `ppctl` so the finding can be re-checked on a future macOS
 rather than taken on faith.
 
+## Finding out what a display really implements
+
+The capability string is a self-report, and displays under-declare. `ppctl scan`
+reads all 256 VCP registers and sorts them into three groups:
+
+| | |
+|---|---|
+| `absent` | no reply, or the display declined the feature |
+| `phantom` | a well-formed reply that cannot describe a control — 0xFFFF or 0 maximum, or current above maximum |
+| `live` | a well-formed reply with a plausible range |
+
+The middle group is the reason the command exists. A dead register still answers:
+asking this panel for its speaker volume returns a correctly checksummed reply
+carrying a maximum of 0xFFFF. A scan that only asked "did it respond?" would call
+that a working control.
+
+`ppctl try <vcp>` write-probes a single register and restores its value on every
+path. Factory-reset codes, input source and power mode are refused outright —
+that guard is in code, with a test, because a sweep of undocumented registers is
+exactly how a monitor ends up reset or switched to an input that takes the
+picture and the DDC channel with it.
+
+Two things worth knowing before trusting a scan. The scan timing keeps
+`writeCycles` at 2: with one cycle this panel reported 255 of 256 registers
+absent, brightness included. And a register that accepts a write proves only that
+it stores a value — whether anything is connected to it is a separate question,
+answered by looking or listening.
+
+### The audio verdict on the development panel
+
+For the record, since the question keeps coming up: this display has no audio
+control over DDC at all. Seven of the nine MCCS audio features are explicitly
+declined; speaker volume and mute are phantoms. Scanning the alternate I2C
+address 0x50 returns the identical 34 registers, so nothing is hidden there.
+
+Its speakers and headphone jack can only be driven from its own on-screen menu.
+The menu bar's volume row therefore controls the system output and offers a
+device picker, which is the one thing that helps when audio is going somewhere
+with a fixed level.
+
 ## Panels lie
 
 Monitors answer DDC queries for features they do not have. The Samsung U32T1
