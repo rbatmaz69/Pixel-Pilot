@@ -42,6 +42,66 @@ struct PanelCard<Content: View>: View {
   }
 }
 
+/// A column of cards, for a settings tab or any other page made of sections.
+///
+/// The counterpart to `Form(.grouped)`, which was the last thing in the app
+/// still drawing system chrome: its sections come with their own radius and
+/// their own inset, neither of which can be restyled, so a settings window kept
+/// looking like a different application from the one it configures.
+struct CardStack<Content: View>: View {
+  @ViewBuilder var content: Content
+
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: Layout.loose) {
+        content
+      }
+      .padding(Layout.loose)
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+}
+
+/// The closing note under a card's controls — the old `Section(footer:)`.
+struct CardFooter: View {
+  let text: String
+
+  init(_ text: String) { self.text = text }
+
+  var body: some View {
+    Text(text)
+      .font(TypeScale.detail)
+      .foregroundStyle(.secondary)
+      .fixedSize(horizontal: false, vertical: true)
+  }
+}
+
+/// A label on the left, a control on the right.
+///
+/// Outside a `Form` nothing aligns the two for you, and a column of pickers
+/// each as wide as its own longest option reads as a broken layout.
+struct ControlRow<Control: View>: View {
+  let title: String
+  var detail: String?
+  @ViewBuilder var control: Control
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: Layout.hair) {
+      HStack {
+        Text(title).font(TypeScale.rowTitle)
+        Spacer(minLength: Layout.snug)
+        control.fixedSize()
+      }
+      if let detail {
+        Text(detail)
+          .font(TypeScale.detail)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+  }
+}
+
 extension View {
   /// The card background on its own, for places that carry their own heading.
   func cardSurface(accent: Color, radius: CGFloat = Layout.radiusCard) -> some View {

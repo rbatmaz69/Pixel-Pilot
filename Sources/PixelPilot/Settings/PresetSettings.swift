@@ -14,7 +14,6 @@ struct PresetSettings: View {
 
   @State private var newPresetName = ""
   @State private var selectedSymbol = "moon.fill"
-  @State private var renaming: Preset?
   @Namespace private var symbolNamespace
 
   /// A small set rather than a full symbol browser — enough to tell presets
@@ -25,58 +24,59 @@ struct PresetSettings: View {
   ]
 
   var body: some View {
-    Form {
-      Section {
-        if model.presets.presets.isEmpty {
-          Text("No presets yet. Set your displays the way you want them, then capture that below.")
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        } else {
-          ForEach(model.presets.presets) { preset in
-            presetRow(preset)
-              // Capturing and deleting both happen with this list on screen.
-              // Growing in and fading out is the difference between a list that
-              // responds and one that flickers.
-              .transition(.asymmetric(
-                insertion: .scale(scale: 0.92, anchor: .leading).combined(with: .opacity),
-                removal: .opacity
-              ))
+    CardStack {
+      PanelCard(title: "Presets", systemImage: "square.stack") {
+        VStack(alignment: .leading, spacing: Layout.snug) {
+          if model.presets.presets.isEmpty {
+            Text("No presets yet. Set your displays the way you want them, "
+              + "then capture that below.")
+              .font(.callout)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          } else {
+            ForEach(model.presets.presets) { preset in
+              presetRow(preset)
+                // Capturing and deleting both happen with this list on screen.
+                // Growing in and fading out is the difference between a list
+                // that responds and one that flickers.
+                .transition(.asymmetric(
+                  insertion: .scale(scale: 0.92, anchor: .leading).combined(with: .opacity),
+                  removal: .opacity
+                ))
+            }
           }
         }
-      } header: {
-        Text("Presets")
+        .animation(motion.spatialDefault, value: model.presets.presets.count)
       }
-      .animation(motion.spatialDefault, value: model.presets.presets.count)
+      .entrance(index: 0)
 
-      Section("Capture the current state") {
-        symbolPicker
+      PanelCard(title: "Capture the current state", systemImage: "plus.circle") {
+        VStack(alignment: .leading, spacing: Layout.normal) {
+          symbolPicker
 
-        HStack(spacing: Layout.snug) {
-          TextField("Name", text: $newPresetName)
-            .textFieldStyle(.roundedBorder)
+          HStack(spacing: Layout.snug) {
+            TextField("Name", text: $newPresetName)
+              .textFieldStyle(.roundedBorder)
 
-          Button("Capture") {
-            let name = newPresetName.trimmingCharacters(in: .whitespaces)
-            guard !name.isEmpty else { return }
-            _ = model.captureCurrentState(name: name, symbolName: selectedSymbol)
-            newPresetName = ""
+            Button("Capture") {
+              let name = newPresetName.trimmingCharacters(in: .whitespaces)
+              guard !name.isEmpty else { return }
+              _ = model.captureCurrentState(name: name, symbolName: selectedSymbol)
+              newPresetName = ""
+            }
+            .buttonStyle(.soft)
+            .disabled(newPresetName.trimmingCharacters(in: .whitespaces).isEmpty)
           }
-          .buttonStyle(.soft)
-          .disabled(newPresetName.trimmingCharacters(in: .whitespaces).isEmpty)
+
+          CardFooter("Stores the brightness and contrast of every connected display. "
+            + "Input source is left out on purpose — switching inputs needs a confirmation, "
+            + "which a preset cannot ask for.")
         }
-
-        Text("Stores the brightness and contrast of every connected display. "
-          + "Input source is left out on purpose — switching inputs needs a confirmation, "
-          + "which a preset cannot ask for.")
-          .font(TypeScale.detail)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
       }
+      .entrance(index: 1)
 
-      appearanceSection
+      appearanceCard.entrance(index: 2)
     }
-    .formStyle(.grouped)
   }
 
   /// The symbol for a new preset, as a row of chips.
@@ -148,39 +148,43 @@ struct PresetSettings: View {
     return names.sorted().joined(separator: ", ")
   }
 
-  @ViewBuilder
-  private var appearanceSection: some View {
-    Section {
-      Toggle("Switch presets with the system appearance", isOn: Binding(
-        get: { model.presets.appearanceBindings.isEnabled },
-        set: { value in model.presets.updateAppearanceBindings { $0.isEnabled = value } }
-      ))
+  private var appearanceCard: some View {
+    PanelCard(title: "Automatic", systemImage: "circle.lefthalf.filled") {
+      VStack(alignment: .leading, spacing: Layout.normal) {
+        Toggle("Switch presets with the system appearance", isOn: Binding(
+          get: { model.presets.appearanceBindings.isEnabled },
+          set: { value in model.presets.updateAppearanceBindings { $0.isEnabled = value } }
+        ))
 
-      Picker("When light", selection: appearanceBinding(isDark: false)) {
-        Text("Do nothing").tag(UUID?.none)
-        ForEach(model.presets.presets) { preset in
-          Text(preset.name).tag(UUID?.some(preset.id))
+        ControlRow(title: "When light") {
+          Picker("", selection: appearanceBinding(isDark: false)) {
+            Text("Do nothing").tag(UUID?.none)
+            ForEach(model.presets.presets) { preset in
+              Text(preset.name).tag(UUID?.some(preset.id))
+            }
+          }
+          .labelsHidden()
         }
-      }
-      .disabled(!model.presets.appearanceBindings.isEnabled)
+        .disabled(!model.presets.appearanceBindings.isEnabled)
 
-      Picker("When dark", selection: appearanceBinding(isDark: true)) {
-        Text("Do nothing").tag(UUID?.none)
-        ForEach(model.presets.presets) { preset in
-          Text(preset.name).tag(UUID?.some(preset.id))
+        ControlRow(title: "When dark") {
+          Picker("", selection: appearanceBinding(isDark: true)) {
+            Text("Do nothing").tag(UUID?.none)
+            ForEach(model.presets.presets) { preset in
+              Text(preset.name).tag(UUID?.some(preset.id))
+            }
+          }
+          .labelsHidden()
         }
+        .disabled(!model.presets.appearanceBindings.isEnabled)
+
+        // Explaining the choice, because a schedule is the obvious thing to
+        // look for and its absence is deliberate.
+        CardFooter("Tied to light and dark rather than to a clock. macOS announces the "
+          + "change, so nothing has to run in the background waiting for it — and following "
+          + "sunrise properly would mean asking for your location.")
       }
-      .disabled(!model.presets.appearanceBindings.isEnabled)
-    } header: {
-      Text("Automatic")
-    } footer: {
-      // Explaining the choice, because a schedule is the obvious thing to look
-      // for and its absence is deliberate.
-      Text("Tied to light and dark rather than to a clock. macOS announces the change, "
-        + "so nothing has to run in the background waiting for it — and following sunrise "
-        + "properly would mean asking for your location.")
-        .font(.caption)
-        .foregroundStyle(.secondary)
+      .animation(motion.effectDefault, value: model.presets.appearanceBindings.isEnabled)
     }
   }
 
