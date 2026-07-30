@@ -68,20 +68,36 @@ faults.
 ## Code signing and the Accessibility permission
 
 The brightness keys are intercepted with a `CGEventTap`, which needs
-Accessibility permission. macOS ties that permission to the app's code
-signature.
+Accessibility permission, and macOS ties that permission to the app's code
+signature. An ad-hoc signature changes on every build, so the permission has to
+be granted again each time — which makes the app unusable as a daily tool.
 
-Without a signing identity the app is signed ad-hoc, and the signature changes
-on every build — so the permission has to be granted again after each rebuild.
-The fix is free and takes a minute:
+`project.yml` therefore sets `CODE_SIGN_STYLE: Automatic` with a
+`DEVELOPMENT_TEAM`. A free Apple ID is enough; no paid developer program is
+involved.
 
-1. Xcode → Settings → Accounts → add your Apple ID.
-2. In `project.yml`, replace the `CODE_SIGN_*` settings with
-   `CODE_SIGN_STYLE: Automatic` and `DEVELOPMENT_TEAM: <your team id>`.
-3. `./Scripts/generate.sh`
+Worth knowing if you clone this on another machine: **signing in to Xcode alone
+does nothing.** Xcode only issues a development certificate when a target asks
+for one, so with manual ad-hoc signing the account sits there registered and the
+certificate list stays empty. Setting up a new machine takes:
 
-No paid developer program is needed. Everything except the media keys works
-without this.
+1. Xcode → Settings → Accounts → add the Apple ID.
+2. Open the project, select the target, Signing & Capabilities → pick the Team.
+3. Put that team id into `project.yml` as `DEVELOPMENT_TEAM` — `Scripts/generate.sh`
+   rewrites the project from that file, so a selection made only in the UI is
+   lost on the next regeneration.
+
+`Scripts/install.sh` falls back to ad-hoc signing when no certificate exists, so
+it keeps working through that setup.
+
+To confirm the signature is actually stable, install twice and compare:
+
+```bash
+codesign -dvvv "/Applications/Pixel Pilot.app" 2>&1 | grep CDHash
+```
+
+The hash must not change between builds. That is the property the Accessibility
+grant depends on — not the file path.
 
 ## Notes on the private APIs
 

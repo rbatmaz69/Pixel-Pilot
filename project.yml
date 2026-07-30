@@ -77,6 +77,7 @@ targets:
         # need for a certificate no matter which team is selected.
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: UA98Q7K4JR
         CODE_SIGNING_REQUIRED: YES
         CODE_SIGNING_ALLOWED: YES
         ENABLE_HARDENED_RUNTIME: YES
