@@ -33,15 +33,29 @@ private struct GeneralSettings: View {
           .onChange(of: global.mediaKeysEnabled) { _, _ in apply() }
 
         if model.needsAccessibilityPermission {
-          HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-              .foregroundStyle(.orange)
-            Text("Accessibility permission is required.")
-              .foregroundStyle(.secondary)
-            Button("Open Settings…") { model.requestAccessibilityPermission() }
-              .buttonStyle(.link)
-          }
-          .font(.callout)
+          permissionRow(
+            "Accessibility — needed to see the keys at all.",
+            action: model.requestAccessibilityPermission
+          )
+        }
+
+        if model.needsInputMonitoringPermission {
+          // A separate grant, and the one that decides whether brightness keys
+          // work on anything other than an Apple keyboard.
+          permissionRow(
+            "Input Monitoring — needed for brightness keys on non-Apple keyboards.",
+            action: model.requestInputMonitoringPermission
+          )
+        }
+
+        if let observed = model.lastObservedKey {
+          // Shows what the keyboard actually sends. On a keyboard that is not
+          // working, this is the difference between diagnosing it and guessing.
+          Text(String(
+            format: "Last key seen: usage 0x%02X from %@", observed.usage, observed.device
+          ))
+          .font(.caption.monospaced())
+          .foregroundStyle(.secondary)
         }
 
         Toggle("Show the on-screen indicator", isOn: $global.showsOSD)
@@ -76,6 +90,19 @@ private struct GeneralSettings: View {
     }
     .formStyle(.grouped)
     .scrollDisabled(true)
+  }
+
+  private func permissionRow(_ text: String, action: @escaping () -> Void) -> some View {
+    HStack(spacing: 8) {
+      Image(systemName: "exclamationmark.triangle.fill")
+        .foregroundStyle(.orange)
+      Text(text)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      Button("Open Settings…", action: action)
+        .buttonStyle(.link)
+    }
+    .font(.callout)
   }
 
   private func apply() {

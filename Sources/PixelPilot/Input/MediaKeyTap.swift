@@ -22,6 +22,18 @@ final class MediaKeyTap {
     case volumeUp
     case volumeDown
     case mute
+
+    /// Identifies the *action*, so the same press arriving over the event tap
+    /// and over HID collides and is handled once.
+    var deduplicationKey: Int {
+      switch self {
+      case .brightnessUp: 1
+      case .brightnessDown: 2
+      case .volumeUp: 3
+      case .volumeDown: 4
+      case .mute: 5
+      }
+    }
   }
 
   struct Event {

@@ -15,6 +15,14 @@ final class AppModel {
   /// Whether the media keys are actually being intercepted. Surfaced so the UI
   /// can explain the missing permission instead of silently doing nothing.
   private(set) var mediaKeysActive = false
+  /// Whether the HID layer is being watched as well, which is what makes
+  /// third-party keyboards' brightness keys work.
+  private(set) var hidKeysActive = false
+
+  /// The most recent consumer-page press seen, whether or not it was
+  /// recognised — the settings window shows it so an unsupported keyboard can
+  /// be identified rather than guessed at.
+  private(set) var lastObservedKey: (usage: UInt32, device: String)?
 
   let log = DiagnosticsLog()
   let preferences: Preferences
@@ -44,6 +52,9 @@ final class AppModel {
   @ObservationIgnored private let events = DisplayEvents()
   @ObservationIgnored private let osd = OSDController()
   @ObservationIgnored private let mediaKeys = MediaKeyTap()
+  @ObservationIgnored private let hidKeys = HIDMediaKeyMonitor()
+  /// One press can reach us through both paths; whichever arrives first wins.
+  @ObservationIgnored private var keyDeduplicator = MediaKeyDeduplicator()
   @ObservationIgnored private let hotkeyCenter = HotkeyCenter()
   @ObservationIgnored private var activationTask: Task<Void, Never>?
 
@@ -66,6 +77,12 @@ final class AppModel {
 
     mediaKeys.handler = { [weak self] event in
       self?.handleMediaKey(event) ?? false
+    }
+    hidKeys.handler = { [weak self] event in
+      self?.handleHIDKey(event)
+    }
+    hidKeys.observer = { [weak self] usage, device in
+      self?.lastObservedKey = (usage, device)
     }
     startMediaKeys()
 
@@ -138,19 +155,57 @@ final class AppModel {
   func startMediaKeys() -> Bool {
     guard preferences.global.mediaKeysEnabled else {
       mediaKeysActive = false
+      hidKeysActive = false
+      mediaKeys.stop()
+      hidKeys.stop()
       return false
     }
     mediaKeysActive = mediaKeys.start()
-    return mediaKeysActive
+    // Independent of the tap: a keyboard whose keys macOS never translates is
+    // exactly the case where the tap succeeds and still sees nothing.
+    hidKeysActive = hidKeys.start()
+    keyDeduplicator.reset()
+    return mediaKeysActive || hidKeysActive
   }
 
   var needsAccessibilityPermission: Bool {
     preferences.global.mediaKeysEnabled && !MediaKeyTap.isTrusted
   }
 
+  /// Input Monitoring is a separate grant from Accessibility, and it is the one
+  /// that makes brightness keys work on keyboards other than Apple's.
+  var needsInputMonitoringPermission: Bool {
+    preferences.global.mediaKeysEnabled && !HIDMediaKeyMonitor.isTrusted
+  }
+
   func requestAccessibilityPermission() {
     MediaKeyTap.requestTrust()
     MediaKeyTap.openAccessibilitySettings()
+  }
+
+  func requestInputMonitoringPermission() {
+    HIDMediaKeyMonitor.requestTrust()
+    HIDMediaKeyMonitor.openInputMonitoringSettings()
+  }
+
+  /// Handles a key seen at the HID layer.
+  ///
+  /// Same actions as the event tap, minus the pass-through decision: reading
+  /// HID does not consume the event, so macOS still gets its copy. That is why
+  /// keys the app cannot act on need no special handling here.
+  private func handleHIDKey(_ event: HIDMediaKeyMonitor.Event) {
+    let action: MediaKeyTap.Key = switch event.key {
+    case .brightnessUp: .brightnessUp
+    case .brightnessDown: .brightnessDown
+    case .volumeUp: .volumeUp
+    case .volumeDown: .volumeDown
+    case .mute: .mute
+    }
+
+    guard keyDeduplicator.shouldHandle(key: action.deduplicationKey) else { return }
+    _ = handleMediaKey(
+      MediaKeyTap.Event(key: action, isRepeat: false, isFineAdjustment: false)
+    )
   }
 
   /// Decides whether Pixel Pilot handles a media key, or lets macOS have it.
@@ -160,6 +215,9 @@ final class AppModel {
   /// a far worse outcome than not handling it at all.
   private func handleMediaKey(_ event: MediaKeyTap.Event) -> Bool {
     guard let display = focusedDisplay, display.isReady else { return false }
+    // Also guards the tap path, so a press that arrived over HID a moment ago
+    // is not acted on twice.
+    guard keyDeduplicator.shouldHandle(key: event.key.deduplicationKey) else { return true }
 
     let settings = preferences.global
     let step = event.isFineAdjustment ? settings.fineKeyStep : settings.keyStep
