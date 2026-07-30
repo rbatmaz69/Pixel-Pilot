@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import PixelPilotCore
 
@@ -21,6 +22,9 @@ USAGE
   ppctl get <vcp> [options]           Read one VCP feature
   ppctl set <vcp> <value> [options]   Write one VCP feature
   ppctl audio [options]               Show which audio route a display resolves to
+  ppctl gamma <fraction> [hold]       Apply software dimming (1.0 restores). 'hold'
+                                      parks the process so recovery can be tested.
+  ppctl gamma-check                   Read the display's gamma table back
   ppctl probe-edid [options]          Experimental IOAVServiceCopyEDID dump
 
 OPTIONS
@@ -259,6 +263,45 @@ case "probe-edid":
       + "product=\(edid.productCode) serial=\(edid.serialNumber) year=\(edid.manufactureYear)")
   }
   dumpLogIfVerbose()
+
+case "gamma":
+  // Deliberately a separate command from anything the app uses: this exists to
+  // answer one question that cannot be answered by reading code — does the
+  // display come back if the process dies without running any cleanup?
+  let display = selectedDisplay()
+  let fraction = Double(arguments.first ?? "") ?? 0.85
+
+  if fraction >= 1.0 {
+    GammaDimmer.shared.clearAll()
+    print("Gamma restored on all displays.")
+  } else {
+    GammaDimmer.shared.setDimming(fraction, for: display.displayID)
+    print("\(display.name): gamma set to \(Int(fraction * 100))%.")
+    if arguments.count > 1, arguments[1] == "hold" {
+      print("Holding (pid \(ProcessInfo.processInfo.processIdentifier)). "
+        + "Kill this process to test recovery.")
+      // Park forever without spinning, so the process can be killed in a
+      // defined state.
+      dispatchMain()
+    }
+  }
+
+case "gamma-check":
+  // Reads the table back rather than trusting that a write took effect.
+  let display = selectedDisplay()
+  var red = [CGGammaValue](repeating: 0, count: 256)
+  var green = red
+  var blue = red
+  var count: UInt32 = 0
+  let result = CGGetDisplayTransferByTable(
+    display.displayID, 256, &red, &green, &blue, &count
+  )
+  guard result == .success, count > 0 else {
+    fail("could not read the gamma table (CGError \(result.rawValue))")
+  }
+  let peak = Double(red[Int(count) - 1])
+  print("\(display.name): \(count) entries, peak \(String(format: "%.4f", peak))")
+  print(peak >= 0.999 ? "  identity — no dimming applied" : "  DIMMED to \(Int(peak * 100))%")
 
 case "-h", "--help", "help":
   print(usage)

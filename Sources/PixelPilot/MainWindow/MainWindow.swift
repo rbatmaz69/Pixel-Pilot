@@ -58,6 +58,7 @@ private struct DisplayDetail: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 24) {
         controls
+        configuration
         capabilities
         diagnostics
       }
@@ -81,6 +82,20 @@ private struct DisplayDetail: View {
             onCommit: { _ in display.commitBrightness() }
           )
           .disabled(!display.isReady)
+        }
+
+        if display.supportsContrast {
+          labelled("Contrast", value: display.contrast) {
+            ExpressiveSlider(
+              value: Binding(
+                get: { display.contrast },
+                set: { display.setContrast($0) }
+              ),
+              accent: display.accent,
+              icon: "circle.lefthalf.filled"
+            )
+            .disabled(!display.isReady)
+          }
         }
 
         if display.supportsVolume {
@@ -123,6 +138,110 @@ private struct DisplayDetail: View {
       }
       content()
     }
+  }
+
+  private var configuration: some View {
+    GroupBox {
+      VStack(alignment: .leading, spacing: 14) {
+        Picker("Brightness via", selection: strategyBinding) {
+          ForEach(BrightnessStrategy.allCases, id: \.self) { strategy in
+            Text(strategy.displayName).tag(strategy)
+          }
+        }
+        .help("Automatic picks the best available path. Override only if that choice is wrong.")
+
+        Toggle("Keep dimming below the backlight minimum", isOn: extraDimmingBinding)
+          .help("Once the backlight is at zero, continue with the gamma table. "
+            + "Costs contrast and appears in screenshots.")
+
+        Toggle("Brightness keys act on this display", isOn: mediaKeysBinding)
+
+        Picker("Timing", selection: timingBinding) {
+          Text("Standard").tag(DDCTiming.default)
+          Text("Relaxed (for fussy panels)").tag(DDCTiming.relaxed)
+        }
+        .help("Increase this if readings fail intermittently or the display "
+          + "ignores the first change after being idle.")
+
+        accentPicker
+
+        HStack {
+          Button {
+            Task { await display.reprobeCapabilities() }
+          } label: {
+            if display.isProbing {
+              HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Probing…")
+              }
+            } else {
+              Text("Probe features again")
+            }
+          }
+          .disabled(display.isProbing)
+
+          Text("Takes a few seconds — one round trip per feature.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+      }
+      .padding(6)
+    } label: {
+      Label("This display", systemImage: "gearshape")
+    }
+  }
+
+  private var accentPicker: some View {
+    HStack {
+      Text("Accent")
+      Spacer()
+      // The default is derived from the display's identity, so the same monitor
+      // keeps its colour across launches. The override is for when that choice
+      // collides with a wallpaper.
+      ForEach(Array(AccentPalette.tones.enumerated()), id: \.offset) { index, tone in
+        let isSelected = display.settings.accentOverride == index
+        Circle()
+          .fill(tone)
+          .frame(width: 16, height: 16)
+          .overlay {
+            Circle().strokeBorder(.primary, lineWidth: isSelected ? 2 : 0)
+          }
+          .onTapGesture {
+            display.updateSettings { $0.accentOverride = isSelected ? nil : index }
+          }
+      }
+    }
+  }
+
+  // Bindings that read from persisted settings and write through the view
+  // model, so a change reaches the controllers and not just the checkbox.
+
+  private var strategyBinding: Binding<BrightnessStrategy> {
+    Binding(
+      get: { display.settings.brightnessStrategy },
+      set: { value in display.updateSettings { $0.brightnessStrategy = value } }
+    )
+  }
+
+  private var extraDimmingBinding: Binding<Bool> {
+    Binding(
+      get: { display.settings.extraDimmingEnabled },
+      set: { value in display.updateSettings { $0.extraDimmingEnabled = value } }
+    )
+  }
+
+  private var mediaKeysBinding: Binding<Bool> {
+    Binding(
+      get: { display.settings.respondsToMediaKeys },
+      set: { value in display.updateSettings { $0.respondsToMediaKeys = value } }
+    )
+  }
+
+  private var timingBinding: Binding<DDCTiming> {
+    Binding(
+      get: { display.settings.timing },
+      set: { value in display.updateSettings { $0.timing = value } }
+    )
   }
 
   /// The point of showing this is the failures. When a slider is missing, this

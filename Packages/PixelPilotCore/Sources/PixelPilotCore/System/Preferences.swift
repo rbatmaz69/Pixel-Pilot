@@ -47,6 +47,15 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
   public var accentOverride: Int?
 
   public init() {}
+
+  /// Whether this configuration puts anything into the display's gamma table.
+  ///
+  /// Callers need this when switching strategies: gamma is global to the display
+  /// and survives the controller that set it, so it has to be cleared explicitly
+  /// rather than left behind when a display stops using it.
+  public var usesGamma: Bool {
+    brightnessStrategy == .gamma || extraDimmingEnabled
+  }
 }
 
 /// Preferences that are not per-display.

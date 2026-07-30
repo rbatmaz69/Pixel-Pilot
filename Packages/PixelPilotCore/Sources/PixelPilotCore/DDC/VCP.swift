@@ -80,7 +80,7 @@ public struct DDCReading: Sendable, Equatable {
 /// time they need, and getting them wrong shows up as intermittent read failures
 /// rather than hard errors. They are persisted per `DisplayKey` so a fussy
 /// monitor can be tuned once.
-public struct DDCTiming: Sendable, Codable, Equatable {
+public struct DDCTiming: Sendable, Codable, Hashable {
   /// Settling delay before each I2C transaction.
   public var writeWaitMicroseconds: UInt32
   /// Extra delay between sending a Get VCP request and reading the reply.

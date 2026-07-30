@@ -44,9 +44,18 @@ enum GammaRamp {
 /// timer checking gamma state several times a second is exactly the kind of
 /// idle drain this app is supposed to avoid.
 ///
-/// **A crash leaves the screen dark.** Anything that dims the display has to
-/// guarantee restoration even when it dies badly, so the safety net below is
-/// installed the first time dimming is applied.
+/// **A crash does not leave the screen dark** — verified, not assumed. The
+/// window server ties the gamma table to the client connection that set it and
+/// reverts to identity when that connection dies. Tested by dimming to 85%,
+/// sending SIGKILL so no handler of ours could possibly run, and reading the
+/// table back: it was identity again.
+///
+/// That measurement removed code rather than adding it. An earlier version
+/// installed handlers for SIGSEGV, SIGABRT, SIGBUS and friends that called
+/// `CGDisplayRestoreColorSyncSettings`, which is not async-signal-safe — a real
+/// risk of hanging inside a crash we were already having, in exchange for a
+/// guarantee the system was already making. `atexit` is kept because it runs in
+/// ordinary context and costs nothing.
 public final class GammaDimmer: @unchecked Sendable {
   public static let shared = GammaDimmer()
 
@@ -146,6 +155,11 @@ public final class GammaDimmer: @unchecked Sendable {
   /// Installed lazily, the first time anything is actually dimmed — an app that
   /// never dims should not be registering process-wide handlers.
   ///
+  /// Only `atexit`, deliberately. Signal handlers were removed after testing
+  /// showed the window server already restores gamma when the process dies; see
+  /// the type documentation. This remains for the orderly-exit path, where it
+  /// runs in normal context and restores a moment sooner than the system would.
+  ///
   /// Caller must hold `lock`.
   private func installSafetyNetLocked() {
     guard !safetyNetInstalled else { return }
@@ -153,18 +167,6 @@ public final class GammaDimmer: @unchecked Sendable {
 
     atexit {
       CGDisplayRestoreColorSyncSettings()
-    }
-
-    // Strictly speaking CGDisplayRestoreColorSyncSettings is not
-    // async-signal-safe, so this is a calculated risk: the alternative to
-    // possibly misbehaving inside a handler we are already crashing in is
-    // definitely leaving the user with a black screen.
-    for signalNumber in [SIGINT, SIGTERM, SIGHUP, SIGQUIT, SIGABRT, SIGSEGV, SIGILL, SIGFPE, SIGBUS] {
-      signal(signalNumber) { received in
-        CGDisplayRestoreColorSyncSettings()
-        signal(received, SIG_DFL)
-        raise(received)
-      }
     }
 
     logger.debug("Gamma restoration safety net installed")

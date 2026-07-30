@@ -20,6 +20,7 @@ final class DisplayViewModel: Identifiable {
   /// 0...1. Written by the UI, read back after a key press or an external
   /// change; never polled.
   var brightness: Double = 1.0
+  var contrast: Double = 0.5
   var volume: Double = 0
   var isMuted: Bool = false
 
@@ -27,8 +28,15 @@ final class DisplayViewModel: Identifiable {
   private(set) var brightnessStrategy: BrightnessStrategy = .automatic
   private(set) var volumeRoute: VolumeController.Route = .unavailable
   private(set) var isReady = false
+  /// True while a capability re-probe is running, so the UI can say so rather
+  /// than appearing frozen for the several seconds it takes.
+  private(set) var isProbing = false
 
-  let accent: Color
+  private(set) var accent: Color
+
+  /// Contrast has no strategy layer: it is DDC or it is nothing. Cached because
+  /// panels do not all use 100 as the maximum.
+  private var contrastMaximum: UInt16 = 100
 
   private let brightnessController: BrightnessController
   private let volumeController: VolumeController
@@ -90,7 +98,37 @@ final class DisplayViewModel: Identifiable {
     volume = await volumeController.volume()
     isMuted = await volumeController.isMuted()
     volumeRoute = await volumeController.route
+
+    await primeContrast()
+
     isReady = true
+  }
+
+  private func primeContrast() async {
+    guard let queue, capabilities?.isUsable(.contrast) == true else { return }
+    guard let reading = try? await queue.read(.contrast), reading.maximum > 0 else { return }
+    contrastMaximum = reading.maximum
+    contrast = Double(reading.current) / Double(reading.maximum)
+  }
+
+  /// Discards the cached capability probe and asks the panel again.
+  ///
+  /// Manual because it is expensive — one DDC round trip per feature, each with
+  /// a 50 ms settling delay. Worth offering when a monitor's firmware has been
+  /// updated or it was probed over a flaky cable, but never automatic.
+  func reprobeCapabilities() async {
+    guard let queue, !isProbing else { return }
+    isProbing = true
+    defer { isProbing = false }
+
+    let probed = await queue.probeCapabilities()
+    capabilities = probed
+    preferences.update(key) { $0.capabilities = probed }
+
+    var settings = preferences.settings(for: key)
+    settings.capabilities = probed
+    await brightnessController.updateSettings(settings)
+    await primeContrast()
   }
 
   // MARK: - What the UI should offer
@@ -129,6 +167,47 @@ final class DisplayViewModel: Identifiable {
   func commitBrightness() {
     Task { await brightnessController.settle() }
   }
+
+  func setContrast(_ value: Double) {
+    contrast = value
+    guard let queue else { return }
+    Task { await queue.set(.contrast, value: UInt16((value * Double(contrastMaximum)).rounded())) }
+  }
+
+  // MARK: - Per-display settings
+
+  /// Applies a settings change and re-derives whatever depends on it.
+  ///
+  /// Changing the brightness strategy is the interesting case: the new path has
+  /// its own idea of the current value, so the display is re-read rather than
+  /// assumed to be wherever the old path left it.
+  func updateSettings(_ mutate: @escaping (inout DisplaySettings) -> Void) {
+    let before = preferences.settings(for: key)
+    preferences.update(key, mutate)
+    let after = preferences.settings(for: key)
+
+    accent = AccentPalette.color(for: key, override: after.accentOverride)
+
+    Task {
+      if after.timing != before.timing {
+        await queue?.setTiming(after.timing)
+      }
+      await brightnessController.updateSettings(after)
+
+      if after.brightnessStrategy != before.brightnessStrategy {
+        // The gamma path and the DDC path can be at different levels; leaving
+        // the old one applied would mean the slider no longer matches the screen.
+        if before.usesGamma {
+          GammaDimmer.shared.clear(displayID)
+        }
+        await brightnessController.reprime()
+        brightness = await brightnessController.brightness()
+      }
+      brightnessStrategy = await brightnessController.effectiveStrategy
+    }
+  }
+
+  var settings: DisplaySettings { preferences.settings(for: key) }
 
   /// Nudges brightness by a step and returns the new value *synchronously*.
   ///

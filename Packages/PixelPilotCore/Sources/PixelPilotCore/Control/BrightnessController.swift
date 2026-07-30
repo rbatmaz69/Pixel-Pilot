@@ -121,6 +121,16 @@ public actor BrightnessController {
     settings = newSettings
   }
 
+  /// Reads the display again after the strategy changed.
+  ///
+  /// The paths do not share a value: DDC luminance and the gamma table are
+  /// independent, so after a switch the only honest thing is to ask the new one
+  /// where it actually is.
+  public func reprime() async {
+    hasPrimed = false
+    await prime()
+  }
+
   public func brightness() -> Double { currentBrightness }
 
   // MARK: - Priming

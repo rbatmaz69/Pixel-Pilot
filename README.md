@@ -103,6 +103,25 @@ The system on-screen indicator is not used. macOS 26 reworked the private OSD
 interface and third-party values no longer render there; established apps show
 an empty indicator on Tahoe. Pixel Pilot draws its own.
 
+## Software dimming survives a crash
+
+Anything that dims a display owes the user a guarantee that the screen comes
+back. The obvious approach — signal handlers calling
+`CGDisplayRestoreColorSyncSettings` — turned out to be both unnecessary and
+harmful.
+
+Measured with `ppctl gamma 0.85 hold`, then `kill -9`, then `ppctl gamma-check`:
+the table was identity again. The window server ties gamma to the client
+connection that set it and reverts when that connection dies, so a crash cannot
+leave the screen dark.
+
+The handlers were removed. They called a function that is not async-signal-safe
+from inside a crash, risking a hang during crash reporting, to provide a
+guarantee the system already made. `atexit` is kept for the orderly-exit path.
+
+Both commands stay in `ppctl` so the finding can be re-checked on a future macOS
+rather than taken on faith.
+
 ## Panels lie
 
 Monitors answer DDC queries for features they do not have. The Samsung U32T1
