@@ -1,149 +1,107 @@
 #!/usr/bin/env swift
 //
-// Generates the app icon and the menu bar template image.
+// Builds the app icon and the menu bar template from Art/poppy-source.png.
 //
 //   swift Scripts/make-icons.swift
 //
-// The artwork is drawn as vector paths rather than scaled from a bitmap, for
-// two reasons: the menu bar needs a clean silhouette that can only be derived
-// from closed paths, and an icon rendered at each target size stays crisp at
-// 16pt where a downscaled bitmap turns to mush.
-//
-// Everything is laid out on a 1024-unit square and scaled, so the numbers below
-// can be read directly against a 1024x1024 reference.
+// An earlier version redrew the artwork as vector paths. That was the wrong
+// call: reproducing someone's drawing by eye lands somewhere near it and never
+// on it. The source image is used directly instead, and the only thing derived
+// from it is the menu bar silhouette — which needs a shape, not colours.
 //
 
 import AppKit
 import CoreGraphics
 import Foundation
 
-// MARK: - Geometry
+let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+let sourceURL = root.appendingPathComponent("Art/poppy-source.png")
 
-extension CGRect {
-  /// Reflected about the stem's centre line, so paired shapes are derived
-  /// rather than typed twice.
-  var mirroredAboutStem: CGRect {
-    CGRect(x: Poppy.stem.midX * 2 - maxX, y: minY, width: width, height: height)
-  }
+guard let sourceImage = NSImage(contentsOf: sourceURL),
+      let source = sourceImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
+else {
+  FileHandle.standardError.write(Data("error: could not read \(sourceURL.path)\n".utf8))
+  exit(1)
 }
 
-/// The poppy, described once in reference coordinates.
-enum Poppy {
-  static let reference: CGFloat = 1024
+// MARK: - Pixel access
 
-  static let centre = CGPoint(x: 512, y: 590) // CG origin is bottom-left
-  static let coreRadius: CGFloat = 92
+/// The source image as straight RGBA, so the artwork can be measured rather
+/// than assumed — where it sits in the frame, and which parts are background.
+struct Bitmap {
+  let width: Int
+  let height: Int
+  var pixels: [UInt8]
 
-  /// The four petals, as rounded shapes arranged around the core. Overlapping
-  /// on purpose — the seams are what make it read as separate petals rather
-  /// than one blob.
-  ///
-  /// The side petals are derived from one rectangle rather than written out
-  /// twice. Typed separately they were two units apart, which is invisible at
-  /// 512px and plainly lopsided at 16px.
-  static let sidePetal = CGRect(x: 500, y: 500, width: 220, height: 240)
-
-  static var petals: [(rect: CGRect, radius: CGFloat)] {
-    [
-      (CGRect(x: 380, y: 650, width: 264, height: 200), 96), // top
-      (sidePetal.mirroredAboutStem, 100),                    // left
-      (sidePetal, 100),                                      // right
-      (CGRect(x: 386, y: 420, width: 252, height: 190), 92), // bottom
-    ]
-  }
-
-  static let stem = CGRect(x: 492, y: 190, width: 40, height: 300)
-  static let stemRadius: CGFloat = 20
-
-  /// Mirrors a path about the stem's centre line.
-  ///
-  /// The axis is the stem's centre rather than the canvas centre — they happen
-  /// to coincide here, but tying it to the stem is what keeps the two leaves
-  /// symmetric if the stem ever moves.
-  private static func mirrored(_ path: CGPath) -> CGPath {
-    let axis = stem.midX
-    var flip = CGAffineTransform(translationX: axis * 2, y: 0).scaledBy(x: -1, y: 1)
-    return path.copy(using: &flip) ?? path
-  }
-
-  static let leafTip = CGPoint(x: 268, y: 462)
-  static let leafJoin = CGPoint(x: 498, y: 232)
-
-  /// The leaf body: a full lens shape, both edges bulging away from each other.
-  ///
-  /// An earlier version formed the fold by letting the two edges nearly meet,
-  /// which made the whole leaf thin. The fold is a cut *inside* a full leaf —
-  /// see `leafNotchPath`.
-  static func leafBodyPath(mirrored isMirrored: Bool) -> CGPath {
-    let path = CGMutablePath()
-    path.move(to: leafTip)
-    // Lower edge, bulging down and out.
-    path.addCurve(
-      to: leafJoin,
-      control1: CGPoint(x: 288, y: 300),
-      control2: CGPoint(x: 372, y: 228)
-    )
-    // Upper edge, bulging up and in.
-    path.addCurve(
-      to: leafTip,
-      control1: CGPoint(x: 436, y: 344),
-      control2: CGPoint(x: 358, y: 438)
-    )
-    path.closeSubpath()
-    return isMirrored ? mirrored(path) : path
-  }
-
-  /// The fold: a thin crescent lifted out of the leaf's upper half.
-  ///
-  /// Built by stroking a curve and taking the outline, so its width stays even
-  /// along its length — describing the same shape as two hand-placed edges is
-  /// fiddly and tends to pinch at the ends.
-  static func leafNotchPath(mirrored isMirrored: Bool) -> CGPath {
-    let curve = CGMutablePath()
-    curve.move(to: CGPoint(x: 316, y: 414))
-    curve.addCurve(
-      to: CGPoint(x: 462, y: 286),
-      control1: CGPoint(x: 366, y: 386),
-      control2: CGPoint(x: 420, y: 336)
-    )
-    let stroked = curve.copy(
-      strokingWithWidth: 18, lineCap: .round, lineJoin: .round, miterLimit: 10
-    )
-    return isMirrored ? mirrored(stroked) : stroked
-  }
-
-  /// The filled outline of the whole plant. The core and the leaf folds are cut
-  /// out afterwards, by whoever is drawing.
-  static func silhouette() -> CGPath {
-    let path = CGMutablePath()
-    for petal in petals {
-      path.addPath(CGPath(
-        roundedRect: petal.rect, cornerWidth: petal.radius, cornerHeight: petal.radius,
-        transform: nil
-      ))
+  init(_ image: CGImage) {
+    width = image.width
+    height = image.height
+    pixels = [UInt8](repeating: 0, count: width * height * 4)
+    pixels.withUnsafeMutableBytes { buffer in
+      guard let context = CGContext(
+        data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+        bytesPerRow: width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+      ) else { return }
+      context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
     }
-    path.addPath(CGPath(
-      roundedRect: stem, cornerWidth: stemRadius, cornerHeight: stemRadius, transform: nil
-    ))
-    path.addPath(leafBodyPath(mirrored: false))
-    path.addPath(leafBodyPath(mirrored: true))
-    return path
+  }
+
+  func rgb(x: Int, y: Int) -> (r: Int, g: Int, b: Int, a: Int) {
+    let index = (y * width + x) * 4
+    return (Int(pixels[index]), Int(pixels[index + 1]), Int(pixels[index + 2]), Int(pixels[index + 3]))
+  }
+
+  /// True where the pixel is part of the drawing rather than the white ground.
+  func isArtwork(x: Int, y: Int) -> Bool {
+    let (r, g, b, a) = rgb(x: x, y: y)
+    guard a > 16 else { return false }
+    return !(r > 236 && g > 236 && b > 236)
+  }
+
+  /// True where the pixel belongs to the flower's dark core.
+  ///
+  /// The core is brown: red-dominant and dark. Distinguishing it by colour
+  /// rather than by position keeps this working if the artwork is ever
+  /// replaced. The shadowed green at the base of the leaves is also dark, but
+  /// green-dominant, which is what separates the two.
+  func isCore(x: Int, y: Int) -> Bool {
+    let (r, g, b, _) = rgb(x: x, y: y)
+    guard isArtwork(x: x, y: y) else { return false }
+    return r >= g && g >= b && max(r, max(g, b)) < 150
+  }
+
+  /// Bounding box of the drawing, in pixel coordinates with y running down.
+  var artworkBounds: (minX: Int, minY: Int, maxX: Int, maxY: Int) {
+    var minX = width, minY = height, maxX = -1, maxY = -1
+    for y in 0 ..< height {
+      for x in 0 ..< width where isArtwork(x: x, y: y) {
+        minX = min(minX, x); maxX = max(maxX, x)
+        minY = min(minY, y); maxY = max(maxY, y)
+      }
+    }
+    return (minX, minY, maxX, maxY)
   }
 }
 
-// MARK: - Colours
+let bitmap = Bitmap(source)
+let bounds = bitmap.artworkBounds
+let artWidth = bounds.maxX - bounds.minX + 1
+let artHeight = bounds.maxY - bounds.minY + 1
 
-enum Palette {
-  static let petalTop = CGColor(red: 0.86, green: 0.25, blue: 0.18, alpha: 1)
-  static let petalSide = CGColor(red: 0.76, green: 0.19, blue: 0.13, alpha: 1)
-  static let coreOuter = CGColor(red: 0.29, green: 0.13, blue: 0.04, alpha: 1)
-  static let coreInner = CGColor(red: 0.16, green: 0.06, blue: 0.02, alpha: 1)
-  static let leafLight = CGColor(red: 0.44, green: 0.78, blue: 0.27, alpha: 1)
-  static let leafDark = CGColor(red: 0.13, green: 0.55, blue: 0.20, alpha: 1)
-  static let plate = CGColor(red: 1, green: 1, blue: 1, alpha: 1)
+print("Source \(bitmap.width)x\(bitmap.height); artwork occupies "
+  + "\(artWidth)x\(artHeight) at (\(bounds.minX), \(bounds.minY))")
+
+/// The drawing cropped to its own edges, so padding is decided here rather than
+/// inherited from however much white the source happened to carry.
+guard let cropped = source.cropping(to: CGRect(
+  x: bounds.minX, y: bounds.minY, width: artWidth, height: artHeight
+)) else {
+  FileHandle.standardError.write(Data("error: could not crop the source\n".utf8))
+  exit(1)
 }
 
-// MARK: - Drawing
+// MARK: - Rendering
 
 func makeContext(size: Int) -> CGContext {
   guard let context = CGContext(
@@ -151,93 +109,23 @@ func makeContext(size: Int) -> CGContext {
     space: CGColorSpace(name: CGColorSpace.sRGB)!,
     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
   ) else { fatalError("could not create a bitmap context at \(size)px") }
+  context.interpolationQuality = .high
   return context
 }
 
-func verticalGradient(_ context: CGContext, in rect: CGRect, from: CGColor, to: CGColor) {
-  guard let gradient = CGGradient(
-    colorsSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
-    colors: [from, to] as CFArray, locations: [0, 1]
-  ) else { return }
-  context.drawLinearGradient(
-    gradient,
-    start: CGPoint(x: rect.midX, y: rect.maxY),
-    end: CGPoint(x: rect.midX, y: rect.minY),
-    options: []
-  )
-}
-
-/// Draws the plant. `scale` maps reference units to pixels.
-func drawPoppy(in context: CGContext, scale: CGFloat) {
-  context.saveGState()
-  context.scaleBy(x: scale, y: scale)
-
-  // Leaves first, so the stem overlaps them at the join.
-  for isMirrored in [false, true] {
-    let body = Poppy.leafBodyPath(mirrored: isMirrored)
-    context.saveGState()
-    context.addPath(body)
-    context.clip()
-    verticalGradient(
-      context, in: body.boundingBox, from: Palette.leafLight, to: Palette.leafDark
-    )
-    context.restoreGState()
-
-    // The fold, cut out so the plate shows through — the same white sliver the
-    // reference drawing has.
-    context.saveGState()
-    context.setBlendMode(.clear)
-    context.addPath(Poppy.leafNotchPath(mirrored: isMirrored))
-    context.fillPath()
-    context.restoreGState()
-  }
-
-  context.saveGState()
-  context.addPath(CGPath(
-    roundedRect: Poppy.stem, cornerWidth: Poppy.stemRadius, cornerHeight: Poppy.stemRadius,
-    transform: nil
-  ))
-  context.clip()
-  verticalGradient(context, in: Poppy.stem, from: Palette.leafLight, to: Palette.leafDark)
-  context.restoreGState()
-
-  // Side petals sit behind, top and bottom in front — the same stacking as the
-  // reference drawing.
-  for (index, petal) in Poppy.petals.enumerated() {
-    let isSide = index == 1 || index == 2
-    context.setFillColor(isSide ? Palette.petalSide : Palette.petalTop)
-    context.addPath(CGPath(
-      roundedRect: petal.rect, cornerWidth: petal.radius, cornerHeight: petal.radius,
-      transform: nil
-    ))
-    context.fillPath()
-  }
-
-  let coreRect = CGRect(
-    x: Poppy.centre.x - Poppy.coreRadius, y: Poppy.centre.y - Poppy.coreRadius,
-    width: Poppy.coreRadius * 2, height: Poppy.coreRadius * 2
-  )
-  context.saveGState()
-  context.addEllipse(in: coreRect)
-  context.clip()
-  verticalGradient(context, in: coreRect, from: Palette.coreOuter, to: Palette.coreInner)
-  context.restoreGState()
-
-  context.restoreGState()
-}
-
-/// The macOS icon grid: the plate occupies 824 of 1024 units with a 185.4
-/// corner radius, leaving the margin the system expects for shadows.
+/// The macOS icon grid: the plate covers 824 of 1024 units with a 185.4 corner
+/// radius, leaving the margin the system expects around it.
 func drawAppIcon(size: Int) -> CGImage {
   let context = makeContext(size: size)
-  let scale = CGFloat(size) / Poppy.reference
+  let canvas = CGFloat(size)
+  let scale = canvas / 1024
 
-  let inset: CGFloat = 100 * scale
+  let plateInset = 100 * scale
   let plate = CGRect(
-    x: inset, y: inset,
-    width: CGFloat(size) - inset * 2, height: CGFloat(size) - inset * 2
+    x: plateInset, y: plateInset,
+    width: canvas - plateInset * 2, height: canvas - plateInset * 2
   )
-  let radius = 185.4 * scale
+  let plateRadius = 185.4 * scale
 
   context.saveGState()
   context.setShadow(
@@ -245,74 +133,113 @@ func drawAppIcon(size: Int) -> CGImage {
     blur: 16 * scale,
     color: CGColor(red: 0, green: 0, blue: 0, alpha: 0.22)
   )
-  context.setFillColor(Palette.plate)
+  context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
   context.addPath(CGPath(
-    roundedRect: plate, cornerWidth: radius, cornerHeight: radius, transform: nil
+    roundedRect: plate, cornerWidth: plateRadius, cornerHeight: plateRadius, transform: nil
   ))
   context.fillPath()
   context.restoreGState()
 
-  // Keep the artwork inside the plate.
+  // Inset the artwork inside the plate so it does not crowd the rounded corners.
+  let padding = plate.width * 0.12
+  let available = plate.insetBy(dx: padding, dy: padding)
+  let fit = min(available.width / CGFloat(artWidth), available.height / CGFloat(artHeight))
+  let drawn = CGSize(width: CGFloat(artWidth) * fit, height: CGFloat(artHeight) * fit)
+
   context.saveGState()
   context.addPath(CGPath(
-    roundedRect: plate, cornerWidth: radius, cornerHeight: radius, transform: nil
+    roundedRect: plate, cornerWidth: plateRadius, cornerHeight: plateRadius, transform: nil
   ))
   context.clip()
-  drawPoppy(in: context, scale: scale)
+  context.draw(cropped, in: CGRect(
+    x: plate.midX - drawn.width / 2,
+    y: plate.midY - drawn.height / 2,
+    width: drawn.width, height: drawn.height
+  ))
   context.restoreGState()
 
   guard let image = context.makeImage() else { fatalError("could not render \(size)px icon") }
   return image
 }
 
-/// A flat black silhouette with the core punched out.
+/// The plant as a flat black shape with the core punched out.
 ///
-/// Template images are tinted by macOS, so only the alpha channel matters. The
-/// hole is what keeps it legible at 18pt: a solid blob of petals reads as a
-/// circle, and the gap is the only thing that says "flower".
-func drawMenuBarIcon(size: Int) -> CGImage {
-  let context = makeContext(size: size)
+/// Template images are tinted by macOS, so only alpha matters. The mask is
+/// built at the source resolution and then scaled down, which keeps the edges
+/// smooth — thresholding after scaling produces a ragged outline.
+func makeSilhouetteMask() -> CGImage {
+  let context = makeContext(size: max(artWidth, artHeight))
+  let mask = Bitmap(cropped)
 
-  // Fit the artwork to the canvas rather than reusing the app icon's scale.
-  // The app icon needs margin for its plate and shadow; a menu bar template has
-  // no plate, and inheriting that margin would waste a third of the height at
-  // the one size where every pixel counts.
-  let silhouette = Poppy.silhouette()
-  let bounds = silhouette.boundingBox
-  let margin = CGFloat(size) * 0.06
-  let available = CGFloat(size) - margin * 2
-  let scale = min(available / bounds.width, available / bounds.height)
-
-  context.saveGState()
-  context.translateBy(
-    x: (CGFloat(size) - bounds.width * scale) / 2 - bounds.minX * scale,
-    y: (CGFloat(size) - bounds.height * scale) / 2 - bounds.minY * scale
-  )
-  context.scaleBy(x: scale, y: scale)
-
-  context.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
-  context.addPath(silhouette)
-  context.fillPath()
-
-  // Punch the core out. At 18pt a solid mass of petals reads as a circle; the
-  // hole is the only thing that says "flower".
-  context.setBlendMode(.clear)
-  context.addArc(
-    center: Poppy.centre, radius: Poppy.coreRadius * 0.82,
-    startAngle: 0, endAngle: .pi * 2, clockwise: false
-  )
-  context.fillPath()
-
-  // The leaf folds too, so the silhouette stays the same drawing as the icon.
-  for isMirrored in [false, true] {
-    context.addPath(Poppy.leafNotchPath(mirrored: isMirrored))
-    context.fillPath()
+  var pixels = [UInt8](repeating: 0, count: artWidth * artHeight * 4)
+  for y in 0 ..< artHeight {
+    for x in 0 ..< artWidth {
+      let index = (y * artWidth + x) * 4
+      let opaque = mask.isArtwork(x: x, y: y) && !mask.isCore(x: x, y: y)
+      // Premultiplied black: only the alpha channel carries anything.
+      pixels[index + 3] = opaque ? 255 : 0
+    }
   }
 
-  context.restoreGState()
+  guard let provider = CGDataProvider(data: Data(pixels) as CFData),
+        let image = CGImage(
+          width: artWidth, height: artHeight, bitsPerComponent: 8, bitsPerPixel: 32,
+          bytesPerRow: artWidth * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+          bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+          provider: provider, decode: nil, shouldInterpolate: true,
+          intent: .defaultIntent
+        )
+  else { fatalError("could not build the silhouette mask") }
+
+  _ = context
+  return image
+}
+
+let silhouetteMask = makeSilhouetteMask()
+
+func drawMenuBarIcon(size: Int) -> CGImage {
+  let context = makeContext(size: size)
+  let canvas = CGFloat(size)
+
+  // No plate here, so the artwork gets nearly the whole canvas — inheriting the
+  // app icon's margin would waste a third of the height at the one size where
+  // every pixel counts.
+  let margin = canvas * 0.04
+  let available = canvas - margin * 2
+  let fit = min(available / CGFloat(artWidth), available / CGFloat(artHeight))
+  let drawn = CGSize(width: CGFloat(artWidth) * fit, height: CGFloat(artHeight) * fit)
+
+  context.draw(silhouetteMask, in: CGRect(
+    x: (canvas - drawn.width) / 2,
+    y: (canvas - drawn.height) / 2,
+    width: drawn.width, height: drawn.height
+  ))
 
   guard let image = context.makeImage() else { fatalError("could not render menu bar icon") }
   return image
+}
+
+// MARK: - Symmetry
+
+let mirrorTolerance = 32
+
+/// Compares an image against its own horizontal mirror.
+func mirrorMismatch(_ image: CGImage) -> (worst: Int, offending: Int) {
+  let bitmap = Bitmap(image)
+  var worst = 0
+  var offending = 0
+  for y in 0 ..< bitmap.height {
+    for x in 0 ..< (bitmap.width / 2) {
+      let left = bitmap.rgb(x: x, y: y)
+      let right = bitmap.rgb(x: bitmap.width - 1 - x, y: y)
+      for delta in [abs(left.r - right.r), abs(left.g - right.g),
+                    abs(left.b - right.b), abs(left.a - right.a)] {
+        if delta > worst { worst = delta }
+        if delta > mirrorTolerance { offending += 1 }
+      }
+    }
+  }
+  return (worst, offending)
 }
 
 // MARK: - Output
@@ -327,50 +254,6 @@ func write(_ image: CGImage, to url: URL) {
   }
 }
 
-/// Compares an image against its own horizontal mirror.
-///
-/// Symmetry is asserted rather than eyeballed: the leaves are mirrored through
-/// a transform, and a wrong axis produces a drift of a few units that is
-/// invisible at 512px and obvious at 16px.
-let mirrorTolerance = 32
-
-func mirrorMismatch(_ image: CGImage) -> (worstChannelDelta: Int, offendingPixels: Int) {
-  let width = image.width
-  let height = image.height
-  var pixels = [UInt8](repeating: 0, count: width * height * 4)
-
-  guard let context = CGContext(
-    data: &pixels, width: width, height: height, bitsPerComponent: 8,
-    bytesPerRow: width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
-    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-  ) else { return (0, 0) }
-  context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-  var worst = 0
-  var offending = 0
-  for y in 0 ..< height {
-    for x in 0 ..< (width / 2) {
-      let left = (y * width + x) * 4
-      let right = (y * width + (width - 1 - x)) * 4
-      for channel in 0 ..< 4 {
-        let delta = abs(Int(pixels[left + channel]) - Int(pixels[right + channel]))
-        if delta > worst { worst = delta }
-        // Mirroring a bézier through a transform rasterises with slightly
-        // different subpixel coverage along its edges, so a few percent of
-        // difference on edge pixels is expected and not a defect.
-        //
-        // The threshold still catches what matters: a geometric offset shifts
-        // whole edges and shows up as deltas near 255. The two-unit mismatch
-        // this test was written for produced a worst delta of 212 across a
-        // thousand pixels.
-        if delta > mirrorTolerance { offending += 1 }
-      }
-    }
-  }
-  return (worst, offending)
-}
-
-let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 let assets = root.appendingPathComponent("Sources/PixelPilot/Resources/Assets.xcassets")
 let appIconSet = assets.appendingPathComponent("AppIcon.appiconset")
 let menuBarSet = assets.appendingPathComponent("MenuBarIcon.imageset")
@@ -379,13 +262,10 @@ for directory in [appIconSet, menuBarSet] {
   try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 }
 
-// macOS wants each size at 1x and 2x; the 2x of one size is the 1x pixel count
-// of the next, so the pixel sizes collapse to this set.
 let iconPixelSizes = [16, 32, 64, 128, 256, 512, 1024]
 for pixels in iconPixelSizes {
   write(drawAppIcon(size: pixels), to: appIconSet.appendingPathComponent("icon_\(pixels).png"))
 }
-
 for (pixels, suffix) in [(18, ""), (36, "@2x")] {
   write(drawMenuBarIcon(size: pixels), to: menuBarSet.appendingPathComponent("menubar\(suffix).png"))
 }
@@ -395,13 +275,13 @@ func appIconContents() -> String {
     (16, 1), (16, 2), (32, 1), (32, 2), (128, 1), (128, 2),
     (256, 1), (256, 2), (512, 1), (512, 2),
   ]
-  let images = entries.map { entry in
+  let images = entries.map {
     """
         {
-          "filename" : "icon_\(entry.size * entry.scale).png",
+          "filename" : "icon_\($0.size * $0.scale).png",
           "idiom" : "mac",
-          "scale" : "\(entry.scale)x",
-          "size" : "\(entry.size)x\(entry.size)"
+          "scale" : "\($0.scale)x",
+          "size" : "\($0.size)x\($0.size)"
         }
     """
   }
@@ -415,7 +295,10 @@ func appIconContents() -> String {
   """
 }
 
-let menuBarContents = """
+try appIconContents().write(
+  to: appIconSet.appendingPathComponent("Contents.json"), atomically: true, encoding: .utf8
+)
+try """
 {
   "images" : [
     { "filename" : "menubar.png", "idiom" : "mac", "scale" : "1x" },
@@ -424,33 +307,20 @@ let menuBarContents = """
   "info" : { "author" : "xcode", "version" : 1 },
   "properties" : { "template-rendering-intent" : "template" }
 }
-"""
-
-let catalogContents = """
+""".write(to: menuBarSet.appendingPathComponent("Contents.json"), atomically: true, encoding: .utf8)
+try """
 {
   "info" : { "author" : "xcode", "version" : 1 }
 }
-"""
+""".write(to: assets.appendingPathComponent("Contents.json"), atomically: true, encoding: .utf8)
 
-try appIconContents().write(
-  to: appIconSet.appendingPathComponent("Contents.json"), atomically: true, encoding: .utf8
-)
-try menuBarContents.write(
-  to: menuBarSet.appendingPathComponent("Contents.json"), atomically: true, encoding: .utf8
-)
-try catalogContents.write(
-  to: assets.appendingPathComponent("Contents.json"), atomically: true, encoding: .utf8
-)
+print("Wrote \(iconPixelSizes.count) app icon sizes and the menu bar template")
 
-print("Wrote \(iconPixelSizes.count) app icon sizes and the menu bar template to")
-print("  \(assets.path)")
-
-let iconCheck = mirrorMismatch(drawAppIcon(size: 512))
+// Reported rather than enforced: any asymmetry now comes from the source
+// drawing, and silently "fixing" someone's artwork is not this script's call.
+let sourceCheck = mirrorMismatch(cropped)
 let menuCheck = mirrorMismatch(drawMenuBarIcon(size: 36))
 print("")
-print("Symmetry (worst channel delta, pixels over tolerance):")
-print("  app icon    \(iconCheck.worstChannelDelta), \(iconCheck.offendingPixels)")
-print("  menu bar    \(menuCheck.worstChannelDelta), \(menuCheck.offendingPixels)")
-if iconCheck.offendingPixels > 0 || menuCheck.offendingPixels > 0 {
-  print("  ⚠︎ not symmetric — check the mirror axis against the stem centre")
-}
+print("Symmetry (worst channel delta, pixels over tolerance \(mirrorTolerance)):")
+print("  source art  \(sourceCheck.worst), \(sourceCheck.offending)")
+print("  menu bar    \(menuCheck.worst), \(menuCheck.offending)")
