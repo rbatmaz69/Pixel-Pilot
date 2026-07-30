@@ -65,10 +65,11 @@ enum KnobGeometry {
   }
 
   static let rest = Metrics(width: 6, cornerRadius: 3, trackHeight: 6)
-  static let hovered = Metrics(width: 8, cornerRadius: 4, trackHeight: 10)
+  static let hovered = Metrics(width: 9, cornerRadius: 4.5, trackHeight: 11)
   /// Widening on grab is the tactile cue: the control acknowledges the press
-  /// before the value has moved at all.
-  static let dragging = Metrics(width: 14, cornerRadius: 5, trackHeight: 12)
+  /// before the value has moved at all. Three times the resting width, because
+  /// a difference you have to look for is not a cue.
+  static let dragging = Metrics(width: 18, cornerRadius: 7, trackHeight: 14)
 
   static func metrics(isDragging: Bool, isHovered: Bool) -> Metrics {
     if isDragging { return KnobGeometry.dragging }

@@ -10,9 +10,12 @@ import SwiftUI
 struct PresetSettings: View {
   let model: AppModel
 
+  @Environment(\.motion) private var motion
+
   @State private var newPresetName = ""
   @State private var selectedSymbol = "moon.fill"
   @State private var renaming: Preset?
+  @Namespace private var symbolNamespace
 
   /// A small set rather than a full symbol browser — enough to tell presets
   /// apart in the menu bar at a glance.
@@ -32,22 +35,24 @@ struct PresetSettings: View {
         } else {
           ForEach(model.presets.presets) { preset in
             presetRow(preset)
+              // Capturing and deleting both happen with this list on screen.
+              // Growing in and fading out is the difference between a list that
+              // responds and one that flickers.
+              .transition(.asymmetric(
+                insertion: .scale(scale: 0.92, anchor: .leading).combined(with: .opacity),
+                removal: .opacity
+              ))
           }
         }
       } header: {
         Text("Presets")
       }
+      .animation(motion.spatialDefault, value: model.presets.presets.count)
 
       Section("Capture the current state") {
-        HStack(spacing: 10) {
-          Picker("", selection: $selectedSymbol) {
-            ForEach(symbols, id: \.self) { symbol in
-              Image(systemName: symbol).tag(symbol)
-            }
-          }
-          .labelsHidden()
-          .frame(width: 70)
+        symbolPicker
 
+        HStack(spacing: Layout.snug) {
           TextField("Name", text: $newPresetName)
             .textFieldStyle(.roundedBorder)
 
@@ -57,13 +62,14 @@ struct PresetSettings: View {
             _ = model.captureCurrentState(name: name, symbolName: selectedSymbol)
             newPresetName = ""
           }
+          .buttonStyle(.soft)
           .disabled(newPresetName.trimmingCharacters(in: .whitespaces).isEmpty)
         }
 
         Text("Stores the brightness and contrast of every connected display. "
           + "Input source is left out on purpose — switching inputs needs a confirmation, "
           + "which a preset cannot ask for.")
-          .font(.caption)
+          .font(TypeScale.detail)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -73,31 +79,59 @@ struct PresetSettings: View {
     .formStyle(.grouped)
   }
 
+  /// The symbol for a new preset, as a row of chips.
+  ///
+  /// A `Picker` in a 70pt well showed one glyph at a time and made choosing an
+  /// icon feel like filling in a form. All eight at once is both faster and the
+  /// most obviously playful surface in the app, which is the right place to
+  /// spend it.
+  private var symbolPicker: some View {
+    HStack(spacing: Layout.tight) {
+      ForEach(symbols, id: \.self) { symbol in
+        let isSelected = selectedSymbol == symbol
+        Image(systemName: symbol)
+          .font(.callout)
+          .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+          .frame(width: 30, height: 28)
+          .background {
+            // One highlight for the whole row, so it slides to the chip you
+            // pick instead of blinking out of one and into another.
+            if isSelected {
+              MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
+                .fill(.tint.opacity(0.18))
+                .matchedGeometryEffect(id: "symbolChip", in: symbolNamespace)
+            }
+          }
+          .contentShape(.rect)
+          .onTapGesture { selectedSymbol = symbol }
+          .help(symbol)
+      }
+      Spacer(minLength: 0)
+    }
+    .animation(motion.spatialDefault, value: selectedSymbol)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Preset symbol")
+  }
+
   private func presetRow(_ preset: Preset) -> some View {
-    HStack(spacing: 10) {
-      Image(systemName: preset.symbolName)
-        .foregroundStyle(.secondary)
-        .frame(width: 18)
+    StatusRow(
+      symbol: preset.symbolName,
+      title: preset.name,
+      detail: summary(for: preset)
+    ) {
+      HStack(spacing: Layout.tight) {
+        Button("Apply") { model.apply(preset) }
+          .buttonStyle(.soft)
 
-      VStack(alignment: .leading, spacing: 1) {
-        Text(preset.name)
-        Text(summary(for: preset))
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        Button {
+          model.deletePreset(id: preset.id)
+        } label: {
+          Image(systemName: "trash")
+        }
+        .buttonStyle(.soft)
+        .help("Delete this preset")
       }
-
-      Spacer()
-
-      Button("Apply") { model.apply(preset) }
-        .buttonStyle(.borderless)
-
-      Button {
-        model.deletePreset(id: preset.id)
-      } label: {
-        Image(systemName: "trash")
-      }
-      .buttonStyle(.borderless)
-      .help("Delete this preset")
+      .font(TypeScale.detail.weight(.medium))
     }
   }
 

@@ -30,6 +30,12 @@ struct ExpressiveSlider: View {
 
   @State private var isDragging = false
   @State private var isHovered = false
+  /// Bumped to fire the knob's squash. One counter for both causes — arriving
+  /// at an end and letting go — because they want the same acknowledgement.
+  @State private var pop = 0
+  /// Latches the end stop, so holding the pointer past the edge pops once
+  /// instead of on every frame of the drag.
+  @State private var isAtEnd = false
 
   private var fraction: Double {
     let span = range.upperBound - range.lowerBound
@@ -84,7 +90,7 @@ struct ExpressiveSlider: View {
         .fill(.quaternary)
 
       MorphingRoundedRectangle(cornerRadius: metrics.trackHeight / 2)
-        .fill(accent.gradient)
+        .fill(accent.accentFill)
         .frame(width: max(metrics.trackHeight, knobX))
 
       if let icon {
@@ -105,13 +111,31 @@ struct ExpressiveSlider: View {
   private func knob(centeredAt x: CGFloat, height: CGFloat) -> some View {
     MorphingKnob(width: metrics.width, cornerRadius: metrics.cornerRadius)
       .fill(.white)
-      .shadow(color: .black.opacity(isDragging ? 0.28 : 0.16), radius: isDragging ? 5 : 2, y: 1)
+      .shadow(color: .black.opacity(isDragging ? 0.30 : 0.16), radius: isDragging ? 6 : 2, y: 1)
+      .background { glow }
       .frame(width: metrics.width, height: metrics.trackHeight + (isDragging ? 10 : 6))
+      .modifier(KnobSquash(trigger: pop, isReduced: motion.isReduced, settle: motion.expressive))
       .position(x: x, y: height / 2)
       // The morph springs; the position does not. Position must track the
-      // pointer exactly or the control feels laggy.
+      // pointer exactly or the control feels laggy. Everything added around
+      // this control since — entrances, glows, the squash — is keyed to its own
+      // value for exactly this reason: an unkeyed animation, or a
+      // `withAnimation` anywhere above, would reach the position and undo it.
       .animation(motion.spatialFast, value: metrics)
       .animation(nil, value: x)
+  }
+
+  /// The accent halo under the handle while it is held.
+  ///
+  /// Its own layer with its own spring: opacity is an effect and must not
+  /// overshoot, but the morph it sits behind is spatial and must. Sharing one
+  /// curve would make the glow flicker at the end of every grab.
+  private var glow: some View {
+    MorphingKnob(width: metrics.width, cornerRadius: metrics.cornerRadius)
+      .fill(accent)
+      .blur(radius: 7)
+      .opacity(isDragging ? 0.9 : 0)
+      .animation(motion.effectDefault, value: isDragging)
   }
 
   // MARK: - Interaction
@@ -133,6 +157,8 @@ struct ExpressiveSlider: View {
         withAnimation(motion.spatialDefault) {
           isDragging = false
         }
+        isAtEnd = false
+        pop += 1
         onCommit(value)
       }
   }
@@ -140,6 +166,39 @@ struct ExpressiveSlider: View {
   private func update(to x: CGFloat, width: CGFloat) {
     let travel = max(1, width - metrics.width)
     let position = min(1, max(0, (x - metrics.width / 2) / travel))
+
+    // Arriving at either end is worth feeling, so you can tell you have bottomed
+    // out without reading the number. Latched, because the pointer usually keeps
+    // going once it gets there.
+    let reachedEnd = position <= 0 || position >= 1
+    if reachedEnd, !isAtEnd { pop += 1 }
+    isAtEnd = reachedEnd
+
     value = range.lowerBound + position * (range.upperBound - range.lowerBound)
+  }
+}
+
+/// One squash of the handle, played on release and on reaching an end.
+///
+/// Three phases rather than two: a two-phase animator would leave the handle
+/// resting at whichever phase it ended on, and the resting size of this control
+/// is not negotiable. Here the first and last phase are both "normal", so the
+/// handle returns to itself whichever way the animator settles.
+private struct KnobSquash: ViewModifier {
+  let trigger: Int
+  let isReduced: Bool
+  let settle: Animation
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if isReduced {
+      content
+    } else {
+      content.phaseAnimator([0, 1, 2], trigger: trigger) { view, phase in
+        view.scaleEffect(phase == 1 ? 1.22 : 1)
+      } animation: { phase in
+        phase == 1 ? .spring(duration: 0.15, bounce: 0.5) : settle
+      }
+    }
   }
 }

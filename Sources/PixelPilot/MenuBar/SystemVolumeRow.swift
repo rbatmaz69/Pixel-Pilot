@@ -13,16 +13,17 @@ struct SystemVolumeRow: View {
   @Environment(\.motion) private var motion
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack(spacing: 8) {
+    VStack(alignment: .leading, spacing: Layout.tight) {
+      HStack(spacing: Layout.tight) {
         Button {
           audio.toggleMute()
         } label: {
           Image(systemName: audio.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
             .contentTransition(.symbolEffect(.replace))
+            .symbolEffect(.bounce, value: audio.isMuted)
             .frame(width: 16)
         }
-        .buttonStyle(.accessoryBar)
+        .buttonStyle(.soft)
         .disabled(!audio.isControllable)
         .help(audio.isMuted ? "Unmute" : "Mute")
 
@@ -42,11 +43,15 @@ struct SystemVolumeRow: View {
         // Spelled out rather than left as a greyed-out slider: the reason is
         // fixable, and the fix is the control right next to it.
         Text(reason)
-          .font(.caption)
+          .font(TypeScale.detail)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
+          // Switching output can make this line appear or vanish while the
+          // panel is open; without a transition the whole panel jumps.
+          .transition(.blurReplace)
       }
     }
+    .animation(motion.spatialDefault, value: audio.unavailableReason)
     .onAppear { audio.refresh() }
   }
 

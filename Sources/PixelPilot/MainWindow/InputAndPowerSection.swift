@@ -15,17 +15,14 @@ struct InputAndPowerSection: View {
   @State private var pendingPowerMode: PowerMode?
 
   var body: some View {
-    GroupBox {
-      VStack(alignment: .leading, spacing: 14) {
+    PanelCard(title: "Input and power", systemImage: "cable.connector", accent: display.accent) {
+      VStack(alignment: .leading, spacing: Layout.normal) {
         inputs
         if !display.availablePowerModes.isEmpty {
           Divider()
           power
         }
       }
-      .padding(6)
-    } label: {
-      Label("Input and power", systemImage: "cable.connector")
     }
     .confirmationDialog(
       pendingInput.map { "Switch to \(InputSource.name(for: $0))?" } ?? "",
@@ -91,34 +88,39 @@ struct InputAndPowerSection: View {
           Task { await display.readCapabilityString() }
         } label: {
           if display.isReadingCapabilityString {
-            HStack(spacing: 6) {
+            HStack(spacing: Layout.tight) {
               ProgressView().controlSize(.small)
               Text("Reading…")
             }
+            .transition(.blurReplace)
           } else {
             Text("Read available inputs")
+              .transition(.blurReplace)
           }
         }
+        .buttonStyle(.soft(display.accent))
         .disabled(display.isReadingCapabilityString)
+        .animation(.default, value: display.isReadingCapabilityString)
       }
     } else {
-      VStack(alignment: .leading, spacing: 8) {
+      VStack(alignment: .leading, spacing: Layout.tight) {
         HStack {
           Text("Input")
-            .font(.callout.weight(.medium))
+            .font(TypeScale.rowTitle)
           Spacer()
           Text(currentInputDescription)
-            .font(.caption)
+            .font(TypeScale.detail)
             .foregroundStyle(.secondary)
         }
 
         // A row of buttons rather than a picker: a picker implies the selection
         // reflects reality, and here we usually cannot tell which input is live.
-        HStack(spacing: 8) {
+        HStack(spacing: Layout.tight) {
           ForEach(display.availableInputs, id: \.self) { value in
             Button(InputSource.name(for: value)) {
               pendingInput = value
             }
+            .buttonStyle(.soft(display.accent))
             .disabled(value == display.currentInput)
           }
         }
@@ -151,37 +153,36 @@ struct InputAndPowerSection: View {
   @ViewBuilder
   private var unlistedInputWarning: some View {
     if display.currentInputIsUnlisted {
-      HStack(alignment: .firstTextBaseline, spacing: 6) {
-        Image(systemName: "exclamationmark.triangle.fill")
-          .foregroundStyle(.orange)
-          .font(.caption)
-        Text("The connection you are using is not among the inputs this display lists, "
+      StatusRow(
+        symbol: "exclamationmark.triangle.fill",
+        tint: Status.warn,
+        title: "No way back from here",
+        detail: "The connection you are using is not among the inputs this display lists, "
           + "so there is nothing here to switch back to. Only the monitor's own buttons "
-          + "can return you to it.")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-      }
+          + "can return you to it."
+      )
+      .transition(.blurReplace)
     }
   }
 
   // MARK: - Power
 
   private var power: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: Layout.tight) {
       Text("Power")
-        .font(.callout.weight(.medium))
+        .font(TypeScale.rowTitle)
 
-      HStack(spacing: 8) {
+      HStack(spacing: Layout.tight) {
         // "On" is pointless from here — if the display were off, this window
         // would not be visible on it.
         ForEach(display.availablePowerModes.filter { $0 != .on }, id: \.self) { mode in
           Button(mode.displayName) { pendingPowerMode = mode }
+            .buttonStyle(.soft(Status.warn))
         }
       }
 
       Text("The Mac stays awake; only the display sleeps.")
-        .font(.caption)
+        .font(TypeScale.detail)
         .foregroundStyle(.secondary)
     }
   }

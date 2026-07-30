@@ -13,13 +13,24 @@ before a single view existed. `ppctl` still exists for exactly that reason.
 
 **Nothing runs when nothing is happening.** No repeating timers, no polling.
 Displays are read once when they connect; after that the app writes but never
-reads. Measured idle cost is 0.0 % CPU.
+reads. With every surface closed, measured idle cost is 0.0 % CPU.
+
+The accent washes behind the panels do drift, and that is the one exception —
+but only while a panel is actually on screen. The animation lives in the view
+hierarchy, and with the panel shut there is no hierarchy for it to live in, so
+there is nothing to stop and nothing to clean up. A window that has been left
+open behind other windows stops moving too.
 
 **Apple's shapes, Material 3 Expressive's movement.** The interface uses Liquid
-Glass, SF Pro and macOS metrics. The motion is borrowed from Android's design
-language: spring physics instead of easing, handles that morph as you grab them,
-and a strict separation between springs that may overshoot (position, size,
-shape) and springs that must not (colour, opacity).
+Glass, SF Pro, SF Rounded for figures, and a small token layer for spacing,
+radii and the roles each display's accent plays. The motion is borrowed from
+Android's design language: spring physics instead of easing, handles that morph
+as you grab them, staggered arrivals rather than everything at once, and a
+strict separation between springs that may overshoot (position, size, shape) and
+springs that must not (colour, opacity).
+
+Reduce Motion removes it all — the stagger collapses to zero, every loop is
+taken out of the hierarchy rather than slowed down, and the HUD stops springing.
 
 ## Layout
 
@@ -33,7 +44,7 @@ Packages/PixelPilotCore/   UI-free core, unit tested
     System/                Preferences, diagnostics log
   Sources/ppctl/           CLI for verifying against real hardware
 Sources/PixelPilot/        The app
-  DesignSystem/            Motion tokens, morphing shapes, accents, slider
+  DesignSystem/            Tokens, motion, morphing shapes, accents, components
   MenuBar/ OSD/ MainWindow/ Settings/ Input/ Model/
 project.yml                Xcode project definition (the .xcodeproj is generated)
 ```

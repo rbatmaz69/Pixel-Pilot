@@ -23,6 +23,22 @@ struct MotionTokens: Sendable, Equatable {
   let effectFast: Animation
   let effectDefault: Animation
 
+  /// Noticeably more ring than `spatialDefault`. For entrances and press
+  /// releases, where the overshoot *is* the point rather than a side effect of
+  /// getting there quickly.
+  let expressive: Animation
+
+  /// Delay between neighbouring elements in a staggered entrance.
+  ///
+  /// Small on purpose. The panel is opened dozens of times a day, and an
+  /// entrance that is enjoyable the first time is an obstacle the twentieth —
+  /// the whole sequence has to be over before anyone would think to wait.
+  let stagger: Double
+
+  /// How long the ambient wash takes to drift from one pose to the other, in
+  /// seconds. Zero means: do not move at all.
+  let ambientPeriod: Double
+
   /// True when the tokens have been flattened for reduced motion.
   let isReduced: Bool
 
@@ -32,18 +48,29 @@ struct MotionTokens: Sendable, Equatable {
     spatialSlow: .spring(duration: 0.60, bounce: 0.20),
     effectFast: .spring(duration: 0.18, bounce: 0.0),
     effectDefault: .spring(duration: 0.25, bounce: 0.0),
+    expressive: .spring(duration: 0.52, bounce: 0.40),
+    stagger: 0.045,
+    ambientPeriod: 9,
     isReduced: false
   )
 
   /// Everything collapses to a short, bounce-free curve. Motion is not removed
   /// outright — an instant jump is its own kind of disorienting — it is made
   /// unremarkable.
+  ///
+  /// The two new tokens are the exception: a stagger of zero and a period of
+  /// zero mean the staggered entrance lands all at once and the ambient drift
+  /// stops entirely. Slowing a continuous animation down is the wrong answer
+  /// here; someone who asked for less motion did not ask for lazier motion.
   static let reduced = MotionTokens(
     spatialFast: .smooth(duration: 0.12),
     spatialDefault: .smooth(duration: 0.15),
     spatialSlow: .smooth(duration: 0.20),
     effectFast: .smooth(duration: 0.12),
     effectDefault: .smooth(duration: 0.15),
+    expressive: .smooth(duration: 0.15),
+    stagger: 0,
+    ambientPeriod: 0,
     isReduced: true
   )
 

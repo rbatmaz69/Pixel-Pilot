@@ -10,18 +10,21 @@ struct MainWindow: View {
 
   var body: some View {
     NavigationSplitView {
+      // Still a `List` with a system selection rather than a custom stack with
+      // a sliding pill. The pill would look better and would cost arrow-key
+      // navigation of the sidebar, which is not a trade worth making for a
+      // highlight.
       List(model.displays, selection: $selection) { display in
-        HStack(spacing: 8) {
-          Circle()
-            .fill(display.accent)
-            .frame(width: 8, height: 8)
+        HStack(spacing: Layout.tight) {
+          AccentDot(accent: display.accent, isReady: display.isReady, size: 9)
           VStack(alignment: .leading, spacing: 1) {
-            Text(display.name).font(.body)
+            Text(display.name).font(TypeScale.rowTitle)
             Text(display.isBuiltin ? "Built-in" : display.routeDescription)
-              .font(.caption)
+              .font(TypeScale.detail)
               .foregroundStyle(.secondary)
           }
         }
+        .padding(.vertical, 3)
         .tag(display.id)
       }
       .navigationSplitViewColumnWidth(min: 200, ideal: 220)
@@ -50,31 +53,62 @@ struct MainWindow: View {
 
 private struct DisplayDetail: View {
   @Environment(\.motion) private var motion
+  /// The ambient wash stops when the window is not the one being used. A glow
+  /// drifting away behind three other windows is pure cost.
+  @Environment(\.controlActiveState) private var controlActive
 
   @Bindable var display: DisplayViewModel
   let log: DiagnosticsLog
 
+  @Namespace private var accentNamespace
+  @State private var hoveredAccent: Int?
+
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 24) {
-        controls
+      VStack(alignment: .leading, spacing: Layout.section) {
+        card(0) { controls }
         if !display.isBuiltin {
-          InputAndPowerSection(display: display)
+          card(1) { InputAndPowerSection(display: display) }
         }
-        configuration
-        capabilities
-        diagnostics
+        card(2) { configuration }
+        card(3) { capabilities }
+        card(4) { diagnostics }
       }
-      .padding(24)
+      .padding(Layout.loose)
       .frame(maxWidth: .infinity, alignment: .leading)
+      // Switching displays rebuilds the column, so the cascade plays again and
+      // the change reads as arriving rather than as a swap.
+      .id(display.id)
+    }
+    .background(alignment: .top) {
+      AmbientBackdrop(accent: display.accent, isVisible: controlActive != .inactive)
+        .frame(height: 260)
     }
     .navigationTitle(display.name)
   }
 
+  /// Cards fade rather than scale as they scroll.
+  ///
+  /// A scale would change the geometry the sliders map a drag into, and a
+  /// handle that lands somewhere other than the pointer is a far worse bug than
+  /// a missing flourish.
+  private func card(_ index: Int, @ViewBuilder content: () -> some View) -> some View {
+    content()
+      .scrollTransition { view, phase in
+        view.opacity(phase.isIdentity ? 1 : 0.55)
+      }
+      .entrance(index: index)
+  }
+
   private var controls: some View {
-    GroupBox {
-      VStack(alignment: .leading, spacing: 18) {
-        labelled("Brightness", value: display.brightness) {
+    PanelCard(title: "Controls", systemImage: "slider.horizontal.3", accent: display.accent) {
+      VStack(alignment: .leading, spacing: Layout.loose) {
+        LabeledReadout(
+          title: "Brightness",
+          value: display.brightness,
+          font: TypeScale.heroReadout,
+          accent: display.accent
+        ) {
           ExpressiveSlider(
             value: Binding(
               get: { display.brightness },
@@ -88,7 +122,7 @@ private struct DisplayDetail: View {
         }
 
         if display.supportsContrast {
-          labelled("Contrast", value: display.contrast) {
+          LabeledReadout(title: "Contrast", value: display.contrast, accent: display.accent) {
             ExpressiveSlider(
               value: Binding(
                 get: { display.contrast },
@@ -102,7 +136,7 @@ private struct DisplayDetail: View {
         }
 
         if display.supportsVolume {
-          labelled("Volume", value: display.volume) {
+          LabeledReadout(title: "Volume", value: display.volume, accent: display.accent) {
             ExpressiveSlider(
               value: Binding(
                 get: { display.volume },
@@ -115,44 +149,21 @@ private struct DisplayDetail: View {
         } else if let reason = display.volumeUnavailableReason {
           // Explaining beats omitting: without this, "cannot" and "forgot"
           // look the same, and here the fix is often just switching output.
-          VStack(alignment: .leading, spacing: 4) {
-            Label("No volume control", systemImage: "speaker.slash")
-              .font(.callout.weight(.medium))
-            Text(reason)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-          }
+          StatusRow(
+            symbol: "speaker.slash",
+            title: "No volume control",
+            detail: reason
+          )
+          .transition(.blurReplace)
         }
       }
-      .padding(6)
-    } label: {
-      Label("Controls", systemImage: "slider.horizontal.3")
-    }
-  }
-
-  private func labelled(
-    _ title: String,
-    value: Double,
-    @ViewBuilder content: () -> some View
-  ) -> some View {
-    VStack(alignment: .leading, spacing: 6) {
-      HStack {
-        Text(title).font(.callout.weight(.medium))
-        Spacer()
-        Text("\(Int((value * 100).rounded()))%")
-          .font(.callout.monospacedDigit())
-          .foregroundStyle(.secondary)
-          .contentTransition(.numericText())
-          .animation(motion.effectFast, value: value)
-      }
-      content()
+      .animation(motion.spatialDefault, value: display.supportsVolume)
     }
   }
 
   private var configuration: some View {
-    GroupBox {
-      VStack(alignment: .leading, spacing: 14) {
+    PanelCard(title: "This display", systemImage: "gearshape", accent: display.accent) {
+      VStack(alignment: .leading, spacing: Layout.normal) {
         Picker("Brightness via", selection: strategyBinding) {
           ForEach(BrightnessStrategy.allCases, id: \.self) { strategy in
             Text(strategy.displayName).tag(strategy)
@@ -180,24 +191,25 @@ private struct DisplayDetail: View {
             Task { await display.reprobeCapabilities() }
           } label: {
             if display.isProbing {
-              HStack(spacing: 6) {
+              HStack(spacing: Layout.tight) {
                 ProgressView().controlSize(.small)
                 Text("Probing…")
               }
+              .transition(.blurReplace)
             } else {
               Text("Probe features again")
+                .transition(.blurReplace)
             }
           }
+          .buttonStyle(.soft(display.accent))
           .disabled(display.isProbing)
+          .animation(motion.spatialDefault, value: display.isProbing)
 
           Text("Takes a few seconds — one round trip per feature.")
-            .font(.caption)
+            .font(TypeScale.detail)
             .foregroundStyle(.secondary)
         }
       }
-      .padding(6)
-    } label: {
-      Label("This display", systemImage: "gearshape")
     }
   }
 
@@ -211,16 +223,30 @@ private struct DisplayDetail: View {
       ForEach(Array(AccentPalette.tones.enumerated()), id: \.offset) { index, tone in
         let isSelected = display.settings.accentOverride == index
         Circle()
-          .fill(tone)
-          .frame(width: 16, height: 16)
+          .fill(tone.accentFill)
+          .frame(width: 18, height: 18)
           .overlay {
-            Circle().strokeBorder(.primary, lineWidth: isSelected ? 2 : 0)
+            // One ring shared across all eight swatches, so picking a new
+            // colour makes it travel there instead of blinking out here and in
+            // again over there.
+            if isSelected {
+              Circle()
+                .strokeBorder(.primary, lineWidth: 2)
+                .matchedGeometryEffect(id: "accentRing", in: accentNamespace)
+            }
+          }
+          .scaleEffect(hoveredAccent == index ? 1.25 : 1)
+          .onHover { hovering in
+            hoveredAccent = hovering ? index : (hoveredAccent == index ? nil : hoveredAccent)
           }
           .onTapGesture {
             display.updateSettings { $0.accentOverride = isSelected ? nil : index }
           }
+          .help("Use this colour for \(display.name)")
       }
     }
+    .animation(motion.spatialDefault, value: display.settings.accentOverride)
+    .animation(motion.spatialFast, value: hoveredAccent)
   }
 
   // Bindings that read from persisted settings and write through the view
@@ -258,19 +284,18 @@ private struct DisplayDetail: View {
   /// is where the reason is — "maximum is 0xFFFF" is a real answer, where a
   /// silently absent control is not.
   private var capabilities: some View {
-    GroupBox {
-      VStack(alignment: .leading, spacing: 6) {
+    PanelCard(title: "Reported features", systemImage: "checklist", accent: display.accent) {
+      VStack(alignment: .leading, spacing: Layout.tight) {
         if let probed = display.capabilities {
           ForEach(VCPCode.probeSet, id: \.rawValue) { vcp in
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-              Image(systemName: probed.isUsable(vcp) ? "checkmark.circle.fill" : "minus.circle")
-                .foregroundStyle(probed.isUsable(vcp) ? Color.green : .secondary)
-                .font(.caption)
-              Text(vcp.description)
-                .font(.callout)
-                .frame(width: 170, alignment: .leading)
+            StatusRow(
+              symbol: probed.isUsable(vcp) ? "checkmark.circle.fill" : "minus.circle",
+              tint: probed.isUsable(vcp) ? Status.ok : nil,
+              title: vcp.description,
+              titleWidth: 170
+            ) {
               Text(detail(for: probed.support(for: vcp)))
-                .font(.caption)
+                .font(TypeScale.detail)
                 .foregroundStyle(.secondary)
             }
           }
@@ -278,9 +303,6 @@ private struct DisplayDetail: View {
           Text("Not probed yet.").font(.callout).foregroundStyle(.secondary)
         }
       }
-      .padding(6)
-    } label: {
-      Label("Reported features", systemImage: "checklist")
     }
   }
 
@@ -294,26 +316,23 @@ private struct DisplayDetail: View {
   }
 
   private var diagnostics: some View {
-    GroupBox {
+    PanelCard(title: "DDC log", systemImage: "text.alignleft", accent: display.accent) {
       // Newest first: when something just broke, it is the top line that
       // matters.
       let records = log.snapshot().suffix(40).reversed()
-      VStack(alignment: .leading, spacing: 2) {
+      VStack(alignment: .leading, spacing: Layout.hair) {
         if records.isEmpty {
           Text("No activity recorded.").font(.callout).foregroundStyle(.secondary)
         } else {
           ForEach(Array(records), id: \.id) { record in
             Text(record.entry.message)
-              .font(.caption.monospaced())
+              .font(TypeScale.mono)
               .foregroundStyle(.secondary)
               .textSelection(.enabled)
           }
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(6)
-    } label: {
-      Label("DDC log", systemImage: "text.alignleft")
     }
   }
 }

@@ -31,19 +31,22 @@ struct ShortcutRecorder: View {
             .font(.caption)
             .foregroundStyle(.tertiary)
             .opacity(isHovered ? 1 : 0)
+            .animation(motion.effectFast, value: isHovered)
+            .transition(.scale.combined(with: .opacity))
             .onTapGesture { onChange(nil) }
         }
       }
       .frame(minWidth: 110)
-      .padding(.horizontal, 10)
+      .padding(.horizontal, Layout.snug)
       .padding(.vertical, 5)
       .background {
-        MorphingRoundedRectangle(cornerRadius: isRecording ? 14 : 7)
+        MorphingRoundedRectangle(cornerRadius: isRecording ? Layout.radiusCard : Layout.radiusControl)
           .fill(isRecording ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.quaternary))
       }
       .overlay {
-        MorphingRoundedRectangle(cornerRadius: isRecording ? 14 : 7)
+        MorphingRoundedRectangle(cornerRadius: isRecording ? Layout.radiusCard : Layout.radiusControl)
           .stroke(isRecording ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), lineWidth: 1.5)
+          .modifier(RecordingPulse(isRecording: isRecording, isReduced: motion.isReduced))
       }
       .animation(motion.spatialFast, value: isRecording)
     }
@@ -92,5 +95,30 @@ struct ShortcutRecorder: View {
     }
     monitor = nil
     isRecording = false
+  }
+}
+
+/// A slow breath on the border while the recorder is armed.
+///
+/// The one loop in the app whose gate is stricter than "on screen": it runs
+/// only while recording, which is a state the user entered deliberately and
+/// leaves with the next keystroke. It is also the one place a loop earns its
+/// keep — a field that is silently swallowing every key press should not look
+/// identical to one that is not.
+private struct RecordingPulse: ViewModifier {
+  let isRecording: Bool
+  let isReduced: Bool
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if isRecording, !isReduced {
+      content.phaseAnimator([0, 1]) { view, phase in
+        view.opacity(phase == 0 ? 0.45 : 1)
+      } animation: { _ in
+        .easeInOut(duration: 0.75)
+      }
+    } else {
+      content
+    }
   }
 }

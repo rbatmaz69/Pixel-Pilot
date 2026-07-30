@@ -11,7 +11,19 @@ import SwiftUI
 final class OSDController {
   /// How long the HUD stays up after the last change, matching the system OSD.
   private let visibleDuration: Duration = .milliseconds(1400)
-  private let fadeDuration: TimeInterval = 0.22
+
+  /// AppKit's side of the reduce-motion setting.
+  ///
+  /// This controller is outside the SwiftUI environment, so `MotionTokens`
+  /// cannot reach it. Without this the window would keep fading and springing
+  /// in while everything drawn inside it had been flattened — half-honoured is
+  /// worse than not honoured, because it looks like the setting is broken.
+  private var reduceMotion: Bool {
+    NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+  }
+
+  private var fadeInDuration: TimeInterval { reduceMotion ? 0 : 0.10 }
+  private var fadeOutDuration: TimeInterval { reduceMotion ? 0.08 : 0.22 }
 
   private var panel: NSPanel?
   private var hostingView: NSHostingView<AnyView>?
@@ -44,6 +56,10 @@ final class OSDController {
       makePanel(content: content, on: screen)
       currentDisplayID = displayID
     } else {
+      // Swapping the root view rather than rebuilding preserves SwiftUI's view
+      // identity, and with it the HUD's `@State`. That is load-bearing: it is
+      // what stops the entrance animation from replaying on every repeat of a
+      // held-down key.
       hostingView?.rootView = content
     }
 
@@ -53,8 +69,11 @@ final class OSDController {
     if panel.alphaValue < 1 {
       panel.alphaValue = 0
       panel.orderFrontRegardless()
+      // Short, and shorter than the SwiftUI spring inside: the window fade is
+      // only there to cover the first frame of compositing. Letting it run as
+      // long as the entrance makes the two curves fight and the HUD look soft.
       NSAnimationContext.runAnimationGroup { context in
-        context.duration = 0.14
+        context.duration = fadeInDuration
         panel.animator().alphaValue = 1
       }
     }
@@ -134,7 +153,7 @@ final class OSDController {
   private func fadeOutAndTeardown() {
     guard let panel else { return }
     NSAnimationContext.runAnimationGroup { context in
-      context.duration = fadeDuration
+      context.duration = fadeOutDuration
       panel.animator().alphaValue = 0
     } completionHandler: { [weak self] in
       MainActor.assumeIsolated {

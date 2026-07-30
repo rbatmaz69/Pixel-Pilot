@@ -15,9 +15,9 @@ struct KeyLearningSheet: View {
   @State private var action: MediaKeyAction = .brightnessUp
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
+    VStack(alignment: .leading, spacing: Layout.normal) {
       Text("Teach a key")
-        .font(.headline)
+        .font(TypeScale.sheetTitle)
 
       Picker("This key should", selection: $action) {
         ForEach(MediaKeyAction.allCases) { candidate in
@@ -29,11 +29,14 @@ struct KeyLearningSheet: View {
 
       Divider()
 
-      if let press = model.pendingLearnedPress {
-        captured(press)
-      } else {
-        waiting
+      Group {
+        if let press = model.pendingLearnedPress {
+          captured(press).transition(.blurReplace)
+        } else {
+          waiting.transition(.blurReplace)
+        }
       }
+      .animation(motion.spatialDefault, value: model.pendingLearnedPress?.signature)
 
       Spacer(minLength: 0)
 
@@ -56,21 +59,27 @@ struct KeyLearningSheet: View {
         }
       }
     }
-    .padding(20)
-    .frame(width: 420, height: 300)
+    .padding(Layout.loose)
+    .frame(width: 440, height: 320)
     .onAppear { model.beginLearningKey() }
     .onDisappear { model.cancelLearningKey() }
   }
 
   private var waiting: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack(spacing: 8) {
-        ProgressView().controlSize(.small)
+    VStack(alignment: .leading, spacing: Layout.tight) {
+      HStack(spacing: Layout.tight) {
+        // A breathing keyboard rather than a spinner. Nothing is loading here —
+        // the app is listening, and a progress indicator says the wrong thing
+        // about who is waiting for whom.
+        Image(systemName: "keyboard")
+          .font(.title3)
+          .foregroundStyle(.tint)
+          .symbolEffect(.breathe, isActive: !motion.isReduced)
         Text("Press the key now.")
-          .font(.callout.weight(.medium))
+          .font(TypeScale.rowTitle)
       }
       Text("Nothing will happen when you press it — the key is only being recorded.")
-        .font(.caption)
+        .font(TypeScale.detail)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -79,15 +88,16 @@ struct KeyLearningSheet: View {
   private func captured(_ press: HIDMediaKeyMonitor.RawPress) -> some View {
     let verdict = verdict(for: press)
 
-    return VStack(alignment: .leading, spacing: 8) {
+    return VStack(alignment: .leading, spacing: Layout.tight) {
       Label("Key captured", systemImage: "checkmark.circle.fill")
-        .foregroundStyle(.green)
-        .font(.callout.weight(.medium))
+        .foregroundStyle(Status.ok)
+        .font(TypeScale.rowTitle)
+        .symbolEffect(.bounce, value: press.signature)
 
       // Showing the raw numbers is the point: on a keyboard using a vendor page
       // this is the only evidence of what the key actually is.
       Text("\(press.deviceName) — \(press.signature.description)")
-        .font(.caption.monospaced())
+        .font(TypeScale.mono)
         .foregroundStyle(.secondary)
         .textSelection(.enabled)
 
@@ -95,21 +105,18 @@ struct KeyLearningSheet: View {
       case .allowed:
         EmptyView()
       case let .allowedWithWarning(text), let .rejected(text):
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-          Image(systemName: verdict.isAllowed
-            ? "exclamationmark.triangle.fill" : "xmark.octagon.fill")
-            .foregroundStyle(verdict.isAllowed ? Color.orange : .red)
-            .font(.caption)
-          Text(text)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
+        StatusRow(
+          symbol: verdict.isAllowed ? "exclamationmark.triangle.fill" : "xmark.octagon.fill",
+          tint: verdict.isAllowed ? Status.warn : Status.bad,
+          title: verdict.isAllowed ? "Usable, with a caveat" : "Not usable",
+          detail: text
+        )
       }
 
       if !verdict.isAllowed {
         Button("Try another key") { model.cancelLearningKey(); model.beginLearningKey() }
-          .font(.caption)
+          .buttonStyle(.soft)
+          .font(TypeScale.detail.weight(.medium))
       }
     }
     .animation(motion.effectDefault, value: press.signature)

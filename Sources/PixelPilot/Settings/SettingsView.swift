@@ -14,13 +14,17 @@ struct SettingsView: View {
       ShortcutSettings(model: model)
         .tabItem { Label("Shortcuts", systemImage: "keyboard") }
     }
-    .frame(width: 460)
+    // Wider than before: the rows now carry their explanation underneath the
+    // title, and at 460 nearly every one of them wrapped to three lines.
+    .frame(width: 500)
     .withMotionTokens()
   }
 }
 
 private struct GeneralSettings: View {
   let model: AppModel
+
+  @Environment(\.motion) private var motion
 
   @State private var global = Preferences.shared.global
   @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -64,21 +68,21 @@ private struct GeneralSettings: View {
         // the connection is opened, and a process that was refused stays
         // refused for its lifetime.
         if model.needsRelaunchForPermissions {
-          HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "arrow.clockwise.circle.fill")
-              .foregroundStyle(.blue)
-            VStack(alignment: .leading, spacing: 1) {
-              Text("Restart to finish enabling")
-              Text("The permission is granted, but this running copy was already refused. "
-                + "macOS only re-checks when the app starts.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer()
+          StatusRow(
+            symbol: "arrow.clockwise.circle.fill",
+            tint: Status.info,
+            title: "Restart to finish enabling",
+            detail: "The permission is granted, but this running copy was already refused. "
+              + "macOS only re-checks when the app starts."
+          ) {
             Button("Restart") { model.relaunch() }
+              .buttonStyle(.soft(Status.info))
+              .font(TypeScale.detail.weight(.medium))
           }
-          .font(.callout)
+          // This row appears the moment a grant is noticed, which is exactly
+          // when the window is being looked at. Without a transition the whole
+          // form jumps under the pointer.
+          .transition(.blurReplace)
         }
 
         // Which keyboards are being watched, and what the last one sent. These
@@ -150,12 +154,14 @@ private struct GeneralSettings: View {
           .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
         if let launchAtLoginError {
           Text(launchAtLoginError)
-            .font(.caption)
-            .foregroundStyle(.red)
+            .font(TypeScale.detail)
+            .foregroundStyle(Status.bad)
+            .transition(.blurReplace)
         }
       }
     }
     .formStyle(.grouped)
+    .animation(motion.spatialDefault, value: model.needsRelaunchForPermissions)
     // Re-check on appearance as well as on activation: opening this window is
     // itself a moment the answer may have changed.
     .onAppear { model.refreshPermissions() }
@@ -172,65 +178,62 @@ private struct GeneralSettings: View {
   /// observed — which is what this is for.
   @ViewBuilder
   private var learnedKeys: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    VStack(alignment: .leading, spacing: Layout.tight) {
       ForEach(model.keyBindings.bindings) { binding in
-        HStack(spacing: 8) {
-          Image(systemName: binding.action.symbolName)
-            .foregroundStyle(.secondary)
-            .frame(width: 16)
-          VStack(alignment: .leading, spacing: 1) {
-            Text(binding.action.displayName)
-              .font(.callout)
-            Text("\(binding.keyboardName) — \(binding.signature.description)")
-              .font(.caption.monospaced())
-              .foregroundStyle(.secondary)
-          }
-          Spacer()
+        StatusRow(
+          symbol: binding.action.symbolName,
+          title: binding.action.displayName,
+          detail: "\(binding.keyboardName) — \(binding.signature.description)"
+        ) {
           Button {
             model.forgetLearnedKey(binding.signature)
           } label: {
             Image(systemName: "trash")
           }
-          .buttonStyle(.borderless)
+          .buttonStyle(.soft)
           .help("Forget this key")
         }
+        // Teaching and forgetting a key both happen with this list on screen,
+        // so both should be visible as changes rather than as jumps.
+        .transition(.blurReplace)
       }
 
-      HStack(spacing: 8) {
+      HStack(spacing: Layout.tight) {
         Button("Teach a key…") { isLearningKey = true }
+          .buttonStyle(.soft)
         Text("For keyboards whose keys are not recognised automatically.")
-          .font(.caption)
+          .font(TypeScale.detail)
           .foregroundStyle(.secondary)
       }
     }
+    .animation(motion.spatialDefault, value: model.keyBindings.bindings.count)
   }
 
+  /// Both permission states, as one row that reacts when the answer changes.
+  ///
+  /// The glyph swap is the whole point of the animation here: coming back from
+  /// System Settings having granted something, the confirmation should be
+  /// unmissable rather than a redraw you have to go looking for.
   private func permissionRow(
     _ title: String,
     detail: String,
     granted: Bool,
     action: @escaping () -> Void
   ) -> some View {
-    HStack(alignment: .firstTextBaseline, spacing: 8) {
-      Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-        .foregroundStyle(granted ? Color.green : .orange)
-
-      VStack(alignment: .leading, spacing: 1) {
-        Text(title)
-        Text(detail)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-
-      Spacer()
-
+    StatusRow(
+      symbol: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+      tint: granted ? Status.ok : Status.warn,
+      title: title,
+      detail: detail
+    ) {
       if !granted {
         Button("Open Settings…", action: action)
-          .buttonStyle(.link)
+          .buttonStyle(.soft(Status.warn))
+          .font(TypeScale.detail.weight(.medium))
+          .transition(.blurReplace)
       }
     }
-    .font(.callout)
+    .animation(motion.spatialDefault, value: granted)
   }
 
   private func apply() {
@@ -290,12 +293,7 @@ private struct ShortcutSettings: View {
     label: String,
     symbol: String? = nil
   ) -> some View {
-    HStack {
-      if let symbol {
-        Image(systemName: symbol).foregroundStyle(.secondary)
-      }
-      Text(label)
-      Spacer()
+    StatusRow(symbol: symbol ?? "command", title: label) {
       ShortcutRecorder(shortcut: model.hotkeys.shortcut(for: action)) { shortcut in
         model.setHotkey(shortcut, for: action)
       }
