@@ -1,0 +1,94 @@
+#
+# Xcode project definition — the .xcodeproj is generated from this and is not
+# checked in. Regenerate with `Scripts/generate.sh` (or `xcodegen generate`)
+# after adding or moving files.
+#
+name: PixelPilot
+
+options:
+  bundleIdPrefix: dev.rb
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "26.0"
+
+packages:
+  PixelPilotCore:
+    path: Packages/PixelPilotCore
+
+targets:
+  PixelPilot:
+    type: application
+    platform: macOS
+
+    sources:
+      - path: Sources/PixelPilot
+        excludes:
+          - "Support/*.plist"
+          - "Support/*.entitlements"
+
+    dependencies:
+      - package: PixelPilotCore
+        product: PixelPilotCore
+
+    info:
+      path: Sources/PixelPilot/Support/Info.plist
+      properties:
+        # No Dock icon and no menu bar: this lives in the status bar.
+        LSUIElement: true
+        CFBundleDisplayName: Pixel Pilot
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSHumanReadableCopyright: ""
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+
+    entitlements:
+      path: Sources/PixelPilot/Support/PixelPilot.entitlements
+      properties:
+        # The sandbox is incompatible with what this app does: raw IOKit access
+        # for DDC, a system-wide event tap for the media keys, and gamma table
+        # writes. None of those have sandbox entitlements.
+        com.apple.security.app-sandbox: false
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.rb.pixelpilot
+        PRODUCT_NAME: Pixel Pilot
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
+
+        # No signing identity is installed on this machine, so the app is signed
+        # ad-hoc to run locally. Consequence: the code signature changes on every
+        # build, and macOS therefore forgets the Accessibility grant each time.
+        # Adding a (free) Apple ID to Xcode produces a stable development
+        # certificate and fixes that — see README.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: YES
+        CODE_SIGNING_ALLOWED: YES
+        ENABLE_HARDENED_RUNTIME: YES
+
+        DEAD_CODE_STRIPPING: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        GENERATE_INFOPLIST_FILE: NO
+        COMBINE_HIDPI_IMAGES: YES
+
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+          ONLY_ACTIVE_ARCH: YES
+        Release:
+          SWIFT_COMPILATION_MODE: wholemodule
+
+schemes:
+  PixelPilot:
+    build:
+      targets:
+        PixelPilot: all
+    run:
+      config: Debug
+    archive:
+      config: Release
