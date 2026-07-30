@@ -20,6 +20,9 @@ final class AppModel {
   let preferences = Preferences.shared
 
   let hotkeys = HotkeyStore()
+  let presets = PresetStore.shared
+
+  @ObservationIgnored private var presetTask: Task<Void, Never>?
 
   @ObservationIgnored private let events = DisplayEvents()
   @ObservationIgnored private let osd = OSDController()
@@ -38,6 +41,9 @@ final class AppModel {
     events.onColorSettingsChanged = {
       // Night Shift or a profile change just reset the gamma table.
       GammaDimmer.shared.reassertAll()
+    }
+    events.onAppearanceChanged = { [weak self] isDark in
+      self?.applyAppearancePreset(isDark: isDark)
     }
     events.start()
 
@@ -149,6 +155,62 @@ final class AppModel {
     }
   }
 
+  // MARK: - Presets
+
+  /// Applies a preset, one display at a time.
+  ///
+  /// Sequential for the same reason display activation is: the displays share an
+  /// I2C bus, and overlapping transactions on it corrupt each other rather than
+  /// queueing.
+  func apply(_ preset: Preset) {
+    presetTask?.cancel()
+    presetTask = Task { [displays] in
+      for display in displays {
+        guard !Task.isCancelled else { return }
+        guard let entry = preset.entry(for: display.key) else { continue }
+
+        if let brightness = entry.brightness {
+          display.setBrightness(brightness)
+        }
+        if let contrast = entry.contrast, display.supportsContrast {
+          display.setContrast(contrast)
+        }
+        // Input switching is deliberately not applied from presets. It is the
+        // one action that can leave the Mac with no picture, and a preset is
+        // exactly the wrong place for something that needs a confirmation.
+        await display.commitBrightnessAndWait()
+      }
+      log.record(.info("Applied preset '\(preset.name)'"))
+    }
+  }
+
+  /// Captures what every display is set to right now.
+  func captureCurrentState(name: String, symbolName: String) -> Preset {
+    var entries: [DisplayKey: PresetEntry] = [:]
+    for display in displays {
+      entries[display.key] = PresetEntry(
+        brightness: display.brightness,
+        contrast: display.supportsContrast ? display.contrast : nil
+      )
+    }
+    let preset = Preset(name: name, symbolName: symbolName, entries: entries)
+    presets.save(preset)
+    return preset
+  }
+
+  func deletePreset(id: UUID) {
+    presets.delete(id: id)
+    hotkeys.pruneMissingPresets(existing: Set(presets.presets.map(\.id)))
+    registerHotkeys()
+  }
+
+  /// Applies whichever preset is bound to the current appearance.
+  private func applyAppearancePreset(isDark: Bool) {
+    guard let preset = presets.preset(forDarkAppearance: isDark) else { return }
+    log.record(.info("Appearance switched to \(isDark ? "dark" : "light")"))
+    apply(preset)
+  }
+
   // MARK: - Global shortcuts
 
   func setHotkey(_ shortcut: Shortcut?, for action: HotkeyCenter.Action) {
@@ -166,23 +228,30 @@ final class AppModel {
   /// Unlike the media keys, a shortcut the user assigned deliberately is always
   /// acted on. There is no "pass it through" case — they chose it for this.
   private func handleHotkey(_ action: HotkeyCenter.Action) {
-    guard let display = focusedDisplay, display.isReady else { return }
-    let step = preferences.global.keyStep
-
     switch action {
-    case .brightnessUp, .brightnessDown:
-      let value = display.adjustBrightness(by: action == .brightnessUp ? step : -step)
-      present(.brightness, value: value, on: display)
+    case let .preset(id):
+      guard let preset = presets.preset(id: id) else { return }
+      apply(preset)
 
-    case .volumeUp, .volumeDown:
-      guard display.supportsVolume else { return }
-      let value = display.adjustVolume(by: action == .volumeUp ? step : -step)
-      present(display.isMuted ? .muted : .volume, value: value, on: display)
+    case let .builtin(builtin):
+      guard let display = focusedDisplay, display.isReady else { return }
+      let step = preferences.global.keyStep
 
-    case .toggleMute:
-      guard display.supportsVolume else { return }
-      display.toggleMute()
-      present(display.isMuted ? .muted : .volume, value: display.volume, on: display)
+      switch builtin {
+      case .brightnessUp, .brightnessDown:
+        let value = display.adjustBrightness(by: builtin == .brightnessUp ? step : -step)
+        present(.brightness, value: value, on: display)
+
+      case .volumeUp, .volumeDown:
+        guard display.supportsVolume else { return }
+        let value = display.adjustVolume(by: builtin == .volumeUp ? step : -step)
+        present(display.isMuted ? .muted : .volume, value: value, on: display)
+
+      case .toggleMute:
+        guard display.supportsVolume else { return }
+        display.toggleMute()
+        present(display.isMuted ? .muted : .volume, value: display.volume, on: display)
+      }
     }
   }
 

@@ -210,6 +210,13 @@ final class DisplayViewModel: Identifiable {
     Task { await brightnessController.settle() }
   }
 
+  /// Same, but awaitable. Applying a preset uses this to finish with one display
+  /// before starting the next, so their DDC traffic never overlaps.
+  func commitBrightnessAndWait() async {
+    await brightnessController.settle()
+    await queue?.flush()
+  }
+
   // MARK: - Inputs and power
 
   /// Reads the capability string, which is the only way to learn which input

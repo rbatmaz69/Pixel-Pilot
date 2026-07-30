@@ -112,7 +112,7 @@ public struct EDID: Sendable, Equatable {
 /// Every persisted per-display setting hangs off this rather than off a
 /// `CGDirectDisplayID`, which is reassigned whenever the display graph changes.
 /// The key survives replugging, port changes, docking and reboots.
-public struct DisplayKey: Hashable, Sendable, Codable, CustomStringConvertible {
+public struct DisplayKey: Hashable, Sendable, CustomStringConvertible {
   public let rawValue: String
 
   public init(rawValue: String) { self.rawValue = rawValue }
@@ -139,4 +139,43 @@ public struct DisplayKey: Hashable, Sendable, Codable, CustomStringConvertible {
   }
 
   public var description: String { rawValue }
+}
+
+/// Encoded as a bare string rather than as `{"rawValue": …}`.
+///
+/// Preferences are stored as JSON in `UserDefaults`, and one of the design goals
+/// is that a user can open them and fix a misconfigured display by hand. Nested
+/// wrappers around a single string work against that.
+extension DisplayKey: Codable {
+  public init(from decoder: any Decoder) throws {
+    self.rawValue = try decoder.singleValueContainer().decode(String.self)
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(rawValue)
+  }
+}
+
+/// Lets `[DisplayKey: …]` encode as a JSON object.
+///
+/// Without this, Swift encodes a dictionary with a non-string key as a flat
+/// array of alternating keys and values — valid, but unreadable and impossible
+/// to edit by hand.
+extension DisplayKey: CodingKeyRepresentable {
+  public var codingKey: any CodingKey {
+    StringCodingKey(stringValue: rawValue)
+  }
+
+  public init?<T: CodingKey>(codingKey: T) {
+    self.init(rawValue: codingKey.stringValue)
+  }
+}
+
+private struct StringCodingKey: CodingKey {
+  var stringValue: String
+  var intValue: Int? { nil }
+
+  init(stringValue: String) { self.stringValue = stringValue }
+  init?(intValue: Int) { nil }
 }

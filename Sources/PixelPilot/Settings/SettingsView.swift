@@ -9,6 +9,8 @@ struct SettingsView: View {
     TabView {
       GeneralSettings(model: model)
         .tabItem { Label("General", systemImage: "gearshape") }
+      PresetSettings(model: model)
+        .tabItem { Label("Presets", systemImage: "square.stack") }
       ShortcutSettings(model: model)
         .tabItem { Label("Shortcuts", systemImage: "keyboard") }
     }
@@ -105,14 +107,8 @@ private struct ShortcutSettings: View {
   var body: some View {
     Form {
       Section {
-        ForEach(HotkeyCenter.Action.allCases) { action in
-          HStack {
-            Text(action.displayName)
-            Spacer()
-            ShortcutRecorder(shortcut: model.hotkeys.shortcut(for: action)) { shortcut in
-              model.setHotkey(shortcut, for: action)
-            }
-          }
+        ForEach(HotkeyCenter.Action.Builtin.allCases, id: \.self) { builtin in
+          row(for: .builtin(builtin), label: builtin.displayName)
         }
       } header: {
         Text("Global shortcuts")
@@ -122,7 +118,32 @@ private struct ShortcutSettings: View {
           .font(.caption)
           .foregroundStyle(.secondary)
       }
+
+      if !model.presets.presets.isEmpty {
+        Section("Presets") {
+          ForEach(model.presets.presets) { preset in
+            row(for: .preset(preset.id), label: preset.name, symbol: preset.symbolName)
+          }
+        }
+      }
     }
     .formStyle(.grouped)
+  }
+
+  private func row(
+    for action: HotkeyCenter.Action,
+    label: String,
+    symbol: String? = nil
+  ) -> some View {
+    HStack {
+      if let symbol {
+        Image(systemName: symbol).foregroundStyle(.secondary)
+      }
+      Text(label)
+      Spacer()
+      ShortcutRecorder(shortcut: model.hotkeys.shortcut(for: action)) { shortcut in
+        model.setHotkey(shortcut, for: action)
+      }
+    }
   }
 }

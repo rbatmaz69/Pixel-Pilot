@@ -59,23 +59,62 @@ struct Shortcut: Codable, Hashable, Sendable {
 /// existing shortcuts for us instead of us silently stealing them.
 @MainActor
 final class HotkeyCenter {
-  enum Action: String, Codable, CaseIterable, Identifiable {
-    case brightnessUp
-    case brightnessDown
-    case volumeUp
-    case volumeDown
-    case toggleMute
+  /// What a shortcut does.
+  ///
+  /// Presets are created at runtime, so this cannot stay a fixed enum. The
+  /// string encoding is chosen so that shortcuts stored under the previous
+  /// fixed-case version still load: a built-in action keeps exactly the raw
+  /// value it had before, and only presets use the namespaced form.
+  enum Action: Hashable, Identifiable {
+    case builtin(Builtin)
+    case preset(UUID)
 
-    var id: String { rawValue }
+    enum Builtin: String, CaseIterable, Sendable {
+      case brightnessUp
+      case brightnessDown
+      case volumeUp
+      case volumeDown
+      case toggleMute
 
-    var displayName: String {
-      switch self {
-      case .brightnessUp: "Increase brightness"
-      case .brightnessDown: "Decrease brightness"
-      case .volumeUp: "Increase volume"
-      case .volumeDown: "Decrease volume"
-      case .toggleMute: "Toggle mute"
+      var displayName: String {
+        switch self {
+        case .brightnessUp: "Increase brightness"
+        case .brightnessDown: "Decrease brightness"
+        case .volumeUp: "Increase volume"
+        case .volumeDown: "Decrease volume"
+        case .toggleMute: "Toggle mute"
+        }
       }
+    }
+
+    private static let presetPrefix = "preset:"
+
+    var storageKey: String {
+      switch self {
+      case let .builtin(builtin): builtin.rawValue
+      case let .preset(id): Self.presetPrefix + id.uuidString
+      }
+    }
+
+    init?(storageKey: String) {
+      if storageKey.hasPrefix(Self.presetPrefix) {
+        let raw = String(storageKey.dropFirst(Self.presetPrefix.count))
+        guard let id = UUID(uuidString: raw) else { return nil }
+        self = .preset(id)
+      } else if let builtin = Builtin(rawValue: storageKey) {
+        self = .builtin(builtin)
+      } else {
+        return nil
+      }
+    }
+
+    var id: String { storageKey }
+
+    /// Presets are named by the user, so their label has to be looked up rather
+    /// than derived.
+    var builtinDisplayName: String? {
+      if case let .builtin(builtin) = self { return builtin.displayName }
+      return nil
     }
   }
 

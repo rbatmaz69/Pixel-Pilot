@@ -25,6 +25,11 @@ struct MenuBarPanel: View {
         }
       }
 
+      if !model.presets.presets.isEmpty {
+        Divider().padding(.top, 12)
+        presetRow
+      }
+
       if model.needsAccessibilityPermission {
         Divider().padding(.top, 12)
         permissionNotice
@@ -49,6 +54,28 @@ struct MenuBarPanel: View {
       }
     }
     .padding(.vertical, 8)
+  }
+
+  /// Presets as a row of buttons rather than a list.
+  ///
+  /// They are the one thing here you press and forget, so they get the least
+  /// vertical space — the sliders are what the panel is for.
+  private var presetRow: some View {
+    HStack(spacing: 6) {
+      ForEach(model.presets.presets) { preset in
+        Button {
+          model.apply(preset)
+        } label: {
+          Label(preset.name, systemImage: preset.symbolName)
+            .labelStyle(.titleAndIcon)
+            .font(.caption)
+        }
+        .buttonStyle(.accessoryBar)
+        .help("Apply \(preset.name)")
+      }
+      Spacer(minLength: 0)
+    }
+    .padding(.top, 10)
   }
 
   /// Shown only when the brightness keys cannot work. Without it the keys would

@@ -25,6 +25,20 @@ final class HotkeyStore {
     shortcuts[action]
   }
 
+  /// Drops bindings whose preset no longer exists, so a deleted preset does not
+  /// leave a shortcut registered that quietly does nothing.
+  func pruneMissingPresets(existing ids: Set<UUID>) {
+    let stale = shortcuts.keys.filter { action in
+      if case let .preset(id) = action { return !ids.contains(id) }
+      return false
+    }
+    guard !stale.isEmpty else { return }
+    for action in stale {
+      shortcuts.removeValue(forKey: action)
+    }
+    persist()
+  }
+
   func set(_ shortcut: Shortcut?, for action: HotkeyCenter.Action) {
     if let shortcut {
       // The same combination cannot drive two actions; the newest wins.
@@ -40,20 +54,24 @@ final class HotkeyStore {
 
   /// No shortcuts are registered out of the box. Anything we picked would risk
   /// silently overriding something the user already relies on.
+  ///
+  /// Unknown keys are dropped rather than failing the whole load — a shortcut
+  /// bound to a preset that no longer exists should cost that one binding, not
+  /// all of them.
   private static func load(from defaults: UserDefaults) -> [HotkeyCenter.Action: Shortcut] {
     guard let data = defaults.data(forKey: defaultsKey),
           let raw = try? JSONDecoder().decode([String: Shortcut].self, from: data)
     else { return [:] }
 
     return raw.reduce(into: [:]) { result, entry in
-      if let action = HotkeyCenter.Action(rawValue: entry.key) {
+      if let action = HotkeyCenter.Action(storageKey: entry.key) {
         result[action] = entry.value
       }
     }
   }
 
   private func persist() {
-    let raw = Dictionary(uniqueKeysWithValues: shortcuts.map { ($0.key.rawValue, $0.value) })
+    let raw = Dictionary(uniqueKeysWithValues: shortcuts.map { ($0.key.storageKey, $0.value) })
     do {
       defaults.set(try JSONEncoder().encode(raw), forKey: Self.defaultsKey)
     } catch {

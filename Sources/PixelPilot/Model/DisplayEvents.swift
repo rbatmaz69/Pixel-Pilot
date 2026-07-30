@@ -26,6 +26,11 @@ final class DisplayEvents {
   var onDisplaysChanged: (() -> Void)?
   var onWake: (() -> Void)?
   var onColorSettingsChanged: (() -> Void)?
+  /// Fires when the system switches between light and dark. Drives preset
+  /// automation, which is why that automation costs nothing while idle.
+  var onAppearanceChanged: ((_ isDark: Bool) -> Void)?
+
+  private var appearanceObservation: NSKeyValueObservation?
 
   func start() {
     let center = NotificationCenter.default
@@ -53,6 +58,25 @@ final class DisplayEvents {
     ) { [weak self] _ in
       MainActor.assumeIsolated { self?.onColorSettingsChanged?() }
     })
+
+    // Observing the effective appearance rather than the "AppleInterfaceThemeChanged"
+    // distributed notification: this also covers Auto mode switching at dusk,
+    // and it reports the appearance the app has actually resolved to.
+    appearanceObservation = NSApplication.shared.observe(
+      \.effectiveAppearance, options: [.new]
+    ) { [weak self] _, _ in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        let isDark = NSApplication.shared.effectiveAppearance
+          .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        self.onAppearanceChanged?(isDark)
+      }
+    }
+  }
+
+  /// The appearance right now, for deciding what to apply at launch.
+  var isDarkAppearance: Bool {
+    NSApplication.shared.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
   }
 
   func stop() {
@@ -63,6 +87,8 @@ final class DisplayEvents {
       DistributedNotificationCenter.default().removeObserver(observer)
     }
     observers.removeAll()
+    appearanceObservation?.invalidate()
+    appearanceObservation = nil
     pendingReconfiguration?.cancel()
     pendingReconfiguration = nil
   }
