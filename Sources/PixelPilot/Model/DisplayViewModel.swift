@@ -225,6 +225,18 @@ final class DisplayViewModel: Identifiable {
     return reported
   }
 
+  /// True when the display reports an input it does not itself list.
+  ///
+  /// Worth calling out separately, because it is worse than not knowing. It
+  /// means the connection currently in use has no entry to switch back to — a
+  /// USB-C connection on a display that lists only DisplayPort and HDMI, for
+  /// instance. Switching away is then irreversible from software in a stronger
+  /// sense than usual: there is nothing to switch back *to*.
+  var currentInputIsUnlisted: Bool {
+    guard let reported = reportedInput, !availableInputs.isEmpty else { return false }
+    return !availableInputs.contains(reported)
+  }
+
   /// Explains the current path in one short phrase, for the panel footer.
   var routeDescription: String {
     var parts = [brightnessStrategy.displayName]

@@ -38,9 +38,7 @@ struct InputAndPowerSection: View {
       }
       Button("Cancel", role: .cancel) { pendingInput = nil }
     } message: {
-      Text("This Mac will stop appearing on \(display.name). Pixel Pilot talks to the display "
-        + "over the video connection, so it cannot switch back — you will need the monitor's "
-        + "own buttons.")
+      Text(switchInputWarning)
     }
     .confirmationDialog(
       pendingPowerMode.map { "Set \(display.name) to \($0.displayName)?" } ?? "",
@@ -58,6 +56,19 @@ struct InputAndPowerSection: View {
       Text("Wake it again by moving the mouse or pressing the monitor's power button. "
         + "The Mac itself stays awake.")
     }
+  }
+
+  /// The confirmation text, which has to be sharper when the current input is
+  /// unlisted — "you can switch back with the monitor's buttons" is misleading
+  /// when the input you are on does not appear in the list at all.
+  private var switchInputWarning: String {
+    let base = "This Mac will stop appearing on \(display.name). Pixel Pilot talks to the "
+      + "display over the video connection, so it cannot switch back."
+    if display.currentInputIsUnlisted {
+      return base + " Your current connection is not even among the inputs this display "
+        + "lists, so there is no entry here to return to — only the monitor's own buttons."
+    }
+    return base + " You will need the monitor's own buttons."
   }
 
   // MARK: - Inputs
@@ -111,6 +122,8 @@ struct InputAndPowerSection: View {
             .disabled(value == display.currentInput)
           }
         }
+
+        unlistedInputWarning
       }
     }
   }
@@ -125,9 +138,31 @@ struct InputAndPowerSection: View {
       return "currently \(InputSource.name(for: current))"
     }
     if let reported = display.reportedInput {
-      return String(format: "current input unknown (display reports 0x%02X)", reported)
+      return String(format: "reports 0x%02X — not one it lists", reported)
     }
     return "current input unknown"
+  }
+
+  /// The stronger warning, for when the connection in use is not in the list.
+  ///
+  /// Not the same as merely not knowing which entry is current. It means there
+  /// is no entry to come back to — the case for a USB-C connection on a display
+  /// that lists only DisplayPort and HDMI.
+  @ViewBuilder
+  private var unlistedInputWarning: some View {
+    if display.currentInputIsUnlisted {
+      HStack(alignment: .firstTextBaseline, spacing: 6) {
+        Image(systemName: "exclamationmark.triangle.fill")
+          .foregroundStyle(.orange)
+          .font(.caption)
+        Text("The connection you are using is not among the inputs this display lists, "
+          + "so there is nothing here to switch back to. Only the monitor's own buttons "
+          + "can return you to it.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
   }
 
   // MARK: - Power
