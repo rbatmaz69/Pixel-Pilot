@@ -29,6 +29,10 @@ final class AppModel {
   private(set) var accessibilityGranted = false
   private(set) var inputMonitoringGranted = false
 
+  /// Keyboards the HID listener is attached to. Empty means nothing was
+  /// matched, which is a different problem from a keyboard that sends nothing.
+  private(set) var watchedKeyboards: [String] = []
+
   let log = DiagnosticsLog()
   let preferences: Preferences
 
@@ -185,6 +189,7 @@ final class AppModel {
     // Independent of the tap: a keyboard whose keys macOS never translates is
     // exactly the case where the tap succeeds and still sees nothing.
     hidKeysActive = hidKeys.start()
+    watchedKeyboards = hidKeys.attachedDevices
     keyDeduplicator.reset()
     return mediaKeysActive || hidKeysActive
   }
@@ -229,6 +234,40 @@ final class AppModel {
   func requestInputMonitoringPermission() {
     HIDMediaKeyMonitor.requestTrust()
     HIDMediaKeyMonitor.openInputMonitoringSettings()
+  }
+
+  /// True when a permission has been granted but the listener it unlocks is
+  /// still not running.
+  ///
+  /// macOS decides HID access at the moment the connection is opened, and a
+  /// process that was refused stays refused for its lifetime — so granting
+  /// Input Monitoring to a running app changes nothing until it restarts.
+  /// Without saying this, the app looks broken precisely when the user has just
+  /// done everything right.
+  var needsRelaunchForPermissions: Bool {
+    guard preferences.global.mediaKeysEnabled else { return false }
+    return (inputMonitoringGranted && !hidKeysActive)
+      || (accessibilityGranted && !mediaKeysActive)
+  }
+
+  /// Relaunches the app.
+  ///
+  /// Spawns a detached copy that waits for this process to exit before opening
+  /// the bundle — launching straight away would collide with the copy that is
+  /// still running.
+  func relaunch() {
+    let bundleURL = Bundle.main.bundleURL
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/sh")
+    process.arguments = [
+      "-c",
+      "while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done; "
+        + "open \"\(bundleURL.path)\"",
+    ]
+    try? process.run()
+
+    stop()
+    NSApplication.shared.terminate(nil)
   }
 
   /// Handles a key seen at the HID layer.

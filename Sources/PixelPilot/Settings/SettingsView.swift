@@ -58,14 +58,54 @@ private struct GeneralSettings: View {
             .fixedSize(horizontal: false, vertical: true)
         }
 
-        if let observed = model.lastObservedKey {
-          // Shows what the keyboard actually sends. On a keyboard that is not
-          // working, this is the difference between diagnosing it and guessing.
-          Text(String(
-            format: "Last key seen: usage 0x%02X from %@", observed.usage, observed.device
-          ))
-          .font(.caption.monospaced())
-          .foregroundStyle(.secondary)
+        // Permission granted and the listener still not running is its own
+        // state, and the only cure is a relaunch: macOS decides HID access when
+        // the connection is opened, and a process that was refused stays
+        // refused for its lifetime.
+        if model.needsRelaunchForPermissions {
+          HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "arrow.clockwise.circle.fill")
+              .foregroundStyle(.blue)
+            VStack(alignment: .leading, spacing: 1) {
+              Text("Restart to finish enabling")
+              Text("The permission is granted, but this running copy was already refused. "
+                + "macOS only re-checks when the app starts.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button("Restart") { model.relaunch() }
+          }
+          .font(.callout)
+        }
+
+        // Which keyboards are being watched, and what the last one sent. These
+        // two together separate "never matched" from "matched but silent",
+        // which need completely different fixes.
+        VStack(alignment: .leading, spacing: 2) {
+          if model.watchedKeyboards.isEmpty {
+            Text("Watching no keyboards.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          } else {
+            Text("Watching: \(model.watchedKeyboards.joined(separator: ", "))")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+
+          if let observed = model.lastObservedKey {
+            Text(String(
+              format: "Last key: usage 0x%02X from %@", observed.usage, observed.device
+            ))
+            .font(.caption.monospaced())
+            .foregroundStyle(.secondary)
+          } else {
+            Text("No media key seen yet — press one now.")
+              .font(.caption)
+              .foregroundStyle(.tertiary)
+          }
         }
 
         Toggle("Show the on-screen indicator", isOn: $global.showsOSD)
@@ -99,7 +139,6 @@ private struct GeneralSettings: View {
       }
     }
     .formStyle(.grouped)
-    .scrollDisabled(true)
     // Re-check on appearance as well as on activation: opening this window is
     // itself a moment the answer may have changed.
     .onAppear { model.refreshPermissions() }

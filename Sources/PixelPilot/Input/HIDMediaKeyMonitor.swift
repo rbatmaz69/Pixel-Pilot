@@ -136,8 +136,24 @@ final class HIDMediaKeyMonitor {
     }
 
     self.manager = manager
-    logger.info("HID media key monitor running")
+    attachedDevices = Self.deviceNames(of: manager)
+    logger.info("HID media key monitor running, watching \(self.attachedDevices.count) device(s)")
     return true
+  }
+
+  /// Names of the devices actually being watched.
+  ///
+  /// Surfaced because it splits the two ways this can fail. A keyboard missing
+  /// from this list was never matched; a keyboard present in it that produces
+  /// no events is sending its keys somewhere other than the consumer page.
+  /// Without the distinction, "nothing happens" is unfixable.
+  private(set) var attachedDevices: [String] = []
+
+  private static func deviceNames(of manager: IOHIDManager) -> [String] {
+    guard let devices = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice> else { return [] }
+    return devices
+      .compactMap { IOHIDDeviceGetProperty($0, kIOHIDProductKey as CFString) as? String }
+      .sorted()
   }
 
   func stop() {
@@ -147,6 +163,7 @@ final class HIDMediaKeyMonitor {
     )
     IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
     self.manager = nil
+    attachedDevices = []
   }
 
   isolated deinit {
