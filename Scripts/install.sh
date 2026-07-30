@@ -23,16 +23,49 @@ if [[ ! -d PixelPilot.xcodeproj ]]; then
   ./Scripts/generate.sh
 fi
 
+# project.yml asks for automatic signing, because that is what makes Xcode issue
+# a development certificate — and a stable signature is what lets macOS remember
+# the Accessibility grant between builds.
+#
+# But that setup needs a team selected in Xcode once, and until then the build
+# fails outright. Rather than leaving the installer broken in the meantime, fall
+# back to ad-hoc signing: the app works, it just forgets its Accessibility grant
+# on the next install.
+SIGNING_ARGS=()
+ADHOC_FALLBACK=0
+
+if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "Apple Development"; then
+  ADHOC_FALLBACK=1
+  SIGNING_ARGS=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
+  echo "==> No development certificate found — signing ad-hoc for now"
+fi
+
 echo "==> Building (Release)"
 xcodebuild \
   -project PixelPilot.xcodeproj \
   -scheme PixelPilot \
   -configuration Release \
   -derivedDataPath .build/xcode \
+  ${SIGNING_ARGS[@]+"${SIGNING_ARGS[@]}"} \
   build \
   > /tmp/pixelpilot-build.log 2>&1 || {
-    echo "error: build failed. Last 30 lines:" >&2
-    tail -30 /tmp/pixelpilot-build.log >&2
+    echo "error: build failed." >&2
+    # Surface the compiler's own error lines. Dumping the tail of the log buries
+    # them under the toolchain's probing output, which is what made this script
+    # unhelpful the first time it failed.
+    if grep -q "requires a development team" /tmp/pixelpilot-build.log; then
+      cat >&2 <<'HINT'
+
+  Signing needs a team selected once in Xcode:
+    open PixelPilot.xcodeproj
+    target "PixelPilot" -> Signing & Capabilities -> Team
+
+  That is also what makes Xcode create the certificate in the first place.
+HINT
+    else
+      grep -E "error:" /tmp/pixelpilot-build.log | head -20 >&2
+      echo "  (full log: /tmp/pixelpilot-build.log)" >&2
+    fi
     exit 1
   }
 
@@ -72,11 +105,13 @@ echo
 echo "Installed. Signature:"
 codesign -dv "$DESTINATION" 2>&1 | grep -E "Identifier|Signature" | sed 's/^/  /'
 echo
-if codesign -dv "$DESTINATION" 2>&1 | grep -q adhoc; then
+if [[ $ADHOC_FALLBACK -eq 1 ]]; then
   cat <<'NOTE'
-Note: this build is signed ad-hoc, so its signature changes every time you run
-this script. macOS will ask for the Accessibility permission again after each
-install. Adding an Apple ID in Xcode → Settings → Accounts produces a stable
-development certificate and ends that — see README.
+Signed ad-hoc, so the signature changes on every install and macOS will ask for
+the Accessibility permission again each time.
+
+To end that: open PixelPilot.xcodeproj, select the target "PixelPilot" ->
+Signing & Capabilities -> Team. A free Apple ID is enough. Re-run this script
+afterwards and it will use the real certificate automatically.
 NOTE
 fi
