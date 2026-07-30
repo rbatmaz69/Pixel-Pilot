@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+.swiftpm/
+
+# Generated from project.yml by Scripts/generate.sh. Machine-written, changes on
+# every file added, and merges badly — the source of truth is project.yml.
+PixelPilot.xcodeproj/
+
+Package.resolved
+xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
