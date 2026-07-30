@@ -23,6 +23,7 @@ final class AppModel {
   let presets = PresetStore.shared
 
   @ObservationIgnored private var presetTask: Task<Void, Never>?
+  @ObservationIgnored private var audioObservation: SystemVolume.DefaultOutputObservation?
 
   @ObservationIgnored private let events = DisplayEvents()
   @ObservationIgnored private let osd = OSDController()
@@ -58,6 +59,18 @@ final class AppModel {
     hotkeyCenter.start()
     registerHotkeys()
 
+    // Whether volume is controllable at all depends on the current output
+    // device, so it has to be re-evaluated when that changes rather than only
+    // at launch.
+    audioObservation = SystemVolume.observeDefaultOutputDevice { [weak self] in
+      Task { @MainActor in
+        guard let self else { return }
+        for display in self.displays {
+          await display.refreshVolumeRoute()
+        }
+      }
+    }
+
     refresh()
   }
 
@@ -65,6 +78,7 @@ final class AppModel {
     events.stop()
     mediaKeys.stop()
     hotkeyCenter.stop()
+    audioObservation = nil
     osd.hide()
     activationTask?.cancel()
     // Leaving a display dimmed after quitting would be indistinguishable from

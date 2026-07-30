@@ -49,6 +49,229 @@ public enum SystemVolume {
     )
   }
 
+  /// Calls `handler` whenever the default output device changes.
+  ///
+  /// Needed because whether volume is controllable at all is a property of the
+  /// current device, not of the display: a Mac sending audio to a DisplayPort
+  /// monitor has no volume control, and the moment it switches to the built-in
+  /// speakers it does. Without this the UI keeps showing whichever answer was
+  /// true at launch.
+  ///
+  /// CoreAudio delivers this as a callback, so it costs nothing while nothing
+  /// changes — the same rule the rest of the app follows.
+  public static func observeDefaultOutputDevice(
+    handler: @escaping @Sendable () -> Void
+  ) -> DefaultOutputObservation {
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    let queue = DispatchQueue(label: "dev.rb.pixelpilot.audio", qos: .utility)
+    let block: AudioObjectPropertyListenerBlock = { _, _ in handler() }
+
+    AudioObjectAddPropertyListenerBlock(
+      AudioObjectID(kAudioObjectSystemObject), &address, queue, block
+    )
+    return DefaultOutputObservation(block: block)
+  }
+
+  /// Removes the listener when released.
+  public final class DefaultOutputObservation: @unchecked Sendable {
+    private let block: AudioObjectPropertyListenerBlock
+
+    init(block: @escaping AudioObjectPropertyListenerBlock) {
+      self.block = block
+    }
+
+    deinit {
+      var address = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+      )
+      AudioObjectRemovePropertyListenerBlock(
+        AudioObjectID(kAudioObjectSystemObject), &address, nil, block
+      )
+    }
+  }
+
+  /// Name of the current output device, for explaining why volume is or is not
+  /// available.
+  public static func defaultOutputDeviceName() -> String? {
+    guard let device = defaultOutputDevice else { return nil }
+    return stringProperty(device, kAudioObjectPropertyName)
+  }
+
+  // MARK: - Diagnostics
+
+  /// One volume-related property and what the device does with it.
+  public struct VolumeProbe: Sendable {
+    public let label: String
+    public let exists: Bool
+    public let isSettable: Bool
+    public let value: Double?
+  }
+
+  public struct OutputDevice: Sendable {
+    public let id: AudioDeviceID
+    public let name: String
+    public let uid: String
+    public let transportType: String
+    public let outputChannelCount: Int
+    public let isDefault: Bool
+    public let volumeProbes: [VolumeProbe]
+  }
+
+  /// Every output device with every volume property probed.
+  ///
+  /// Exists to answer "can this really not be controlled?" with evidence rather
+  /// than with the one property the app happens to check. A device can expose
+  /// per-channel volume while refusing the aggregate, so checking only the
+  /// latter would wrongly report a controllable device as fixed.
+  public static func outputDevices() -> [OutputDevice] {
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyDevices,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    var size: UInt32 = 0
+    guard AudioObjectGetPropertyDataSize(
+      AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size
+    ) == noErr else { return [] }
+
+    let count = Int(size) / MemoryLayout<AudioDeviceID>.size
+    var ids = [AudioDeviceID](repeating: 0, count: count)
+    guard AudioObjectGetPropertyData(
+      AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &ids
+    ) == noErr else { return [] }
+
+    let defaultDevice = defaultOutputDevice
+    return ids.compactMap { id in
+      let channels = outputChannelCount(of: id)
+      guard channels > 0 else { return nil }
+      return OutputDevice(
+        id: id,
+        name: stringProperty(id, kAudioObjectPropertyName) ?? "unnamed",
+        uid: stringProperty(id, kAudioDevicePropertyDeviceUID) ?? "—",
+        transportType: transportDescription(of: id),
+        outputChannelCount: channels,
+        isDefault: id == defaultDevice,
+        volumeProbes: probes(for: id, channels: channels)
+      )
+    }
+  }
+
+  private static func probes(for device: AudioDeviceID, channels: Int) -> [VolumeProbe] {
+    var result: [VolumeProbe] = [
+      probe(device, kAudioHardwareServiceDeviceProperty_VirtualMainVolume, 0, "virtual main volume"),
+      probe(device, kAudioDevicePropertyVolumeScalar, 0, "volume scalar (main)"),
+      probe(device, kAudioDevicePropertyMute, 0, "mute"),
+    ]
+    // Channel elements are 1-based; a device with no main-element volume very
+    // often still has per-channel volume.
+    for channel in 1 ... max(1, min(channels, 2)) {
+      result.append(
+        probe(device, kAudioDevicePropertyVolumeScalar, UInt32(channel), "volume scalar (ch \(channel))")
+      )
+    }
+    return result
+  }
+
+  private static func probe(
+    _ device: AudioDeviceID,
+    _ selector: AudioObjectPropertySelector,
+    _ element: UInt32,
+    _ label: String
+  ) -> VolumeProbe {
+    var address = AudioObjectPropertyAddress(
+      mSelector: selector,
+      mScope: kAudioDevicePropertyScopeOutput,
+      mElement: element
+    )
+    guard AudioObjectHasProperty(device, &address) else {
+      return VolumeProbe(label: label, exists: false, isSettable: false, value: nil)
+    }
+
+    var settable: DarwinBoolean = false
+    _ = AudioObjectIsPropertySettable(device, &address, &settable)
+
+    var value: Float32 = 0
+    var size = UInt32(MemoryLayout<Float32>.size)
+    let readable = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &value) == noErr
+
+    return VolumeProbe(
+      label: label,
+      exists: true,
+      isSettable: settable.boolValue,
+      value: readable ? Double(value) : nil
+    )
+  }
+
+  private static func outputChannelCount(of device: AudioDeviceID) -> Int {
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioDevicePropertyStreamConfiguration,
+      mScope: kAudioDevicePropertyScopeOutput,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    var size: UInt32 = 0
+    guard AudioObjectGetPropertyDataSize(device, &address, 0, nil, &size) == noErr, size > 0 else {
+      return 0
+    }
+
+    let buffer = UnsafeMutableRawPointer.allocate(
+      byteCount: Int(size), alignment: MemoryLayout<AudioBufferList>.alignment
+    )
+    defer { buffer.deallocate() }
+
+    guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, buffer) == noErr else {
+      return 0
+    }
+    let list = UnsafeMutableAudioBufferListPointer(
+      buffer.assumingMemoryBound(to: AudioBufferList.self)
+    )
+    return list.reduce(0) { $0 + Int($1.mNumberChannels) }
+  }
+
+  private static func stringProperty(
+    _ device: AudioDeviceID, _ selector: AudioObjectPropertySelector
+  ) -> String? {
+    var address = AudioObjectPropertyAddress(
+      mSelector: selector,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    var value: CFString = "" as CFString
+    var size = UInt32(MemoryLayout<CFString>.size)
+    guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &value) == noErr else {
+      return nil
+    }
+    return value as String
+  }
+
+  private static func transportDescription(of device: AudioDeviceID) -> String {
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioDevicePropertyTransportType,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    var value: UInt32 = 0
+    var size = UInt32(MemoryLayout<UInt32>.size)
+    guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &value) == noErr else {
+      return "unknown"
+    }
+    switch value {
+    case kAudioDeviceTransportTypeBuiltIn: return "built-in"
+    case kAudioDeviceTransportTypeDisplayPort: return "DisplayPort"
+    case kAudioDeviceTransportTypeHDMI: return "HDMI"
+    case kAudioDeviceTransportTypeUSB: return "USB"
+    case kAudioDeviceTransportTypeBluetooth: return "Bluetooth"
+    case kAudioDeviceTransportTypeVirtual: return "virtual"
+    case kAudioDeviceTransportTypeAggregate: return "aggregate"
+    default: return "other"
+    }
+  }
+
   /// Whether the current output device exposes a volume we can move.
   ///
   /// False for fixed digital outputs — DisplayPort and HDMI audio endpoints,
@@ -215,6 +438,15 @@ public actor VolumeController {
     }
 
     log?.record(.info("Volume primed at \(Int(currentVolume * 100))% via \(route.displayName)"))
+  }
+
+  /// Re-reads state after the audio route changed.
+  ///
+  /// The cached volume belongs to whichever device was current at priming, so
+  /// after a switch it describes a device we are no longer driving.
+  public func reprime() async {
+    hasPrimed = false
+    await prime()
   }
 
   public func setVolume(_ fraction: Double) async {

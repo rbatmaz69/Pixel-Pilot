@@ -159,6 +159,36 @@ final class DisplayViewModel: Identifiable {
   /// nothing.
   var supportsVolume: Bool { volumeRoute != .unavailable }
 
+  /// Why there is no volume slider.
+  ///
+  /// Worth spelling out rather than just omitting the control: "the app cannot
+  /// do this" and "the app forgot to offer this" look identical from the
+  /// outside, and the difference matters when the fix is to switch output
+  /// device.
+  var volumeUnavailableReason: String? {
+    guard volumeRoute == .unavailable else { return nil }
+    let device = SystemVolume.defaultOutputDeviceName() ?? "the current output device"
+    if capabilities?.isUsable(.audioSpeakerVolume) == false, queue != nil {
+      return "\(name) has no DDC audio control, and \(device) has a fixed digital "
+        + "output whose level macOS cannot change. Switching audio output to the "
+        + "built-in speakers or headphones gives you a slider here."
+    }
+    return "\(device) has no volume macOS can change."
+  }
+
+  /// Re-evaluates the audio route after the output device changed.
+  func refreshVolumeRoute() async {
+    let route = await volumeController.route
+    // Re-prime even when the route name is unchanged: switching between two
+    // devices that both support volume keeps the route but changes the value.
+    await volumeController.reprime()
+
+    volumeRoute = route
+    volume = await volumeController.volume()
+    isMuted = await volumeController.isMuted()
+    log.record(.info("\(name): audio route is \(route.displayName)"))
+  }
+
   var supportsContrast: Bool { capabilities?.isUsable(.contrast) == true }
 
   /// Whether the hardware brightness keys should act on this display.

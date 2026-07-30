@@ -112,10 +112,17 @@ private struct DisplayDetail: View {
               icon: "speaker.wave.2.fill"
             )
           }
-        } else {
-          Text("This display has no controllable volume.")
-            .font(.callout)
-            .foregroundStyle(.secondary)
+        } else if let reason = display.volumeUnavailableReason {
+          // Explaining beats omitting: without this, "cannot" and "forgot"
+          // look the same, and here the fix is often just switching output.
+          VStack(alignment: .leading, spacing: 4) {
+            Label("No volume control", systemImage: "speaker.slash")
+              .font(.callout.weight(.medium))
+            Text(reason)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
         }
       }
       .padding(6)

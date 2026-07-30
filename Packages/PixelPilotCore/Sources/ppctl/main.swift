@@ -22,6 +22,7 @@ USAGE
   ppctl get <vcp> [options]           Read one VCP feature
   ppctl set <vcp> <value> [options]   Write one VCP feature
   ppctl audio [options]               Show which audio route a display resolves to
+  ppctl audio-devices                 List output devices and their volume properties
   ppctl capabilities [options]        Read the MCCS capability string (slow, one-off)
   ppctl gamma <fraction> [hold]       Apply software dimming (1.0 restores). 'hold'
                                       parks the process so recovery can be tested.
@@ -244,6 +245,31 @@ case "audio":
     print("  muted    \(await controller.isMuted() ? "yes" : "no")")
   }
   dumpLogIfVerbose()
+
+case "audio-devices":
+  // Enumerates every output device and every volume-ish property on it.
+  // Written because "the volume is not settable" is a claim worth checking
+  // properly before telling someone their monitor cannot do something.
+  for device in SystemVolume.outputDevices() {
+    let marker = device.isDefault ? " (default output)" : ""
+    print("\(device.name)\(marker)")
+    print("  uid          \(device.uid)")
+    print("  transport    \(device.transportType)")
+    print("  channels     \(device.outputChannelCount)")
+
+    for probe in device.volumeProbes {
+      let state: String
+      switch (probe.exists, probe.isSettable, probe.value) {
+      case (false, _, _): state = "absent"
+      case (true, false, let value?): state = String(format: "read-only (%.3f)", value)
+      case (true, false, nil): state = "read-only, unreadable"
+      case (true, true, let value?): state = String(format: "SETTABLE (%.3f)", value)
+      case (true, true, nil): state = "SETTABLE, unreadable"
+      }
+      print("  \(probe.label.padding(toLength: 26, withPad: " ", startingAt: 0)) \(state)")
+    }
+    print("")
+  }
 
 case "probe-edid":
   let (display, transport) = selectedTransport()
