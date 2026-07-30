@@ -14,8 +14,10 @@ struct PixelPilotApp: App {
     MenuBarExtra {
       MenuBarPanel(model: model)
     } label: {
-      // A template image so macOS handles light, dark and tinted menu bars.
-      Image(systemName: "sun.max")
+      // A template image, so macOS tints it for light, dark and tinted menu
+      // bars instead of us shipping three variants.
+      Image("MenuBarIcon")
+        .renderingMode(.template)
     }
     // .window rather than .menu: a menu cannot host sliders that drag.
     .menuBarExtraStyle(.window)
