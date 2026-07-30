@@ -22,6 +22,7 @@ USAGE
   ppctl get <vcp> [options]           Read one VCP feature
   ppctl set <vcp> <value> [options]   Write one VCP feature
   ppctl audio [options]               Show which audio route a display resolves to
+  ppctl capabilities [options]        Read the MCCS capability string (slow, one-off)
   ppctl gamma <fraction> [hold]       Apply software dimming (1.0 restores). 'hold'
                                       parks the process so recovery can be tested.
   ppctl gamma-check                   Read the display's gamma table back
@@ -261,6 +262,55 @@ case "probe-edid":
   if let edid = try? EDID(bytes: bytes, strictChecksum: false) {
     print("\n  parsed: \(edid.manufacturerCode) \(edid.displayName ?? "—") "
       + "product=\(edid.productCode) serial=\(edid.serialNumber) year=\(edid.manufactureYear)")
+  }
+  dumpLogIfVerbose()
+
+case "capabilities", "caps":
+  let (display, transport) = selectedTransport()
+  guard let arm64 = transport as? Arm64DDCTransport else {
+    fail("capability reading needs the Apple Silicon transport")
+  }
+  print("Reading the capability string from \(display.name) — this takes a moment …\n")
+
+  let raw: String
+  do {
+    raw = try arm64.readCapabilities(timing: timing)
+  } catch {
+    dumpLogIfVerbose()
+    fail("\(error)")
+  }
+
+  print("RAW (\(raw.utf8.count) bytes)\n  \(raw)\n")
+  let unprintable = Array(raw.utf8).enumerated().filter { $0.element < 0x20 || $0.element > 0x7E }
+  if !unprintable.isEmpty {
+    let described = unprintable.prefix(8)
+      .map { String(format: "@%d=0x%02X", $0.offset, $0.element) }
+      .joined(separator: " ")
+    print("  non-printable bytes: \(described)\n")
+  }
+
+  let parsed = CapabilityString(raw: raw)
+  if let model = parsed.model { print("  model      \(model)") }
+  if let type = parsed.type { print("  type       \(type)") }
+  if let version = parsed.mccsVersion { print("  mccs       \(version)") }
+  print("  features   \(parsed.features.count) listed")
+
+  if let inputs = parsed.values(for: .inputSource), !inputs.isEmpty {
+    print("\nINPUT SOURCES (0x60)")
+    for value in inputs.sorted() {
+      let marker = InputSource.isStandard(value) ? " " : " (non-standard code)"
+      print(String(format: "  0x%02X  %@%@", value, InputSource.name(for: value), marker))
+    }
+  } else {
+    print("\n  No enumerated input sources — switching stays disabled.")
+  }
+
+  if let powerStates = parsed.values(for: .powerMode), !powerStates.isEmpty {
+    print("\nPOWER MODES (0xD6)")
+    for value in powerStates.sorted() {
+      let name = PowerMode(rawValue: value)?.displayName ?? "unknown"
+      print(String(format: "  0x%02X  %@", value, name))
+    }
   }
   dumpLogIfVerbose()
 

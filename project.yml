@@ -60,13 +60,23 @@ targets:
         SWIFT_STRICT_CONCURRENCY: complete
         SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
 
-        # No signing identity is installed on this machine, so the app is signed
-        # ad-hoc to run locally. Consequence: the code signature changes on every
-        # build, and macOS therefore forgets the Accessibility grant each time.
-        # Adding a (free) Apple ID to Xcode produces a stable development
-        # certificate and fixes that — see README.
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "-"
+        # Automatic signing is what makes Xcode actually issue a development
+        # certificate. Signing in alone does not: Xcode only requests one when a
+        # target asks for it, so the previous manual ad-hoc setup left the
+        # account registered and the certificate list empty.
+        #
+        # A stable signature is what lets macOS remember the Accessibility grant
+        # across rebuilds, and what SMAppService requires for "Open at login".
+        #
+        # DEVELOPMENT_TEAM is filled in below once the team has been selected
+        # once in Xcode. It must live here rather than in the project, because
+        # Scripts/generate.sh rewrites the project from this file.
+        #
+        # CODE_SIGN_IDENTITY must be stated explicitly: XcodeGen defaults macOS
+        # targets to "-" (sign to run locally), and with that set Xcode sees no
+        # need for a certificate no matter which team is selected.
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
         CODE_SIGNING_REQUIRED: YES
         CODE_SIGNING_ALLOWED: YES
         ENABLE_HARDENED_RUNTIME: YES

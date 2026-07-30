@@ -46,6 +46,13 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
   /// Manual override of the derived accent colour, as an index into the palette.
   public var accentOverride: Int?
 
+  /// The display's own capability string, once read.
+  ///
+  /// Cached separately from `capabilities` because it is far more expensive —
+  /// a dozen or more round trips rather than six — and because the raw text is
+  /// what the diagnostics view shows when a panel reports something odd.
+  public var capabilityString: String?
+
   public init() {}
 
   /// Whether this configuration puts anything into the display's gamma table.

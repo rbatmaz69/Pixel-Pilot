@@ -68,6 +68,124 @@ public final class Arm64DDCTransport: DDCTransport, @unchecked Sendable {
     throw lastError
   }
 
+  // MARK: - Capabilities
+
+  /// Fetches the MCCS capability string, fragment by fragment.
+  ///
+  /// This is the slow one — a round trip per 32-byte fragment, so a typical
+  /// string costs a dozen or more. It is called once per panel, on demand,
+  /// never automatically.
+  ///
+  /// Two checksum conventions are tried because it is not established which one
+  /// capability requests follow; whichever produces a first fragment is used for
+  /// the rest. Panels that ignore a wrongly-checksummed request simply return
+  /// nothing, so this costs one extra round trip in the bad case.
+  public func readCapabilities(timing: DDCTiming = .default) throws -> String {
+    for includeSourceAddress in [false, true] {
+      do {
+        let text = try fetchCapabilities(timing: timing, includeSourceAddress: includeSourceAddress)
+        if !text.isEmpty {
+          log?.record(.info(
+            "Capability string read with source address \(includeSourceAddress ? "included" : "omitted")"
+          ))
+          return text
+        }
+      } catch {
+        log?.record(.warning("Capability fetch failed (source address \(includeSourceAddress)): \(error)"))
+      }
+    }
+    throw DDCError.malformedReply(bytes: [], detail: "display returned no capability string")
+  }
+
+  private func fetchCapabilities(timing: DDCTiming, includeSourceAddress: Bool) throws -> String {
+    var assembled: [UInt8] = []
+    var offset: UInt16 = 0
+    // A malformed length field could otherwise keep this going forever; real
+    // strings are a few hundred bytes.
+    let maximumLength = 4096
+    var fragmentCount = 0
+
+    while assembled.count < maximumLength, fragmentCount < 128 {
+      fragmentCount += 1
+
+      guard let fragment = try fetchFragment(
+        at: offset, timing: timing, includeSourceAddress: includeSourceAddress
+      ) else {
+        throw DDCError.malformedReply(
+          bytes: [],
+          detail: "fragment at offset \(offset) stayed corrupt after \(timing.readRetries + 1) attempts"
+        )
+      }
+
+      if fragment.isTerminator { break }
+
+      assembled.append(contentsOf: fragment.bytes)
+      offset += UInt16(fragment.bytes.count)
+    }
+
+    // Displays pad the string with a trailing NUL, and a corrupt byte can leave
+    // other control characters behind. Dropping them here keeps the parser from
+    // having to care.
+    let cleaned = assembled.filter { $0 >= 0x20 && $0 < 0x7F }
+    return String(decoding: cleaned, as: UTF8.self)
+  }
+
+  /// Fetches one fragment, retrying while the checksum disagrees.
+  ///
+  /// Returns nil once the retries are exhausted. Retrying matters more here than
+  /// for a VCP read: a bad VCP reading is one wrong number, whereas a bad
+  /// fragment is spliced into the middle of a string that then parses cleanly
+  /// and describes a display that does not exist.
+  private func fetchFragment(
+    at offset: UInt16,
+    timing: DDCTiming,
+    includeSourceAddress: Bool
+  ) throws -> DDCPacket.CapabilitiesFragment? {
+    for attempt in 0 ... timing.readRetries {
+      if attempt > 0 {
+        usleep(timing.retryWaitMicroseconds)
+      }
+
+      var request = DDCPacket.capabilitiesRequest(
+        offset: offset, includeSourceAddress: includeSourceAddress
+      )
+      try send(&request, vcp: .luminance, timing: timing, operation: "capabilities request")
+
+      usleep(timing.readWaitMicroseconds)
+
+      var reply = [UInt8](repeating: 0, count: 64)
+      let result = reply.withUnsafeMutableBytes { buffer in
+        PPAVServiceReadI2C(
+          service,
+          DDCPacket.chipAddress,
+          UInt32(0x51),
+          buffer.baseAddress!,
+          UInt32(buffer.count)
+        )
+      }
+      guard result == kIOReturnSuccess else {
+        throw DDCError.ioError(code: result, operation: "capabilities read")
+      }
+
+      let fragment = try DDCPacket.parseCapabilitiesReply(reply)
+
+      // The display echoes the offset it is answering. A mismatch means we would
+      // stitch fragments in the wrong order.
+      guard fragment.offset == offset else {
+        log?.record(.warning(
+          "Capability fragment: asked for offset \(offset), got \(fragment.offset)"
+        ))
+        continue
+      }
+      guard fragment.checksumValid else {
+        log?.record(.warning("Capability fragment at offset \(offset) failed its checksum"))
+        continue
+      }
+      return fragment
+    }
+    return nil
+  }
+
   // MARK: - Experimental
 
   /// Attempts `IOAVServiceCopyEDID`. The symbol is exported but undocumented and

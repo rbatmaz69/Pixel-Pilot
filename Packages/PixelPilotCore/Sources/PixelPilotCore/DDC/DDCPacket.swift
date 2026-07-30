@@ -47,6 +47,91 @@ public enum DDCPacket {
     return packet
   }
 
+  private static let capabilitiesOpcode: UInt8 = 0xF3
+  private static let capabilitiesReplyOpcode: UInt8 = 0xE3
+
+  /// Builds a "Capabilities Request" for the fragment starting at `offset`.
+  ///
+  /// - Parameter includeSourceAddress: which checksum convention to use. The
+  ///   DDC/CI spec says host → display checksums cover the source address, and
+  ///   `setRequest` does include it — but `getRequest` demonstrably works
+  ///   without it on real panels, and the reference implementations omit it
+  ///   there. Since it is not obvious which convention capability requests
+  ///   follow, both are available and the transport tries each.
+  public static func capabilitiesRequest(offset: UInt16, includeSourceAddress: Bool) -> [UInt8] {
+    var packet: [UInt8] = [
+      0x80 | 0x03,
+      capabilitiesOpcode,
+      UInt8(truncatingIfNeeded: offset >> 8),
+      UInt8(truncatingIfNeeded: offset),
+      0x00,
+    ]
+    var checksum = displayAddress
+    if includeSourceAddress { checksum ^= 0x51 }
+    packet[4] = checksum ^ packet[0] ^ packet[1] ^ packet[2] ^ packet[3]
+    return packet
+  }
+
+  public struct CapabilitiesFragment: Sendable, Equatable {
+    public let offset: UInt16
+    public let bytes: [UInt8]
+    /// Whether the trailing checksum matched.
+    ///
+    /// Unlike a VCP reply, a bad fragment cannot be shrugged off: fragments are
+    /// concatenated, so one corrupt one silently poisons the middle of the
+    /// string. Observed in practice — the same monitor returned `MStarcmds` on
+    /// one read and `MStaYOt<` on the next.
+    public let checksumValid: Bool
+    /// An empty fragment is how the display signals the end of the string.
+    public var isTerminator: Bool { bytes.isEmpty }
+  }
+
+  /// Decodes a capabilities reply.
+  ///
+  /// Layout: `6E <0x80|len> E3 <offsetHi> <offsetLo> <data…> <checksum>`,
+  /// where `len` counts from the opcode through the last data byte.
+  public static func parseCapabilitiesReply(_ bytes: [UInt8]) throws -> CapabilitiesFragment {
+    guard bytes.count >= 6 else {
+      throw DDCError.malformedReply(bytes: bytes, detail: "only \(bytes.count) bytes")
+    }
+    guard bytes.contains(where: { $0 != 0 }) else {
+      throw DDCError.malformedReply(bytes: bytes, detail: "no response")
+    }
+    guard bytes[2] == capabilitiesReplyOpcode else {
+      throw DDCError.malformedReply(
+        bytes: Array(bytes.prefix(8)),
+        detail: String(format: "opcode 0x%02X, expected 0xE3", bytes[2])
+      )
+    }
+
+    let declared = Int(bytes[1] & 0x7F)
+    // The length covers the opcode and the two offset bytes as well as payload.
+    let payloadLength = declared - 3
+    guard payloadLength >= 0, bytes.count >= 5 + payloadLength else {
+      throw DDCError.malformedReply(
+        bytes: Array(bytes.prefix(8)),
+        detail: "declared length \(declared) does not fit in \(bytes.count) bytes"
+      )
+    }
+
+    let offset = (UInt16(bytes[3]) << 8) | UInt16(bytes[4])
+
+    // Reply layout is 0x6E, the length byte, `declared` bytes, then the
+    // checksum — so the checksum sits at index 2 + declared.
+    let checksumIndex = 2 + declared
+    var checksumValid = false
+    if bytes.count > checksumIndex {
+      let computed = bytes[0 ..< checksumIndex].reduce(hostAddress) { $0 ^ $1 }
+      checksumValid = computed == bytes[checksumIndex]
+    }
+
+    return CapabilitiesFragment(
+      offset: offset,
+      bytes: Array(bytes[5 ..< (5 + payloadLength)]),
+      checksumValid: checksumValid
+    )
+  }
+
   public struct ParsedReply: Sendable, Equatable {
     public let reading: DDCReading
     /// False when the trailing checksum byte disagrees with the payload. The

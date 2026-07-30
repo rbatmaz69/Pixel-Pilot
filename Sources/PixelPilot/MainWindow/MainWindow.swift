@@ -58,6 +58,9 @@ private struct DisplayDetail: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 24) {
         controls
+        if !display.isBuiltin {
+          InputAndPowerSection(display: display)
+        }
         configuration
         capabilities
         diagnostics

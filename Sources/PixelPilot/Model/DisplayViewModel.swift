@@ -31,6 +31,13 @@ final class DisplayViewModel: Identifiable {
   /// True while a capability re-probe is running, so the UI can say so rather
   /// than appearing frozen for the several seconds it takes.
   private(set) var isProbing = false
+  private(set) var isReadingCapabilityString = false
+
+  /// The parsed capability string, once read. This is what makes input
+  /// switching possible at all.
+  private(set) var capabilityString: CapabilityString?
+  /// Raw value of VCP 0x60, believed only when it matches a declared input.
+  private(set) var reportedInput: UInt8?
 
   private(set) var accent: Color
 
@@ -42,6 +49,12 @@ final class DisplayViewModel: Identifiable {
   private let volumeController: VolumeController
   private let queue: DDCQueue?
   private let preferences: Preferences
+  let log: DiagnosticsLog
+
+  /// The concrete transport, kept for the capability string — that request does
+  /// not fit the VCP-shaped `DDCTransport` protocol, and inventing a protocol
+  /// method for one Apple Silicon specific call would be worse than this.
+  private let arm64Transport: Arm64DDCTransport?
 
   init(
     display: DiscoveredDisplay,
@@ -53,9 +66,12 @@ final class DisplayViewModel: Identifiable {
     self.name = display.name
     self.isBuiltin = display.isBuiltin
     self.preferences = preferences
+    self.log = log
+    self.arm64Transport = display.transport as? Arm64DDCTransport
 
     let settings = preferences.settings(for: display.key)
     self.capabilities = settings.capabilities
+    self.capabilityString = settings.capabilityString.map(CapabilityString.init(raw:))
     self.accent = AccentPalette.color(for: display.key, override: settings.accentOverride)
 
     let queue = display.transport.map {
@@ -148,6 +164,32 @@ final class DisplayViewModel: Identifiable {
   /// Whether the hardware brightness keys should act on this display.
   var respondsToMediaKeys: Bool { preferences.settings(for: key).respondsToMediaKeys }
 
+  /// Inputs the display itself declared, in its capability string.
+  ///
+  /// Empty until the string has been read, and empty for panels that do not
+  /// enumerate. Nothing is ever offered that is not in here: an input code that
+  /// merely looks plausible switches the monitor to a dead signal, and because
+  /// DDC travels over the video link, there is no way back except the monitor's
+  /// own buttons.
+  var availableInputs: [UInt8] {
+    capabilityString?.values(for: .inputSource)?.sorted() ?? []
+  }
+
+  var availablePowerModes: [PowerMode] {
+    (capabilityString?.values(for: .powerMode) ?? []).compactMap(PowerMode.init(rawValue:))
+  }
+
+  /// What the display claims is its current input — which may well be nonsense.
+  ///
+  /// The panel this was developed against reports 0x07 while declaring only
+  /// 0x0F, 0x10, 0x11 and 0x12. So this is nil unless the reported value is one
+  /// the display actually admits to having, and the UI says "unknown" rather
+  /// than pointing at the wrong entry.
+  var currentInput: UInt8? {
+    guard let reported = reportedInput, availableInputs.contains(reported) else { return nil }
+    return reported
+  }
+
   /// Explains the current path in one short phrase, for the panel footer.
   var routeDescription: String {
     var parts = [brightnessStrategy.displayName]
@@ -166,6 +208,56 @@ final class DisplayViewModel: Identifiable {
   /// End of a drag — let the queue drain so the final value is definitely out.
   func commitBrightness() {
     Task { await brightnessController.settle() }
+  }
+
+  // MARK: - Inputs and power
+
+  /// Reads the capability string, which is the only way to learn which input
+  /// values the display accepts.
+  ///
+  /// On demand and cached: it costs a dozen or more round trips. The parsed
+  /// result is stored under the `DisplayKey`, so a panel is asked once ever
+  /// rather than once per launch.
+  func readCapabilityString() async {
+    guard let transport = arm64Transport, !isReadingCapabilityString else { return }
+    isReadingCapabilityString = true
+    defer { isReadingCapabilityString = false }
+
+    let raw: String? = await Task.detached(priority: .utility) {
+      try? transport.readCapabilities(timing: await self.settings.timing)
+    }.value
+
+    guard let raw, !raw.isEmpty else {
+      log.record(.warning("\(name): no capability string; input switching stays unavailable"))
+      return
+    }
+
+    capabilityString = CapabilityString(raw: raw)
+    preferences.update(key) { $0.capabilityString = raw }
+
+    if let queue, let reading = try? await queue.read(.inputSource) {
+      reportedInput = UInt8(truncatingIfNeeded: reading.current)
+    }
+  }
+
+  /// Switches the display to another input.
+  ///
+  /// One-way in practice: when the monitor leaves the Mac's input, the video
+  /// link goes with it, and the DDC channel rides on that link. There is no
+  /// software path back. The caller is responsible for having confirmed this
+  /// with the user first.
+  func switchInput(to value: UInt8) {
+    guard availableInputs.contains(value), let queue else { return }
+    log.record(.info("\(name): switching input to \(InputSource.name(for: value))"))
+    Task { await queue.set(.inputSource, value: UInt16(value)) }
+  }
+
+  /// Puts the display into a low-power state. Waking it needs mouse movement or
+  /// the monitor's own button.
+  func setPowerMode(_ mode: PowerMode) {
+    guard let queue else { return }
+    log.record(.info("\(name): power mode → \(mode.displayName)"))
+    Task { await queue.set(.powerMode, value: UInt16(mode.rawValue)) }
   }
 
   func setContrast(_ value: Double) {
