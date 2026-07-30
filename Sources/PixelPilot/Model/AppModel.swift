@@ -24,6 +24,11 @@ final class AppModel {
   /// be identified rather than guessed at.
   private(set) var lastObservedKey: (usage: UInt32, device: String)?
 
+  /// Cached permission state. Observable, unlike the system calls behind it,
+  /// so the UI stops warning once a grant actually happens.
+  private(set) var accessibilityGranted = false
+  private(set) var inputMonitoringGranted = false
+
   let log = DiagnosticsLog()
   let preferences: Preferences
 
@@ -48,6 +53,7 @@ final class AppModel {
 
   @ObservationIgnored private var presetTask: Task<Void, Never>?
   @ObservationIgnored private var audioObservation: SystemVolume.DefaultOutputObservation?
+  @ObservationIgnored private var activationObserver: (any NSObjectProtocol)?
 
   @ObservationIgnored private let events = DisplayEvents()
   @ObservationIgnored private let osd = OSDController()
@@ -106,6 +112,16 @@ final class AppModel {
     }
     systemAudio.refresh()
 
+    // Coming back from System Settings is the moment a grant becomes real, and
+    // it is an event rather than something to poll for.
+    activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+      forName: NSWorkspace.didActivateApplicationNotification,
+      object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.refreshPermissions() }
+    }
+    refreshPermissions()
+
     refresh()
   }
 
@@ -113,7 +129,12 @@ final class AppModel {
     events.stop()
     mediaKeys.stop()
     hotkeyCenter.stop()
+    hidKeys.stop()
     audioObservation = nil
+    if let activationObserver {
+      NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
+    }
+    activationObserver = nil
     osd.hide()
     activationTask?.cancel()
     // Leaving a display dimmed after quitting would be indistinguishable from
@@ -168,14 +189,36 @@ final class AppModel {
     return mediaKeysActive || hidKeysActive
   }
 
+  /// Re-reads both permissions and restarts whatever can now run.
+  ///
+  /// Has to be called rather than computed. Both checks are function calls into
+  /// the system, not observable state, so SwiftUI has no way to notice that a
+  /// grant happened — an earlier version left the warning on screen after the
+  /// user had already switched the app on, which is worse than no warning.
+  func refreshPermissions() {
+    let accessibility = MediaKeyTap.isTrusted
+    let inputMonitoring = HIDMediaKeyMonitor.isTrusted
+
+    let changed = accessibility != accessibilityGranted
+      || inputMonitoring != inputMonitoringGranted
+    accessibilityGranted = accessibility
+    inputMonitoringGranted = inputMonitoring
+
+    // A grant that arrives while running is useless until the listeners are
+    // started, and they were refused the last time they tried.
+    if changed {
+      startMediaKeys()
+    }
+  }
+
   var needsAccessibilityPermission: Bool {
-    preferences.global.mediaKeysEnabled && !MediaKeyTap.isTrusted
+    preferences.global.mediaKeysEnabled && !accessibilityGranted
   }
 
   /// Input Monitoring is a separate grant from Accessibility, and it is the one
   /// that makes brightness keys work on keyboards other than Apple's.
   var needsInputMonitoringPermission: Bool {
-    preferences.global.mediaKeysEnabled && !HIDMediaKeyMonitor.isTrusted
+    preferences.global.mediaKeysEnabled && !inputMonitoringGranted
   }
 
   func requestAccessibilityPermission() {

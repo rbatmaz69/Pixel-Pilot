@@ -45,6 +45,9 @@ struct MenuBarPanel: View {
     .padding(14)
     .frame(width: 300)
     .withMotionTokens()
+    // Opening the panel is a cheap, natural moment to notice a grant that
+    // happened while the app was in the background.
+    .onAppear { model.refreshPermissions() }
   }
 
   private var emptyState: some View {

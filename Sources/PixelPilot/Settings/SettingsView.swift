@@ -32,20 +32,30 @@ private struct GeneralSettings: View {
         Toggle("Use the keyboard's brightness and volume keys", isOn: $global.mediaKeysEnabled)
           .onChange(of: global.mediaKeysEnabled) { _, _ in apply() }
 
-        if model.needsAccessibilityPermission {
-          permissionRow(
-            "Accessibility — needed to see the keys at all.",
-            action: model.requestAccessibilityPermission
-          )
-        }
+        // Both statuses are always shown, granted or not. A warning that only
+        // appears when something is missing leaves no way to tell "granted"
+        // from "the app has not noticed yet".
+        permissionRow(
+          "Accessibility",
+          detail: "Needed to see the keys at all.",
+          granted: model.accessibilityGranted,
+          action: model.requestAccessibilityPermission
+        )
+        permissionRow(
+          "Input Monitoring",
+          detail: "Needed for brightness keys on keyboards other than Apple's.",
+          granted: model.inputMonitoringGranted,
+          action: model.requestInputMonitoringPermission
+        )
 
-        if model.needsInputMonitoringPermission {
-          // A separate grant, and the one that decides whether brightness keys
-          // work on anything other than an Apple keyboard.
-          permissionRow(
-            "Input Monitoring — needed for brightness keys on non-Apple keyboards.",
-            action: model.requestInputMonitoringPermission
-          )
+        if model.needsAccessibilityPermission || model.needsInputMonitoringPermission {
+          Text("If Pixel Pilot is already ticked in System Settings but still shows as "
+            + "missing here, remove it with the “−” button and add it again. macOS keys "
+            + "these grants to the app's signature, and entries from earlier builds go "
+            + "stale.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
 
         if let observed = model.lastObservedKey {
@@ -90,17 +100,35 @@ private struct GeneralSettings: View {
     }
     .formStyle(.grouped)
     .scrollDisabled(true)
+    // Re-check on appearance as well as on activation: opening this window is
+    // itself a moment the answer may have changed.
+    .onAppear { model.refreshPermissions() }
   }
 
-  private func permissionRow(_ text: String, action: @escaping () -> Void) -> some View {
-    HStack(spacing: 8) {
-      Image(systemName: "exclamationmark.triangle.fill")
-        .foregroundStyle(.orange)
-      Text(text)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-      Button("Open Settings…", action: action)
-        .buttonStyle(.link)
+  private func permissionRow(
+    _ title: String,
+    detail: String,
+    granted: Bool,
+    action: @escaping () -> Void
+  ) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 8) {
+      Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+        .foregroundStyle(granted ? Color.green : .orange)
+
+      VStack(alignment: .leading, spacing: 1) {
+        Text(title)
+        Text(detail)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+
+      Spacer()
+
+      if !granted {
+        Button("Open Settings…", action: action)
+          .buttonStyle(.link)
+      }
     }
     .font(.callout)
   }

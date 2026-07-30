@@ -84,13 +84,16 @@ final class HIDMediaKeyMonitor {
 
   var isRunning: Bool { manager != nil }
 
+  /// Attempts to start, whether or not permission has been granted yet.
+  ///
+  /// The attempt is deliberate. macOS only lists an app under Input Monitoring
+  /// once it has actually tried to listen — an earlier version checked
+  /// `isTrusted` first and returned, so the app never asked, never appeared in
+  /// the list, and could not be granted anything. The failed open is what puts
+  /// it there.
   @discardableResult
   func start() -> Bool {
     guard manager == nil else { return true }
-    guard Self.isTrusted else {
-      logger.notice("HID media keys unavailable: Input Monitoring not granted")
-      return false
-    }
 
     let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
 
@@ -117,7 +120,15 @@ final class HIDMediaKeyMonitor {
 
     let result = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
     guard result == kIOReturnSuccess else {
-      logger.error("IOHIDManagerOpen failed: \(result)")
+      // Expected until permission is granted. Asking here rather than only from
+      // the settings button means the app registers itself on first launch, so
+      // there is something to switch on when the user goes looking.
+      if !Self.isTrusted {
+        logger.notice("Input Monitoring not granted yet — requesting")
+        _ = Self.requestTrust()
+      } else {
+        logger.error("IOHIDManagerOpen failed despite permission: \(result)")
+      }
       IOHIDManagerUnscheduleFromRunLoop(
         manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue
       )
