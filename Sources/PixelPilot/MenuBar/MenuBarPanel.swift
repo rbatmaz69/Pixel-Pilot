@@ -25,6 +25,10 @@ struct MenuBarPanel: View {
         }
       }
 
+      Divider().padding(.top, 12)
+      SystemVolumeRow(audio: model.systemAudio)
+        .padding(.top, 10)
+
       if !model.presets.presets.isEmpty {
         Divider().padding(.top, 12)
         presetRow
@@ -147,7 +151,9 @@ private struct DisplayControlGroup: View {
       )
       .disabled(!display.isReady)
 
-      if display.supportsVolume {
+      // Only the display's own speakers belong here. System output volume is
+      // global and lives at the foot of the panel.
+      if display.hasDisplayAudio {
         HStack(spacing: 8) {
           ExpressiveSlider(
             value: Binding(

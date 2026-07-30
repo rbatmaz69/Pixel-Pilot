@@ -49,6 +49,26 @@ public enum SystemVolume {
     )
   }
 
+  /// Makes `device` the system's default output.
+  ///
+  /// The practical escape hatch when audio is going somewhere with no volume
+  /// control: a monitor's DisplayPort endpoint has a level fixed in the sink,
+  /// and no amount of software can move it. Switching where the audio goes can.
+  @discardableResult
+  public static func setDefaultOutputDevice(_ device: AudioDeviceID) -> Bool {
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    var value = device
+    let status = AudioObjectSetPropertyData(
+      AudioObjectID(kAudioObjectSystemObject), &address, 0, nil,
+      UInt32(MemoryLayout<AudioDeviceID>.size), &value
+    )
+    return status == noErr
+  }
+
   /// Calls `handler` whenever the default output device changes.
   ///
   /// Needed because whether volume is controllable at all is a property of the
@@ -113,7 +133,7 @@ public enum SystemVolume {
     public let value: Double?
   }
 
-  public struct OutputDevice: Sendable {
+  public struct OutputDevice: Sendable, Identifiable {
     public let id: AudioDeviceID
     public let name: String
     public let uid: String
@@ -121,6 +141,13 @@ public enum SystemVolume {
     public let outputChannelCount: Int
     public let isDefault: Bool
     public let volumeProbes: [VolumeProbe]
+
+    /// Whether picking this device would give the user a working volume
+    /// slider. Shown in the picker rather than used to filter: a device you
+    /// cannot control is still a device you may want to send audio to.
+    public var hasSettableVolume: Bool {
+      volumeProbes.contains { $0.exists && $0.isSettable }
+    }
   }
 
   /// Every output device with every volume property probed.
@@ -233,6 +260,13 @@ public enum SystemVolume {
     return list.reduce(0) { $0 + Int($1.mNumberChannels) }
   }
 
+  /// Reads a CFString-valued device property.
+  ///
+  /// The variable is `Unmanaged<CFString>?` rather than `CFString`. Handing
+  /// CoreAudio a pointer to an ARC-managed reference and letting it overwrite
+  /// the slot leaks whatever was there and hands back a string ARC never
+  /// retained — the compiler warns about exactly this. CoreAudio returns these
+  /// at +1, so ownership is taken explicitly.
   private static func stringProperty(
     _ device: AudioDeviceID, _ selector: AudioObjectPropertySelector
   ) -> String? {
@@ -241,12 +275,12 @@ public enum SystemVolume {
       mScope: kAudioObjectPropertyScopeGlobal,
       mElement: kAudioObjectPropertyElementMain
     )
-    var value: CFString = "" as CFString
-    var size = UInt32(MemoryLayout<CFString>.size)
-    guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &value) == noErr else {
-      return nil
-    }
-    return value as String
+    var value: Unmanaged<CFString>?
+    var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+    guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &value) == noErr,
+          let value
+    else { return nil }
+    return value.takeRetainedValue() as String
   }
 
   private static func transportDescription(of device: AudioDeviceID) -> String {

@@ -153,10 +153,15 @@ final class DisplayViewModel: Identifiable {
   /// anything, so this is only false in genuinely broken states.
   var supportsBrightness: Bool { true }
 
-  /// False when the panel's DDC audio is a stub *and* the system output has no
-  /// settable volume — a DisplayPort-attached monitor with no speakers, for
-  /// instance. Showing a slider there would be showing a control that does
-  /// nothing.
+  /// True only when the *display itself* answers DDC audio commands.
+  ///
+  /// The distinction matters for where the slider goes: a monitor's own
+  /// speakers belong to that monitor, while the system output volume is global
+  /// and lives at the panel's foot. Conflating them puts an identical-looking
+  /// slider under every monitor that all move the same thing.
+  var hasDisplayAudio: Bool { volumeRoute == .displaySpeakers }
+
+  /// Any volume path at all, including the system output.
   var supportsVolume: Bool { volumeRoute != .unavailable }
 
   /// Why there is no volume slider.

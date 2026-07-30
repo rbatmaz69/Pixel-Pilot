@@ -21,6 +21,7 @@ final class AppModel {
 
   let hotkeys = HotkeyStore()
   let presets = PresetStore.shared
+  let systemAudio = SystemAudioModel()
 
   @ObservationIgnored private var presetTask: Task<Void, Never>?
   @ObservationIgnored private var audioObservation: SystemVolume.DefaultOutputObservation?
@@ -65,11 +66,13 @@ final class AppModel {
     audioObservation = SystemVolume.observeDefaultOutputDevice { [weak self] in
       Task { @MainActor in
         guard let self else { return }
+        self.systemAudio.refresh()
         for display in self.displays {
           await display.refreshVolumeRoute()
         }
       }
     }
+    systemAudio.refresh()
 
     refresh()
   }
@@ -156,15 +159,27 @@ final class AppModel {
       return true
 
     case .volumeUp, .volumeDown:
-      guard display.supportsVolume else { return false }
-      let value = display.adjustVolume(by: event.key == .volumeUp ? step : -step)
-      present(display.isMuted ? .muted : .volume, value: value, on: display)
+      // The display's own speakers win when it has them; otherwise the system
+      // output, which is what the keys would have reached anyway.
+      if display.hasDisplayAudio {
+        let value = display.adjustVolume(by: event.key == .volumeUp ? step : -step)
+        present(display.isMuted ? .muted : .volume, value: value, on: display)
+        return true
+      }
+      guard systemAudio.isControllable else { return false }
+      let value = systemAudio.adjustVolume(by: event.key == .volumeUp ? step : -step)
+      present(systemAudio.isMuted ? .muted : .volume, value: value, on: display)
       return true
 
     case .mute:
-      guard display.supportsVolume else { return false }
-      display.toggleMute()
-      present(display.isMuted ? .muted : .volume, value: display.volume, on: display)
+      if display.hasDisplayAudio {
+        display.toggleMute()
+        present(display.isMuted ? .muted : .volume, value: display.volume, on: display)
+        return true
+      }
+      guard systemAudio.isControllable else { return false }
+      systemAudio.toggleMute()
+      present(systemAudio.isMuted ? .muted : .volume, value: systemAudio.volume, on: display)
       return true
     }
   }
@@ -257,14 +272,22 @@ final class AppModel {
         present(.brightness, value: value, on: display)
 
       case .volumeUp, .volumeDown:
-        guard display.supportsVolume else { return }
-        let value = display.adjustVolume(by: builtin == .volumeUp ? step : -step)
-        present(display.isMuted ? .muted : .volume, value: value, on: display)
+        if display.hasDisplayAudio {
+          let value = display.adjustVolume(by: builtin == .volumeUp ? step : -step)
+          present(display.isMuted ? .muted : .volume, value: value, on: display)
+        } else if systemAudio.isControllable {
+          let value = systemAudio.adjustVolume(by: builtin == .volumeUp ? step : -step)
+          present(systemAudio.isMuted ? .muted : .volume, value: value, on: display)
+        }
 
       case .toggleMute:
-        guard display.supportsVolume else { return }
-        display.toggleMute()
-        present(display.isMuted ? .muted : .volume, value: display.volume, on: display)
+        if display.hasDisplayAudio {
+          display.toggleMute()
+          present(display.isMuted ? .muted : .volume, value: display.volume, on: display)
+        } else if systemAudio.isControllable {
+          systemAudio.toggleMute()
+          present(systemAudio.isMuted ? .muted : .volume, value: systemAudio.volume, on: display)
+        }
       }
     }
   }
