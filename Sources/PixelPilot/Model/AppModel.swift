@@ -33,6 +33,12 @@ final class AppModel {
   /// matched, which is a different problem from a keyboard that sends nothing.
   private(set) var watchedKeyboards: [String] = []
 
+  let keyBindings = KeyBindingStore.shared
+
+  /// The press captured while the learning sheet is open, awaiting confirmation.
+  private(set) var pendingLearnedPress: HIDMediaKeyMonitor.RawPress?
+  var isLearningKey: Bool { hidKeys.isLearning }
+
   let log = DiagnosticsLog()
   let preferences: Preferences
 
@@ -91,9 +97,19 @@ final class AppModel {
     hidKeys.handler = { [weak self] event in
       self?.handleHIDKey(event)
     }
-    hidKeys.observer = { [weak self] usage, device in
-      self?.lastObservedKey = (usage, device)
+    hidKeys.observer = { [weak self] press in
+      guard let self else { return }
+      lastObservedKey = (press.signature.usage, press.deviceName)
+      // The learning sheet is watching this.
+      if hidKeys.isLearning {
+        pendingLearnedPress = press
+      } else if let action = keyBindings.action(for: press.signature) {
+        // A taught key beats the built-in mapping, so a wrong guess on our part
+        // can be corrected.
+        applyLearned(action, on: press)
+      }
     }
+    hidKeys.learnedSignatures = keyBindings.watchedSignatures()
     startMediaKeys()
 
     hotkeyCenter.handler = { [weak self] action in
@@ -187,8 +203,14 @@ final class AppModel {
     }
     mediaKeysActive = mediaKeys.start()
     // Independent of the tap: a keyboard whose keys macOS never translates is
-    // exactly the case where the tap succeeds and still sees nothing.
-    hidKeysActive = hidKeys.start()
+    // exactly the case where the tap succeeds and still sees nothing. Costs
+    // measurable CPU while open, hence the separate switch.
+    if preferences.global.hidMediaKeysEnabled {
+      hidKeysActive = hidKeys.start()
+    } else {
+      hidKeys.stop()
+      hidKeysActive = false
+    }
     watchedKeyboards = hidKeys.attachedDevices
     keyDeduplicator.reset()
     return mediaKeysActive || hidKeysActive
@@ -270,6 +292,53 @@ final class AppModel {
     NSApplication.shared.terminate(nil)
   }
 
+  // MARK: - Teaching keys
+
+  func beginLearningKey() {
+    pendingLearnedPress = nil
+    hidKeys.beginLearning()
+  }
+
+  func cancelLearningKey() {
+    pendingLearnedPress = nil
+    hidKeys.endLearning()
+  }
+
+  /// Confirms the captured press as the key for `action`.
+  func confirmLearnedKey(as action: MediaKeyAction) {
+    guard let press = pendingLearnedPress else { return }
+    keyBindings.bind(press.signature, to: action, keyboardName: press.deviceName)
+
+    pendingLearnedPress = nil
+    hidKeys.endLearning()
+    // The monitor narrows its matching to the taught keys, so it has to be told
+    // about the new one or the key it just learned would not be watched.
+    hidKeys.learnedSignatures = keyBindings.watchedSignatures()
+    hidKeys.refreshMatching()
+
+    log.record(.info("Learned \(press.signature.description) as \(action.displayName)"))
+  }
+
+  func forgetLearnedKey(_ signature: KeySignature) {
+    keyBindings.unbind(signature)
+    hidKeys.learnedSignatures = keyBindings.watchedSignatures()
+    hidKeys.refreshMatching()
+  }
+
+  /// Runs a taught binding.
+  private func applyLearned(_ action: MediaKeyAction, on press: HIDMediaKeyMonitor.RawPress) {
+    let key: MediaKeyTap.Key = switch action {
+    case .brightnessUp: .brightnessUp
+    case .brightnessDown: .brightnessDown
+    case .volumeUp: .volumeUp
+    case .volumeDown: .volumeDown
+    case .mute: .mute
+    }
+    // No deduplication here: `handleMediaKey` is the single place that decides,
+    // and checking in both would consume the slot and then discard against it.
+    _ = handleMediaKey(MediaKeyTap.Event(key: key, isRepeat: false, isFineAdjustment: false))
+  }
+
   /// Handles a key seen at the HID layer.
   ///
   /// Same actions as the event tap, minus the pass-through decision: reading
@@ -284,7 +353,8 @@ final class AppModel {
     case .mute: .mute
     }
 
-    guard keyDeduplicator.shouldHandle(key: action.deduplicationKey) else { return }
+    // Deduplication happens once, inside `handleMediaKey`. Checking here as
+    // well would take the slot and then fail against it.
     _ = handleMediaKey(
       MediaKeyTap.Event(key: action, isRepeat: false, isFineAdjustment: false)
     )

@@ -25,6 +25,7 @@ private struct GeneralSettings: View {
   @State private var global = Preferences.shared.global
   @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
   @State private var launchAtLoginError: String?
+  @State private var isLearningKey = false
 
   var body: some View {
     Form {
@@ -108,8 +109,24 @@ private struct GeneralSettings: View {
           }
         }
 
+        learnedKeys
+
         Toggle("Show the on-screen indicator", isOn: $global.showsOSD)
           .onChange(of: global.showsOSD) { _, _ in apply() }
+
+        VStack(alignment: .leading, spacing: 2) {
+          Toggle("Also read keys at the hardware level", isOn: $global.hidMediaKeysEnabled)
+            .onChange(of: global.hidMediaKeysEnabled) { _, _ in apply() }
+          // Stated because it is the one thing in this app that is not free
+          // when nothing is happening, and because the trade is real: some
+          // keyboards need it and some do not.
+          Text("Needed for brightness keys on keyboards macOS does not recognise. "
+            + "Costs about 0.3% of one CPU core while running; without it Pixel Pilot "
+            + "uses none when idle.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
       } header: {
         Text("Keys")
       } footer: {
@@ -142,6 +159,50 @@ private struct GeneralSettings: View {
     // Re-check on appearance as well as on activation: opening this window is
     // itself a moment the answer may have changed.
     .onAppear { model.refreshPermissions() }
+    .sheet(isPresented: $isLearningKey) {
+      KeyLearningSheet(model: model, isPresented: $isLearningKey)
+        .withMotionTokens()
+    }
+  }
+
+  /// Keys taught for keyboards the automatic detection does not cover.
+  ///
+  /// Automatic detection can only handle schemes that were anticipated. A
+  /// keyboard using its own usage page cannot be recognised in advance — only
+  /// observed — which is what this is for.
+  @ViewBuilder
+  private var learnedKeys: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      ForEach(model.keyBindings.bindings) { binding in
+        HStack(spacing: 8) {
+          Image(systemName: binding.action.symbolName)
+            .foregroundStyle(.secondary)
+            .frame(width: 16)
+          VStack(alignment: .leading, spacing: 1) {
+            Text(binding.action.displayName)
+              .font(.callout)
+            Text("\(binding.keyboardName) — \(binding.signature.description)")
+              .font(.caption.monospaced())
+              .foregroundStyle(.secondary)
+          }
+          Spacer()
+          Button {
+            model.forgetLearnedKey(binding.signature)
+          } label: {
+            Image(systemName: "trash")
+          }
+          .buttonStyle(.borderless)
+          .help("Forget this key")
+        }
+      }
+
+      HStack(spacing: 8) {
+        Button("Teach a key…") { isLearningKey = true }
+        Text("For keyboards whose keys are not recognised automatically.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    }
   }
 
   private func permissionRow(

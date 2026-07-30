@@ -1,5 +1,6 @@
 import AppKit
 import IOKit.hid
+import PixelPilotCore
 import os
 
 /// Watches media keys at the HID layer, below the event tap.
@@ -16,6 +17,16 @@ import os
 /// which is what `MediaKeyDeduplicator` is for.
 ///
 /// Needs Input Monitoring permission, separately from Accessibility.
+///
+/// **It is not free.** An open `IOHIDManager` costs about 0.33% of a core
+/// continuously — measured as 0.20 s of CPU over 60 s of complete idle, against
+/// 0.00 s with this class disabled and everything else running. Narrowing which
+/// devices and elements are matched does not change that; the cost is in having
+/// the connection open at all.
+///
+/// For an app whose whole premise is costing nothing while idle, that is worth a
+/// switch rather than a silent default, which is why `hidMediaKeysEnabled`
+/// exists. Keyboards macOS already understands work without this.
 @MainActor
 final class HIDMediaKeyMonitor {
   enum Key: Equatable {
@@ -32,10 +43,23 @@ final class HIDMediaKeyMonitor {
     let deviceName: String
   }
 
+  /// A raw press, before any interpretation.
+  struct RawPress {
+    let signature: KeySignature
+    let deviceName: String
+  }
+
   var handler: ((Event) -> Void)?
-  /// Called for every consumer-page press, recognised or not. Lets the settings
-  /// window show what an unsupported keyboard is actually sending.
-  var observer: ((_ usage: UInt32, _ deviceName: String) -> Void)?
+  /// Called for every press the monitor sees, recognised or not. Lets the
+  /// settings window show what an unsupported keyboard is actually sending, and
+  /// is what the learning sheet captures.
+  var observer: ((RawPress) -> Void)?
+
+  /// While true, every usage page is matched and nothing is acted on.
+  private(set) var isLearning = false
+
+  /// Signatures the user has taught. Watched in addition to the built-in set.
+  var learnedSignatures: Set<KeySignature> = []
 
   private var manager: IOHIDManager?
   private let logger = Logger(subsystem: "dev.rb.pixelpilot", category: "hidkeys")
@@ -50,14 +74,24 @@ final class HIDMediaKeyMonitor {
     static let volumeDecrement: UInt32 = 0xEA
   }
 
-  private static func key(for usage: UInt32) -> Key? {
+  /// The built-in mapping, before anything the user taught.
+  private static func key(for usage: UInt32, page: UInt32) -> Key? {
+    if page == UInt32(kHIDPage_KeyboardOrKeypad) {
+      // The convention on keyboards without a Mac mode.
+      switch usage {
+      case UInt32(kHIDUsage_KeyboardF15): return .brightnessUp
+      case UInt32(kHIDUsage_KeyboardF14): return .brightnessDown
+      default: return nil
+      }
+    }
+    guard page == UInt32(kHIDPage_Consumer) else { return nil }
     switch usage {
-    case Usage.brightnessIncrement: .brightnessUp
-    case Usage.brightnessDecrement: .brightnessDown
-    case Usage.volumeIncrement: .volumeUp
-    case Usage.volumeDecrement: .volumeDown
-    case Usage.mute: .mute
-    default: nil
+    case Usage.brightnessIncrement: return .brightnessUp
+    case Usage.brightnessDecrement: return .brightnessDown
+    case Usage.volumeIncrement: return .volumeUp
+    case Usage.volumeDecrement: return .volumeDown
+    case Usage.mute: return .mute
+    default: return nil
     }
   }
 
@@ -80,6 +114,92 @@ final class HIDMediaKeyMonitor {
     NSWorkspace.shared.open(url)
   }
 
+  // MARK: - What is watched
+
+  /// Which devices are opened.
+  ///
+  /// Consumer-control collections in normal operation, widened to all keyboards
+  /// while learning — a keyboard that puts its keys somewhere unusual still has
+  /// to be reachable.
+  ///
+  /// The narrowing is not a performance measure, though it was tried as one:
+  /// matching every keyboard versus only consumer collections made no
+  /// measurable difference (0.35% against 0.33%). Having an `IOHIDManager` open
+  /// at all is what costs; see `HIDMediaKeyMonitor`'s notes on that.
+  private func deviceMatching() -> [[String: Any]] {
+    var criteria: [[String: Any]] = [
+      [kIOHIDDeviceUsagePageKey: kHIDPage_Consumer,
+       kIOHIDDeviceUsageKey: kHIDUsage_Csmr_ConsumerControl],
+    ]
+    if isLearning {
+      criteria.append([
+        kIOHIDDeviceUsagePageKey: kHIDPage_GenericDesktop,
+        kIOHIDDeviceUsageKey: kHIDUsage_GD_Keyboard,
+      ])
+    }
+    return criteria
+  }
+
+  /// Which elements produce callbacks.
+  ///
+  /// Narrow by default and wide only while learning. Watching every page all
+  /// the time would mean seeing every keystroke, which is not something an app
+  /// should do to answer a question it asks once.
+  private func valueMatching() -> [[String: Any]] {
+    if isLearning {
+      // Everything, so a key on a vendor page can be captured — the case that
+      // makes this feature necessary at all.
+      return [[:]]
+    }
+
+    var criteria: [[String: Any]] = [
+      // The consumer page as a whole: it carries media and system controls, not
+      // typed characters, and seeing unrecognised ones is what makes the
+      // diagnostics useful.
+      [kIOHIDElementUsagePageKey: kHIDPage_Consumer],
+      // F14 and F15 are what keyboards without a Mac mode use for brightness.
+      [kIOHIDElementUsagePageKey: kHIDPage_KeyboardOrKeypad,
+       kIOHIDElementUsageKey: kHIDUsage_KeyboardF14],
+      [kIOHIDElementUsagePageKey: kHIDPage_KeyboardOrKeypad,
+       kIOHIDElementUsageKey: kHIDUsage_KeyboardF15],
+    ]
+
+    // Plus exactly the keys the user taught, and nothing else on their pages.
+    for signature in learnedSignatures where signature.usagePage != UInt32(kHIDPage_Consumer) {
+      criteria.append([
+        kIOHIDElementUsagePageKey: Int(signature.usagePage),
+        kIOHIDElementUsageKey: Int(signature.usage),
+      ])
+    }
+    return criteria
+  }
+
+  /// Widens matching to every page and stops acting on presses.
+  ///
+  /// Implemented by restarting rather than by reconfiguring in place: changing
+  /// the matching on a live manager is not reliably picked up, and a learning
+  /// mode that silently keeps the old filter would capture nothing.
+  func beginLearning() {
+    guard !isLearning else { return }
+    stop()
+    isLearning = true
+    start()
+  }
+
+  func endLearning() {
+    guard isLearning else { return }
+    stop()
+    isLearning = false
+    start()
+  }
+
+  /// Re-applies matching after the taught keys changed.
+  func refreshMatching() {
+    guard isRunning, !isLearning else { return }
+    stop()
+    start()
+  }
+
   // MARK: - Lifecycle
 
   var isRunning: Bool { manager != nil }
@@ -97,19 +217,9 @@ final class HIDMediaKeyMonitor {
 
     let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
 
-    // Match anything that can carry consumer controls. Keyboards expose these
-    // in a separate collection from their keys, and some devices — headsets,
-    // dials — expose the collection on its own.
-    let criteria: [[String: Any]] = [
-      [kIOHIDDeviceUsagePageKey: kHIDPage_Consumer, kIOHIDDeviceUsageKey: kHIDUsage_Csmr_ConsumerControl],
-      [kIOHIDDeviceUsagePageKey: kHIDPage_GenericDesktop, kIOHIDDeviceUsageKey: kHIDUsage_GD_Keyboard],
-    ]
-    IOHIDManagerSetDeviceMatchingMultiple(manager, criteria as CFArray)
+    IOHIDManagerSetDeviceMatchingMultiple(manager, deviceMatching() as CFArray)
 
-    // Only consumer-page values, so ordinary typing never reaches this callback.
-    IOHIDManagerSetInputValueMatchingMultiple(
-      manager, [[kIOHIDElementUsagePageKey: kHIDPage_Consumer]] as CFArray
-    )
+    IOHIDManagerSetInputValueMatchingMultiple(manager, valueMatching() as CFArray)
 
     let context = Unmanaged.passUnretained(self).toOpaque()
     IOHIDManagerRegisterInputValueCallback(manager, { context, _, _, value in
@@ -180,17 +290,27 @@ final class HIDMediaKeyMonitor {
 
     let element = IOHIDValueGetElement(value)
     let usage = IOHIDElementGetUsage(element)
-    // Consumer controls report 1 on press and 0 on release; acting on release
-    // would double every press.
+    let page = IOHIDElementGetUsagePage(element)
+    // Keys report 1 on press and 0 on release; acting on release would double
+    // every press.
     guard IOHIDValueGetIntegerValue(value) == 1 else { return }
 
     let device = IOHIDElementGetDevice(element)
     let name = (IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String)
       ?? "unknown keyboard"
+    let vendor = (IOHIDDeviceGetProperty(device, kIOHIDVendorIDKey as CFString) as? Int) ?? 0
+    let product = (IOHIDDeviceGetProperty(device, kIOHIDProductIDKey as CFString) as? Int) ?? 0
+
+    let signature = KeySignature(
+      usagePage: page, usage: usage, vendorID: vendor, productID: product
+    )
 
     MainActor.assumeIsolated {
-      monitor.observer?(usage, name)
-      guard let key = key(for: usage) else { return }
+      monitor.observer?(RawPress(signature: signature, deviceName: name))
+      // While learning, the press is only reported — acting on it would change
+      // the brightness while the user is trying to tell us what a key is.
+      guard !monitor.isLearning else { return }
+      guard let key = key(for: usage, page: page) else { return }
       monitor.handler?(Event(key: key, deviceName: name))
     }
   }

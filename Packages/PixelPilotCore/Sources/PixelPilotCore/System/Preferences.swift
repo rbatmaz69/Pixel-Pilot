@@ -68,6 +68,16 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
 /// Preferences that are not per-display.
 public struct GlobalSettings: Codable, Sendable, Equatable {
   public var mediaKeysEnabled: Bool = true
+
+  /// Whether to also watch the HID layer, which is what makes brightness keys
+  /// work on keyboards macOS does not translate.
+  ///
+  /// On by default because a key that does nothing is the more common
+  /// complaint. But it is a switch rather than an assumption: an open HID
+  /// connection costs about 0.33% of a core continuously, and this app is
+  /// otherwise at zero when idle. Anyone whose keyboard already works can turn
+  /// it off and get that back.
+  public var hidMediaKeysEnabled: Bool = true
   public var showsOSD: Bool = true
   /// Step size for one press of a brightness or volume key, as a fraction.
   public var keyStep: Double = 1.0 / 16.0
