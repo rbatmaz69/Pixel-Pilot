@@ -24,6 +24,9 @@ USAGE
   ppctl audio [options]               Show which audio route a display resolves to
   ppctl audio-devices                 List output devices and their volume properties
   ppctl capabilities [options]        Read the MCCS capability string (slow, one-off)
+  ppctl scan [--alt] [options]        Read all 256 VCP registers and classify them.
+                                      --alt also scans I2C address 0x50.
+  ppctl try <vcp> [options]           Write-probe one register, restoring its value
   ppctl gamma <fraction> [hold]       Apply software dimming (1.0 restores). 'hold'
                                       parks the process so recovery can be tested.
   ppctl gamma-check                   Read the display's gamma table back
@@ -337,6 +340,115 @@ case "capabilities", "caps":
       let name = PowerMode(rawValue: value)?.displayName ?? "unknown"
       print(String(format: "  0x%02X  %@", value, name))
     }
+  }
+  dumpLogIfVerbose()
+
+case "scan":
+  let (display, transport) = selectedTransport()
+
+  // Cross-reference against what the display admits to, so undeclared live
+  // registers stand out — those are the ones worth looking at.
+  var declared: Set<UInt8> = []
+  if let arm64 = transport as? Arm64DDCTransport,
+     let raw = try? arm64.readCapabilities(timing: timing) {
+    declared = Set(CapabilityString(raw: raw).features.keys)
+    print("Capability string declares \(declared.count) features.\n")
+  } else {
+    print("No capability string — everything will show as undeclared.\n")
+  }
+
+  let addresses: [UInt8] = arguments.contains("--alt") ? [0x51, 0x50] : [0x51]
+
+  for address in addresses {
+    print("Scanning 256 registers on data address 0x\(String(address, radix: 16)) …")
+    let results = VCPScanner.scan(
+      transport: transport, dataAddress: address, declared: declared
+    ) { done, total in
+      if done % 32 == 0 || done == total {
+        FileHandle.standardError.write(Data("  \(done)/\(total)\r".utf8))
+      }
+    }
+    FileHandle.standardError.write(Data("\n".utf8))
+
+    let live = results.filter(\.classification.isLive)
+    let phantom = results.filter {
+      if case .phantom = $0.classification { return true }
+      return false
+    }
+
+    print("\n  \(live.count) live, \(phantom.count) answered but unusable, "
+      + "\(results.count - live.count - phantom.count) absent\n")
+
+    for result in live {
+      guard case let .live(current, maximum) = result.classification else { continue }
+      let mark = result.isDeclared ? " " : "★"
+      let name = VCPCode(rawValue: result.code).standardName ?? "unknown"
+      print(String(
+        format: "  %@ 0x%02X  %-34@ %5d / %-5d",
+        mark, result.code, name as NSString, Int(current), Int(maximum)
+      ))
+    }
+
+    // Every audio feature MCCS defines, and what this display does with it —
+    // the question the scan exists to answer.
+    let audioVerdicts = results.filter { VCPScanner.audioCodes.contains($0.code) }
+    print("\n  MCCS audio group:")
+    for verdict in audioVerdicts.sorted(by: { $0.code < $1.code }) {
+      let name = VCPCode(rawValue: verdict.code).standardName ?? "unknown"
+      let state: String = switch verdict.classification {
+      case let .live(current, maximum): "live \(current)/\(maximum)"
+      case let .phantom(_, _, reason): "phantom — \(reason)"
+      case let .absent(reason): "absent — \(reason)"
+      }
+      print(String(format: "    0x%02X  %-30@ %@", verdict.code, name as NSString, state))
+    }
+
+    let undeclared = live.filter { !$0.isDeclared }
+    if undeclared.isEmpty {
+      print("\n  ★ none — the display answers nothing it did not declare.")
+    } else {
+      print("\n  ★ marks \(undeclared.count) register(s) the display did not declare.")
+    }
+
+    let candidates = VCPScanner.audioCandidates(in: results)
+    if !candidates.isEmpty {
+      print("\n  Audio candidates worth a write test:")
+      for candidate in candidates {
+        guard case let .live(current, maximum) = candidate.classification else { continue }
+        print(String(format: "    0x%02X  %@  (%d / %d)",
+                     candidate.code, candidate.name, Int(current), Int(maximum)))
+      }
+      print("\n  Test one with:  ppctl try 0x<code>")
+    } else {
+      print("\n  No audio candidates.")
+    }
+  }
+  _ = display
+  dumpLogIfVerbose()
+
+case "try":
+  guard let codeArgument = arguments.first else { fail("`try` needs a VCP code") }
+  let vcp = parseVCP(codeArgument)
+  let (display, transport) = selectedTransport()
+
+  guard !WriteProbe.forbidden.contains(vcp.rawValue) else {
+    fail("\(vcp) is on the forbidden list — writing it could reset the display "
+      + "or take away the picture")
+  }
+
+  print("Probing \(vcp) on \(display.name) — the original value is restored afterwards.\n")
+  switch WriteProbe.probe(vcp, transport: transport, timing: timing, log: log) {
+  case let .accepted(wrote, maximum):
+    print("  ACCEPTED — wrote \(wrote) and read it back (max \(maximum))")
+    print("  This register is real. Now check whether anything is connected to it:")
+    print("  play audio and run `ppctl set 0x\(String(vcp.rawValue, radix: 16)) <value>`.")
+    print("  A register can store values and drive nothing.")
+  case let .rejected(wrote, readBack):
+    print("  REJECTED — wrote \(wrote), read back \(readBack)")
+  case let .unreadable(detail):
+    print("  UNREADABLE — \(detail)")
+  case .forbiddenCode:
+    print("  refused")
   }
   dumpLogIfVerbose()
 

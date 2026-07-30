@@ -32,11 +32,17 @@ public final class Arm64DDCTransport: DDCTransport, @unchecked Sendable {
 
   public func write(_ vcp: VCPCode, value: UInt16, timing: DDCTiming = .default) throws {
     var packet = DDCPacket.setRequest(vcp, value: value)
-    try send(&packet, vcp: vcp, timing: timing, operation: "set")
+    try send(&packet, to: vcp.dataAddress, timing: timing, operation: "set")
     log?.record(.ddcWrite(vcp: vcp, value: value))
   }
 
   public func read(_ vcp: VCPCode, timing: DDCTiming = .default) throws -> DDCReading {
+    try read(vcp, at: vcp.dataAddress, timing: timing)
+  }
+
+  public func read(
+    _ vcp: VCPCode, at dataAddress: UInt8, timing: DDCTiming = .default
+  ) throws -> DDCReading {
     var lastError: Error = DDCError.malformedReply(bytes: [], detail: "no attempt made")
 
     for attempt in 0 ... timing.readRetries {
@@ -44,7 +50,7 @@ public final class Arm64DDCTransport: DDCTransport, @unchecked Sendable {
         usleep(timing.retryWaitMicroseconds)
       }
       do {
-        let parsed = try readOnce(vcp, timing: timing)
+        let parsed = try readOnce(vcp, at: dataAddress, timing: timing)
         // A bad checksum earns a retry, but on the final attempt we take the
         // values anyway: several panels answer correctly and checksum wrongly,
         // and refusing them would mean no DDC at all on that hardware.
@@ -149,7 +155,7 @@ public final class Arm64DDCTransport: DDCTransport, @unchecked Sendable {
       var request = DDCPacket.capabilitiesRequest(
         offset: offset, includeSourceAddress: includeSourceAddress
       )
-      try send(&request, vcp: .luminance, timing: timing, operation: "capabilities request")
+      try send(&request, to: 0x51, timing: timing, operation: "capabilities request")
 
       usleep(timing.readWaitMicroseconds)
 
@@ -203,9 +209,11 @@ public final class Arm64DDCTransport: DDCTransport, @unchecked Sendable {
 
   // MARK: - Transactions
 
-  private func readOnce(_ vcp: VCPCode, timing: DDCTiming) throws -> DDCPacket.ParsedReply {
+  private func readOnce(
+    _ vcp: VCPCode, at dataAddress: UInt8, timing: DDCTiming
+  ) throws -> DDCPacket.ParsedReply {
     var request = DDCPacket.getRequest(vcp)
-    try send(&request, vcp: vcp, timing: timing, operation: "get request")
+    try send(&request, to: dataAddress, timing: timing, operation: "get request")
 
     usleep(timing.readWaitMicroseconds)
 
@@ -214,7 +222,7 @@ public final class Arm64DDCTransport: DDCTransport, @unchecked Sendable {
       PPAVServiceReadI2C(
         service,
         DDCPacket.chipAddress,
-        UInt32(vcp.dataAddress),
+        UInt32(dataAddress),
         buffer.baseAddress!,
         UInt32(buffer.count)
       )
@@ -233,7 +241,7 @@ public final class Arm64DDCTransport: DDCTransport, @unchecked Sendable {
   /// the packet whenever the trailing checksum happens to compute to zero.
   private func send(
     _ packet: inout [UInt8],
-    vcp: VCPCode,
+    to dataAddress: UInt8,
     timing: DDCTiming,
     operation: String
   ) throws {
@@ -243,7 +251,7 @@ public final class Arm64DDCTransport: DDCTransport, @unchecked Sendable {
         PPAVServiceWriteI2C(
           service,
           DDCPacket.chipAddress,
-          UInt32(vcp.dataAddress),
+          UInt32(dataAddress),
           buffer.baseAddress!,
           UInt32(buffer.count)
         )

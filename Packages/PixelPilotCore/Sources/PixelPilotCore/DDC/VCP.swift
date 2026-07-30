@@ -31,23 +31,71 @@ public struct VCPCode: RawRepresentable, Hashable, Sendable, Codable, CustomStri
   }
 
   public var description: String {
-    let name = Self.knownNames[self] ?? "VCP"
-    return String(format: "%@ (0x%02X)", name, rawValue)
+    String(format: "%@ (0x%02X)", standardName ?? "unknown", rawValue)
   }
 
-  private static let knownNames: [VCPCode: String] = [
-    .luminance: "Brightness",
-    .contrast: "Contrast",
-    .audioSpeakerVolume: "Volume",
-    .audioMute: "Mute",
-    .inputSource: "Input Source",
-    .powerMode: "Power Mode",
-    .redGain: "Red Gain",
-    .greenGain: "Green Gain",
-    .blueGain: "Blue Gain",
-    .colorTemperature: "Color Temperature",
-    .inputSourceAlternate: "Input Source (alt)",
+  /// Standard MCCS names, for reading a register scan.
+  ///
+  /// Worth the table: a scan that prints "VCP (0x0E)" tells you nothing, while
+  /// "Clock" immediately identifies a vestigial analog control on a digital
+  /// panel. Interpreting a scan without these means guessing.
+  private static let knownNames: [UInt8: String] = [
+    0x02: "New Control Value",
+    0x04: "Restore Factory Defaults",
+    0x05: "Restore Factory Brightness/Contrast",
+    0x06: "Restore Factory Geometry",
+    0x08: "Restore Factory Colour",
+    0x0A: "Restore Factory TV Defaults",
+    0x0B: "Colour Temperature Increment",
+    0x0C: "Colour Temperature Request",
+    0x0E: "Clock",
+    0x10: "Brightness",
+    0x12: "Contrast",
+    0x14: "Select Colour Preset",
+    0x16: "Video Gain Red",
+    0x18: "Video Gain Green",
+    0x1A: "Video Gain Blue",
+    0x1E: "Auto Setup",
+    0x20: "Horizontal Position",
+    0x22: "Horizontal Size",
+    0x30: "Vertical Position",
+    0x32: "Vertical Size",
+    0x3E: "Clock Phase",
+    0x52: "Active Control",
+    0x54: "Performance Preservation",
+    0x60: "Input Source",
+    0x62: "Audio: Speaker Volume",
+    0x63: "Audio: Speaker Select",
+    0x64: "Audio: Microphone Volume",
+    0x66: "Audio: Jack Connection",
+    0x6C: "Video Black Level Red",
+    0x6E: "Video Black Level Green",
+    0x70: "Video Black Level Blue",
+    0x8D: "Audio: Mute",
+    0x8F: "Audio: Treble",
+    0x91: "Audio: Bass",
+    0x93: "Audio: Balance",
+    0x94: "Audio: Processor Mode",
+    0xA8: "Stereo Video Mode",
+    0xAA: "Screen Orientation",
+    0xAC: "Horizontal Frequency",
+    0xAE: "Vertical Frequency",
+    0xB2: "Flat Panel Sub-Pixel Layout",
+    0xB4: "Source Timing Mode",
+    0xB6: "Display Technology Type",
+    0xC6: "Application Enable Key",
+    0xC8: "Display Controller ID",
+    0xC9: "Display Firmware Level",
+    0xCA: "OSD / Button Control",
+    0xCC: "OSD Language",
+    0xD6: "Power Mode",
+    0xDC: "Display Application",
+    0xDF: "VCP Version",
+    0xF4: "Input Source (alternate address)",
   ]
+
+  /// The standard name, when there is one.
+  public var standardName: String? { Self.knownNames[rawValue] }
 
   /// The features probed once per panel to work out what it supports.
   /// Deliberately short: every entry costs a full DDC round trip.
@@ -160,4 +208,19 @@ public enum DDCError: Error, CustomStringConvertible {
 public protocol DDCTransport: AnyObject, Sendable {
   func read(_ vcp: VCPCode, timing: DDCTiming) throws -> DDCReading
   func write(_ vcp: VCPCode, value: UInt16, timing: DDCTiming) throws
+
+  /// Reads at an explicitly chosen I2C data address.
+  ///
+  /// Exists for scanning the alternate address 0x50, where some vendors park
+  /// controls that are absent from 0x51. Separate from `read(_:timing:)`
+  /// because the address normally follows from the feature — only a scan has
+  /// reason to override it.
+  func read(_ vcp: VCPCode, at dataAddress: UInt8, timing: DDCTiming) throws -> DDCReading
+}
+
+public extension DDCTransport {
+  /// Backends with no notion of a data address ignore the override.
+  func read(_ vcp: VCPCode, at dataAddress: UInt8, timing: DDCTiming) throws -> DDCReading {
+    try read(vcp, timing: timing)
+  }
 }
