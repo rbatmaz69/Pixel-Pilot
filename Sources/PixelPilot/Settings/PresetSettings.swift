@@ -259,11 +259,9 @@ struct PresetSettings: View {
         ControlRow(title: "When dark") { presetMenu(isDark: true) }
           .disabled(!model.appearanceBindings.isEnabled)
 
-        // Explaining the choice, because a schedule is the obvious thing to
-        // look for and its absence is deliberate.
-        CardFooter("Tied to light and dark rather than to a clock. macOS announces the "
-          + "change, so nothing has to run in the background waiting for it — and following "
-          + "sunrise properly would mean asking for your location.")
+        CardFooter("Tied to light and dark rather than to a clock — macOS announces the "
+          + "change, so nothing has to be waiting for it. For times of day, see the "
+          + "Schedule tab.")
       }
       .animation(motion.effectDefault, value: model.appearanceBindings.isEnabled)
     }

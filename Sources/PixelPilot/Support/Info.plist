@@ -26,5 +26,7 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Used once to work out when the sun rises and sets where you are, so the schedule can follow it. Stored rounded to about 11 km, and never sent anywhere.</string>
 </dict>
 </plist>

@@ -187,9 +187,13 @@ final class AppModel {
     refreshPermissions()
 
     refresh()
+
+    scheduleRunner.start()
+    refreshSchedule()
   }
 
   func stop() {
+    scheduleRunner.stop()
     events.stop()
     mediaKeys.stop()
     hotkeyCenter.stop()
@@ -458,6 +462,69 @@ final class AppModel {
       systemAudio.toggleMute()
       present(systemAudio.isMuted ? .muted : .volume, value: systemAudio.volume, on: display)
       return true
+    }
+  }
+
+  // MARK: - Schedule
+
+  @ObservationIgnored private lazy var scheduleRunner = ScheduleRunner { [weak self] stop in
+    self?.applyScheduleStop(stop)
+  }
+
+  /// When the next scheduled change is due, for the settings UI.
+  var nextScheduledChange: Date? { scheduleRunner.nextFire }
+
+  func updateSchedule(_ mutate: (inout DaySchedule) -> Void) {
+    preferences.updateGlobal { mutate(&$0.schedule) }
+    refreshSchedule()
+  }
+
+  func setCoordinate(latitude: Double?, longitude: Double?) {
+    preferences.updateGlobal {
+      // Rounded here rather than at the point of asking, so a coordinate
+      // arriving from anywhere is reduced the same way.
+      $0.latitude = latitude.map { ($0 * 10).rounded() / 10 }
+      $0.longitude = longitude.map { ($0 * 10).rounded() / 10 }
+    }
+    refreshSchedule()
+  }
+
+  private func refreshSchedule() {
+    let global = preferences.global
+    let coordinate: (latitude: Double, longitude: Double)? =
+      if let latitude = global.latitude, let longitude = global.longitude {
+        (latitude, longitude)
+      } else {
+        nil
+      }
+    scheduleRunner.update(schedule: global.schedule, coordinate: coordinate)
+  }
+
+  /// One stop, applied to every display.
+  ///
+  /// Absolute values, not a nudge: a schedule that adjusted relative to
+  /// whatever the displays happened to be at would drift a little further
+  /// every day and end up somewhere nobody chose.
+  private func applyScheduleStop(_ stop: ScheduleStop) {
+    groupChangeTick += 1
+    log.record(.info("Applying scheduled change"))
+
+    presetTask?.cancel()
+    presetTask = Task { [displays] in
+      for display in displays {
+        guard !Task.isCancelled else { return }
+        if let brightness = stop.brightness {
+          display.setBrightness(brightness)
+        }
+        if let kelvin = stop.kelvin {
+          // 6500 K is neutral, and neutral means no table of ours at all
+          // rather than a very slight tint.
+          display.setColorTemperature(
+            abs(kelvin - ColorTemperature.neutralKelvin) < 1 ? nil : kelvin
+          )
+        }
+        await display.commitBrightnessAndWait()
+      }
     }
   }
 

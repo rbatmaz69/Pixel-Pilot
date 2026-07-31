@@ -127,6 +127,18 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   public var fineKeyStep: Double = 1.0 / 64.0
   public var launchAtLogin: Bool = false
 
+  /// The day schedule. Disabled by default; an app that started changing the
+  /// brightness on its own without being asked would be a fault, not a feature.
+  public var schedule: DaySchedule = .init()
+
+  /// Where sunrise happens, to one decimal place — about 11 km, which is more
+  /// precision than sunrise needs and much less than a location.
+  ///
+  /// Optional in both senses: the schedule works on clock times without it, and
+  /// it is only ever filled in by someone explicitly choosing solar stops.
+  public var latitude: Double?
+  public var longitude: Double?
+
   /// Whether the trackpad taps back at end stops, detents and confirmations.
   ///
   /// On by default, and deliberately *not* tied to Reduce Motion. That setting
@@ -163,6 +175,10 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
     fineKeyStep = try container.decodeIfPresent(Double.self, forKey: .fineKeyStep) ?? fallback.fineKeyStep
     launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? fallback.launchAtLogin
     hapticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? fallback.hapticsEnabled
+    // `try?` for the composite, same reasoning as `DisplaySettings.timing`.
+    schedule = (try? container.decodeIfPresent(DaySchedule.self, forKey: .schedule)) ?? fallback.schedule
+    latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
+    longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
   }
 }
 

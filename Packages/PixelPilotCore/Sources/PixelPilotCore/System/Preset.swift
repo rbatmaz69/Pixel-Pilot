@@ -59,10 +59,14 @@ public struct Preset: Codable, Sendable, Identifiable, Hashable {
 
 /// Stores presets, and which of them follow the system appearance.
 ///
-/// Automatic switching is tied to light/dark rather than to a clock. A schedule
-/// would need a timer and, to follow sunrise properly, a location permission —
-/// for an app whose defining constraint is costing nothing while idle, that is a
-/// bad trade. The appearance change arrives as a notification, for free.
+/// Appearance binding is the free one: macOS announces light and dark as a
+/// notification, so nothing has to be waiting for it.
+///
+/// This used to say a clock schedule was a bad trade, needing a timer and a
+/// location permission. Both turned out to be avoidable — `DaySchedule` sleeps
+/// once until the next stop rather than ticking, and the location is optional,
+/// asked for one time and rounded to 11 km — so the schedule lives there and
+/// this stays what it always was.
 public final class PresetStore: @unchecked Sendable {
   public static let shared = PresetStore()
 

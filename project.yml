@@ -39,6 +39,14 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSHumanReadableCopyright: ""
+        # Only reached if someone adds a sunrise or sunset stop to the
+        # schedule, and only once — the answer is rounded to one decimal place
+        # and stored, and the location manager is let go immediately after.
+        # Clock stops need none of this, and there is a manual entry field so
+        # solar stops do not require the grant either.
+        NSLocationWhenInUseUsageDescription:
+          Used once to work out when the sun rises and sets where you are, so the schedule
+          can follow it. Stored rounded to about 11 km, and never sent anywhere.
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
 
     entitlements:
