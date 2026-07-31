@@ -69,7 +69,12 @@ private struct GeneralSettings: View {
         Toggle("Show the on-screen indicator", isOn: $global.showsOSD)
           .onChange(of: global.showsOSD) { _, _ in apply() }
 
-        CardFooter("Hold Shift and Option while pressing a key for finer steps.")
+        Toggle("Tap the trackpad at ends and quarters", isOn: $global.hapticsEnabled)
+          .onChange(of: global.hapticsEnabled) { _, _ in apply() }
+
+        CardFooter("Hold Shift and Option while pressing a key for finer steps. The trackpad "
+          + "taps only on hardware that can — macOS decides that, and its own setting in "
+          + "Trackpad preferences wins over this one.")
       }
     }
   }

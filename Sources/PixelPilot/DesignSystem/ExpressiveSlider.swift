@@ -1,3 +1,4 @@
+import PixelPilotCore
 import SwiftUI
 
 /// The signature control of the app.
@@ -20,6 +21,14 @@ struct ExpressiveSlider: View {
   var range: ClosedRange<Double> = 0 ... 1
   var accent: Color
   var icon: String?
+  /// Marks that tug back, as 0...1 fractions of the track. Felt and drawn,
+  /// never enforced — see `SliderDetents`.
+  ///
+  /// Defaulted rather than passed at each call site: every slider in this app
+  /// is a percentage of something, so the quarters are the right marks for all
+  /// of them, and six copies of the same argument is how the seventh ends up
+  /// different. Pass an empty array for a control where they are not.
+  var detents: [Double] = SliderDetents.quarters
   /// Called continuously while dragging — cheap work only.
   var onChange: (Double) -> Void = { _ in }
   /// Called once when the drag ends.
@@ -33,9 +42,20 @@ struct ExpressiveSlider: View {
   /// Bumped to fire the knob's squash. One counter for both causes — arriving
   /// at an end and letting go — because they want the same acknowledgement.
   @State private var pop = 0
+  /// Bumped when a detent is entered. Its own counter, and its own smaller
+  /// squash: a detent happens several times in one drag and must not read as
+  /// loudly as bottoming out.
+  @State private var tick = 0
   /// Latches the end stop, so holding the pointer past the edge pops once
   /// instead of on every frame of the drag.
   @State private var isAtEnd = false
+  /// The detent currently occupied. Latched for the same reason as `isAtEnd`:
+  /// a drag sits inside a detent for many frames and deserves one tick.
+  @State private var latchedDetent: Double?
+
+  /// How wide a detent feels, in points. Converted to a fraction of the track
+  /// at drag time so a wide slider does not get wide detents.
+  private static let detentReach: Double = 4
 
   private var fraction: Double {
     let span = range.upperBound - range.lowerBound
@@ -89,6 +109,8 @@ struct ExpressiveSlider: View {
       MorphingRoundedRectangle(cornerRadius: metrics.trackHeight / 2)
         .fill(.quaternary)
 
+      detentMarks(width: width)
+
       MorphingRoundedRectangle(cornerRadius: metrics.trackHeight / 2)
         .fill(accent.accentFill)
         .frame(width: max(metrics.trackHeight, knobX))
@@ -108,13 +130,48 @@ struct ExpressiveSlider: View {
     .animation(motion.spatialFast, value: metrics.trackHeight)
   }
 
+  /// Hairlines where the detents are.
+  ///
+  /// A detent nobody can see is a control that occasionally resists for no
+  /// stated reason. Drawn under the fill rather than over it, so the marks show
+  /// on the empty part of the track and the filled part stays a clean colour —
+  /// ticks over the accent read as damage to it.
+  ///
+  /// The two ends are skipped: a mark hard against the cap is indistinguishable
+  /// from the cap.
+  @ViewBuilder
+  private func detentMarks(width: CGFloat) -> some View {
+    let interior = detents.filter { $0 > 0.001 && $0 < 0.999 }
+    if !interior.isEmpty {
+      ZStack(alignment: .leading) {
+        ForEach(interior, id: \.self) { detent in
+          Rectangle()
+            .fill(.tertiary)
+            .frame(width: 1, height: metrics.trackHeight)
+            // The knob's own formula, minus half the mark's width to centre it
+            // on the line rather than start it there. Sharing the formula
+            // matters more than it looks: `metrics.width` grows when the handle
+            // is grabbed, and a mark computed any other way would drift out
+            // from under a handle that is sitting still on it.
+            .offset(x: (width - metrics.width) * detent + metrics.width / 2 - 0.5)
+        }
+      }
+      .frame(width: width, alignment: .leading)
+      // The marks belong to the track, so they fade with it rather than
+      // sitting at full strength on a control nobody is touching.
+      .opacity(isDragging || isHovered ? 0.9 : 0.5)
+      .animation(motion.effectFast, value: isDragging || isHovered)
+    }
+  }
+
   private func knob(centeredAt x: CGFloat, height: CGFloat) -> some View {
     MorphingKnob(width: metrics.width, cornerRadius: metrics.cornerRadius)
       .fill(.white)
       .shadow(color: .black.opacity(isDragging ? 0.30 : 0.16), radius: isDragging ? 6 : 2, y: 1)
       .background { glow }
       .frame(width: metrics.width, height: metrics.trackHeight + (isDragging ? 10 : 6))
-      .modifier(KnobSquash(trigger: pop, isReduced: motion.isReduced, settle: motion.expressive))
+      .tickOnChange(tick, motion: motion)
+      .squashOnChange(pop, motion: motion)
       .position(x: x, y: height / 2)
       // The morph springs; the position does not. Position must track the
       // pointer exactly or the control feels laggy. Everything added around
@@ -158,6 +215,10 @@ struct ExpressiveSlider: View {
           isDragging = false
         }
         isAtEnd = false
+        latchedDetent = nil
+        // No haptic here on purpose. Letting go already has the squash, and a
+        // tap on every release would fire far more often than the two things
+        // worth feeling — bottoming out, and crossing a mark.
         pop += 1
         onCommit(value)
       }
@@ -171,34 +232,29 @@ struct ExpressiveSlider: View {
     // out without reading the number. Latched, because the pointer usually keeps
     // going once it gets there.
     let reachedEnd = position <= 0 || position >= 1
-    if reachedEnd, !isAtEnd { pop += 1 }
+    if reachedEnd, !isAtEnd {
+      pop += 1
+      Haptics.endStop()
+    }
     isAtEnd = reachedEnd
 
-    value = range.lowerBound + position * (range.upperBound - range.lowerBound)
-  }
-}
-
-/// One squash of the handle, played on release and on reaching an end.
-///
-/// Three phases rather than two: a two-phase animator would leave the handle
-/// resting at whichever phase it ended on, and the resting size of this control
-/// is not negotiable. Here the first and last phase are both "normal", so the
-/// handle returns to itself whichever way the animator settles.
-private struct KnobSquash: ViewModifier {
-  let trigger: Int
-  let isReduced: Bool
-  let settle: Animation
-
-  @ViewBuilder
-  func body(content: Content) -> some View {
-    if isReduced {
-      content
-    } else {
-      content.phaseAnimator([0, 1, 2], trigger: trigger) { view, phase in
-        view.scaleEffect(phase == 1 ? 1.22 : 1)
-      } animation: { phase in
-        phase == 1 ? .spring(duration: 0.15, bounce: 0.5) : settle
-      }
+    // The same latching idea one level down. Note what this does *not* do: it
+    // never touches `position`. A detent that snapped the value would quantise
+    // the one property this control promises to keep exact — the handle under
+    // the pointer — and would make fine adjustment impossible on the control
+    // whose entire job is fine adjustment. The mark is felt and drawn; the
+    // number does whatever the pointer says.
+    let detent = SliderDetents.nearest(
+      to: position,
+      among: detents,
+      tolerance: SliderDetents.tolerance(points: Self.detentReach, travel: travel)
+    )
+    if let detent, detent != latchedDetent, !reachedEnd {
+      tick += 1
+      Haptics.detent()
     }
+    latchedDetent = detent
+
+    value = range.lowerBound + position * (range.upperBound - range.lowerBound)
   }
 }

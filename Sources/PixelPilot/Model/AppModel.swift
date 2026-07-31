@@ -137,6 +137,11 @@ final class AppModel {
       lastObservedKey = (press.signature.usage, press.deviceName)
       // The learning sheet is watching this.
       if hidKeys.isLearning {
+        // The one moment in the learning sheet worth acknowledging: the key
+        // that was pressed has been caught. The sheet says so visually; this
+        // says so without having to look at the screen, which is the position
+        // someone reaching for an unlabelled key is usually in.
+        if pendingLearnedPress?.signature != press.signature { Haptics.confirm() }
         pendingLearnedPress = press
       } else if let action = keyBindings.action(for: press.signature) {
         // A taught key beats the built-in mapping, so a wrong guess on our part
@@ -454,6 +459,12 @@ final class AppModel {
   /// I2C bus, and overlapping transactions on it corrupt each other rather than
   /// queueing.
   func apply(_ preset: Preset) {
+    // Before the fan-out, not after it. Writing brightness to every display
+    // takes hundreds of milliseconds of DDC round trips, and an
+    // acknowledgement that arrives at the end of that has stopped being an
+    // acknowledgement of the click.
+    Haptics.confirm()
+
     presetTask?.cancel()
     presetTask = Task { [displays] in
       for display in displays {

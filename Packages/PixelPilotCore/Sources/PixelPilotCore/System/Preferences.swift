@@ -114,6 +114,16 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   public var fineKeyStep: Double = 1.0 / 64.0
   public var launchAtLogin: Bool = false
 
+  /// Whether the trackpad taps back at end stops, detents and confirmations.
+  ///
+  /// On by default, and deliberately *not* tied to Reduce Motion. That setting
+  /// is about visible movement, and this app answers it by removing animation
+  /// from the hierarchy outright — which takes away exactly the visual cues a
+  /// haptic stands in for. macOS has its own switch for feedback, in Trackpad
+  /// settings, and the system's feedback performer already honours it; this one
+  /// is here so the app can be told to be quiet on its own.
+  public var hapticsEnabled: Bool = true
+
   public init() {}
 
   /// Decoded by hand, and this is not boilerplate worth deleting.
@@ -139,6 +149,7 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
     keyStep = try container.decodeIfPresent(Double.self, forKey: .keyStep) ?? fallback.keyStep
     fineKeyStep = try container.decodeIfPresent(Double.self, forKey: .fineKeyStep) ?? fallback.fineKeyStep
     launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? fallback.launchAtLogin
+    hapticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? fallback.hapticsEnabled
   }
 }
 
