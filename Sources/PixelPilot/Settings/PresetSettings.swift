@@ -28,11 +28,16 @@ struct PresetSettings: View {
       PanelCard(title: "Presets", systemImage: "square.stack") {
         VStack(alignment: .leading, spacing: Layout.snug) {
           if model.presetList.isEmpty {
-            Text("No presets yet. Set your displays the way you want them, "
-              + "then capture that below.")
-              .font(.callout)
-              .foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
+            CharacterfulEmptyState(
+              title: "No presets yet",
+              message: "Set your displays the way you want them, then capture that below "
+                + "and give it a name."
+            ) {
+              SearchingRadar(size: 60)
+            }
+            // Inside a card rather than filling a window, so the illustration
+            // gets a smaller share than the copy.
+            .padding(.vertical, -Layout.snug)
           } else {
             ForEach(model.presetList) { preset in
               presetRow(preset)

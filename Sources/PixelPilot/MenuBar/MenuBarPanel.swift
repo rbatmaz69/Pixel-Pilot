@@ -68,14 +68,26 @@ struct MenuBarPanel: View {
   /// Where the cascade has got to by the time the per-display cards are done.
   private var trailingIndex: Int { model.displays.count }
 
+  /// Still the warning card rather than a full empty state.
+  ///
+  /// The panel is 320 pt of a menu bar popover, not a page — a centred
+  /// illustration with a heading under it would push the volume row and the
+  /// footer off the bottom. The radar goes beside the text instead, which is
+  /// enough to say "looking" without spending the height on saying it.
   private var emptyState: some View {
-    VStack(alignment: .leading, spacing: Layout.tight) {
-      Label("No displays found", systemImage: "display.trianglebadge.exclamationmark")
-        .font(TypeScale.cardTitle)
-      if !model.isDDCAvailable {
-        Text("DDC/CI is unavailable on this system. Software dimming is still possible.")
+    HStack(alignment: .top, spacing: Layout.snug) {
+      SearchingRadar(accent: Status.warn, size: 34)
+        .padding(.top, 2)
+
+      VStack(alignment: .leading, spacing: Layout.tight) {
+        Text("No displays found")
+          .font(TypeScale.cardTitle)
+        Text(model.isDDCAvailable
+          ? "Nothing is answering on the DDC bus yet."
+          : "DDC/CI is unavailable on this system. Software dimming is still possible.")
           .font(TypeScale.detail)
           .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
       }
     }
     .padding(Layout.normal)

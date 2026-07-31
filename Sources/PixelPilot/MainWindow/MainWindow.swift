@@ -31,12 +31,26 @@ struct MainWindow: View {
     } detail: {
       if let display = model.displays.first(where: { $0.id == selection }) {
         DisplayDetail(display: display, log: model.log)
+      } else if model.displays.isEmpty {
+        // Two empty states, not one. "Nothing is plugged in" and "nothing is
+        // selected" are different problems with different next steps, and
+        // `ContentUnavailableView` was telling both of them to pick from a
+        // list that might have nothing in it.
+        CharacterfulEmptyState(
+          title: "Looking for displays",
+          message: "Nothing is answering on the DDC bus yet. External monitors appear here "
+            + "as soon as they are connected."
+        ) {
+          SearchingRadar()
+        }
       } else {
-        ContentUnavailableView(
-          "Select a display",
-          systemImage: "display",
-          description: Text("Choose a display to see its controls and diagnostics.")
-        )
+        CharacterfulEmptyState(
+          title: "Pick a display",
+          message: "Choose one on the left to see its controls, what it really supports, "
+            + "and what it has been saying back."
+        ) {
+          BreathingMonitor()
+        }
       }
     }
     .onAppear {

@@ -5,18 +5,37 @@ import SwiftUI
 /// SwiftUI's `RoundedRectangle` does not interpolate its radius when the value
 /// changes — it snaps. Making the radius the `animatableData` is what turns
 /// "pill becomes squircle" into an actual morph rather than a jump.
-struct MorphingRoundedRectangle: Shape, Animatable {
+struct MorphingRoundedRectangle: InsettableShape, Animatable {
   var cornerRadius: CGFloat
+  /// Insettable so this can take `strokeBorder`, which draws inside the shape.
+  /// Plain `stroke` straddles the edge, so half of every hairline would fall
+  /// outside the card it is supposed to be outlining.
+  private var inset: CGFloat = 0
 
   var animatableData: CGFloat {
     get { cornerRadius }
     set { cornerRadius = newValue }
   }
 
+  init(cornerRadius: CGFloat) {
+    self.cornerRadius = cornerRadius
+  }
+
   func path(in rect: CGRect) -> Path {
+    let bounds = rect.insetBy(dx: inset, dy: inset)
     // Continuous corners, not circular: this is the curvature Apple uses
     // everywhere, and mixing the two in one interface is immediately visible.
-    Path(roundedRect: rect, cornerRadius: min(cornerRadius, min(rect.width, rect.height) / 2), style: .continuous)
+    return Path(
+      roundedRect: bounds,
+      cornerRadius: min(max(0, cornerRadius - inset), min(bounds.width, bounds.height) / 2),
+      style: .continuous
+    )
+  }
+
+  func inset(by amount: CGFloat) -> Self {
+    var copy = self
+    copy.inset += amount
+    return copy
   }
 }
 
