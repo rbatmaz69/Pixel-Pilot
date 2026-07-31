@@ -251,14 +251,40 @@ final class AppModel {
         guard !Task.isCancelled else { return }
         await display.activate()
       }
+      // Whether the keys are worth watching depends on what is plugged in, so
+      // it has to be decided again every time that changes — and after
+      // activation, because `respondsToMediaKeys` is read from settings the
+      // panel has only just been identified against.
+      guard !Task.isCancelled else { return }
+      startMediaKeys()
     }
   }
 
   // MARK: - Media keys
 
+  /// Whether there is a display the keys could actually act on.
+  ///
+  /// With only the built-in panel there is not. macOS already does brightness
+  /// there — better than this app could, since it has the ambient light sensor
+  /// — and it does system volume too. Watching the keys in that situation means
+  /// installing an event tap for the sole purpose of declining everything it
+  /// sees, which is all risk and no benefit: a declined key still has to
+  /// survive the trip out through the tap and back into the system, and a key
+  /// that does not survive it is a Mac whose brightness keys have stopped
+  /// working. That is a far worse outcome than not watching at all.
+  var hasKeyDrivableDisplay: Bool {
+    displays.contains { !$0.isBuiltin && $0.respondsToMediaKeys }
+  }
+
+  /// True when the keys are switched on but there is nothing to point them at,
+  /// so the settings window can say which of the two it is.
+  var mediaKeysIdleForLackOfDisplays: Bool {
+    preferences.global.mediaKeysEnabled && !hasKeyDrivableDisplay
+  }
+
   @discardableResult
   func startMediaKeys() -> Bool {
-    guard preferences.global.mediaKeysEnabled else {
+    guard preferences.global.mediaKeysEnabled, hasKeyDrivableDisplay else {
       mediaKeysActive = false
       hidKeysActive = false
       mediaKeys.stop()
