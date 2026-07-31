@@ -15,8 +15,7 @@ Requires macOS 26 (Tahoe) on Apple Silicon.
 - **The keyboard's brightness and volume keys**, intercepted and acted on,
   with its own indicator — macOS 26 no longer renders third-party values in
   the system one.
-- **Scroll over the menu bar icon** to change brightness. The icon itself is a
-  gauge showing the current level.
+- **Scroll over the menu bar icon** to change brightness.
 - **One slider for every display**, keeping the differences between them.
 - **Presets**, applied by hand, by global shortcut, by system appearance, on a
   schedule, or by which application is in front.

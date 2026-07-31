@@ -251,11 +251,6 @@ final class AppModel {
         guard !Task.isCancelled else { return }
         await display.activate()
       }
-      // After activation, not before: until a panel has answered, its
-      // brightness is a placeholder and the gauge would show a value nothing
-      // in the world corresponds to.
-      guard !Task.isCancelled else { return }
-      publishInitialStatusLevel()
     }
   }
 
@@ -852,7 +847,6 @@ final class AppModel {
   }
 
   private func present(_ kind: OSDKind, value: Double, on display: DisplayViewModel) {
-    if kind == .brightness { publishStatusLevel(value) }
     guard preferences.global.showsOSD else { return }
     osd.show(
       kind: kind,
@@ -863,36 +857,10 @@ final class AppModel {
     )
   }
 
-  // MARK: - The menu bar gauge
-
-  /// Where the menu bar icon's fill level comes from.
-  ///
-  /// Pushed rather than observed. An observation-tracking loop would have to
-  /// re-register on every change, which is a second mechanism for something
-  /// this app already has one of — and the icon is a `NSImage` redraw, not a
-  /// view, so there is nothing for SwiftUI to invalidate anyway.
-  ///
-  /// What it shows is the brightness that was last *set*, not the brightness of
-  /// whichever display currently holds the mouse. On one monitor the two are
-  /// the same; on several, "the last value you asked for" is the thing worth
-  /// confirming at a glance, and it cannot go stale the way a reading tied to
-  /// the pointer would.
-  @ObservationIgnored var onStatusLevelChanged: ((Double?) -> Void)?
-
-  func publishStatusLevel(_ level: Double?) {
-    onStatusLevelChanged?(level)
-  }
-
   /// The scroll wheel over the menu bar icon, which wants exactly what a
-  /// brightness key press wants: the HUD, and the gauge kept in step.
+  /// brightness key press wants: the on-screen indicator.
   func presentScrolledBrightness(_ value: Double, on display: DisplayViewModel) {
     present(.brightness, value: value, on: display)
-  }
-
-  /// The value to start from — at launch, and after a display comes or goes.
-  private func publishInitialStatusLevel() {
-    let display = displays.first { !$0.isBuiltin } ?? displays.first
-    publishStatusLevel(display.flatMap { $0.isReady ? $0.brightness : nil })
   }
 
   /// The display the menu bar or a key press should act on: whichever one holds

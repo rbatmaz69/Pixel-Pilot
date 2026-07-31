@@ -47,16 +47,12 @@ final class StatusItemController: NSObject {
 
   func install() {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    item.button?.image = StatusIconRenderer.image(level: nil)
+    item.button?.image = StatusIconRenderer.image
     item.button?.imagePosition = .imageOnly
     item.button?.target = self
     item.button?.action = #selector(togglePanel)
     item.button?.toolTip = "Pixel Pilot"
     statusItem = item
-
-    model.onStatusLevelChanged = { [weak self] level in
-      self?.statusItem?.button?.image = StatusIconRenderer.image(level: level)
-    }
 
     installScrollHandling(on: item)
   }
