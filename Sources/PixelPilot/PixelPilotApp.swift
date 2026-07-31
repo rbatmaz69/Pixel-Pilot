@@ -1,59 +1,44 @@
+import AppKit
 import PixelPilotCore
 import SwiftUI
 
-enum WindowID {
-  static let main = "main"
-}
-
-@main
-struct PixelPilotApp: App {
-  @State private var model = AppModel()
-  @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-
-  var body: some Scene {
-    MenuBarExtra {
-      MenuBarPanel(model: model)
-    } label: {
-      // A template image, so macOS tints it for light, dark and tinted menu
-      // bars instead of us shipping three variants.
-      Image("MenuBarIcon")
-        .renderingMode(.template)
-    }
-    // .window rather than .menu: a menu cannot host sliders that drag.
-    .menuBarExtraStyle(.window)
-
-    // Not `WindowGroup`: exactly one settings window, opened on demand and
-    // never at launch.
-    Window("Displays", id: WindowID.main) {
-      MainWindow(model: model)
-        .withMotionTokens()
-    }
-    .windowResizability(.contentMinSize)
-    .defaultSize(width: 720, height: 480)
-
-    Settings {
-      SettingsView(model: model)
-    }
-  }
-
-  init() {
-    model.start()
-    AppDelegate.shared = model
-  }
-}
-
-/// Exists for one reason: `applicationWillTerminate`.
+/// The entry point.
 ///
-/// If the app quits while a display is dimmed via the gamma table, that display
-/// stays dark. SwiftUI's `Scene` lifecycle has no reliable hook for this, so
-/// AppKit's does the job.
-final class AppDelegate: NSObject, NSApplicationDelegate {
-  @MainActor static var shared: AppModel?
+/// AppKit's lifecycle rather than SwiftUI's `App`, and the reason is the menu
+/// bar. The panel is a hand-built `NSPanel` so it can take scroll events over
+/// the status item and draw its own level gauge, and once it is not a
+/// `MenuBarExtra` there is no scene that is eagerly instantiated — `Window` and
+/// `Settings` are both lazy — so `openWindow` and `SettingsLink` have nothing
+/// to bind to. `WindowCoordinator` explains that in full.
+///
+/// Every surface is still SwiftUI. Only the shell around them is not.
+@main
+@MainActor
+final class PixelPilotMain: NSObject, NSApplicationDelegate {
+  private let model = AppModel()
+  private lazy var windows = WindowCoordinator(model: model)
+  private lazy var statusItem = StatusItemController(model: model, windows: windows)
 
+  static func main() {
+    let application = NSApplication.shared
+    let delegate = PixelPilotMain()
+    application.delegate = delegate
+    // Held for the process's lifetime; `NSApplication.delegate` is weak.
+    Self.retained = delegate
+    application.run()
+  }
+
+  private static var retained: PixelPilotMain?
+
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    model.start()
+    statusItem.install()
+  }
+
+  /// If the app quits while a display is dimmed via the gamma table, that
+  /// display stays dark.
   func applicationWillTerminate(_ notification: Notification) {
-    MainActor.assumeIsolated {
-      Self.shared?.stop()
-    }
+    model.stop()
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

@@ -3,18 +3,26 @@ import SwiftUI
 
 /// The menu bar panel — the primary way the app is used.
 ///
-/// SwiftUI only builds this while the panel is open, which is exactly what the
-/// energy budget requires: closed, there is no view hierarchy, no observation
-/// and no animation running.
+/// This is only built while the panel is open, which is exactly what the energy
+/// budget requires: closed, there is no view hierarchy, no observation and no
+/// animation running. `MenuBarExtra` used to guarantee that; now
+/// `MenuBarPanelWindow.close()` does, by dropping the hosting view rather than
+/// ordering the window out.
 ///
 /// That same property is what pays for the entrance. Because the hierarchy is
 /// built fresh on every open, the staggered arrival plays every single time the
 /// panel is used — and costs nothing at all in between.
+///
+/// The two ways out are closures rather than `openWindow` and `SettingsLink`.
+/// Both of those are scene-graph facilities, and this view is hosted by AppKit
+/// now. Injecting them also means the panel no longer knows what a window is,
+/// which is the right amount for it to know.
 struct MenuBarPanel: View {
-  @Environment(\.openWindow) private var openWindow
   @Environment(\.motion) private var motion
 
   let model: AppModel
+  var onOpenDisplays: () -> Void = {}
+  var onOpenSettings: () -> Void = {}
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
@@ -145,16 +153,14 @@ struct MenuBarPanel: View {
 
   private var footer: some View {
     HStack(spacing: Layout.tight) {
-      Button {
-        openWindow(id: WindowID.main)
-      } label: {
+      Button(action: onOpenDisplays) {
         Label("Displays", systemImage: "slider.horizontal.3")
           .labelStyle(.titleAndIcon)
       }
 
       Spacer()
 
-      SettingsLink {
+      Button(action: onOpenSettings) {
         Image(systemName: "gearshape")
       }
       .help("Settings")
