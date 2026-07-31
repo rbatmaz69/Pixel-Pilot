@@ -18,9 +18,17 @@ enum Layout {
   /// read as playful — but only if they are consistent. Two radii that are
   /// close but not equal look like a mistake rather than a decision, which is
   /// the whole reason these live here instead of at the call site.
+  ///
+  /// The scale is a hierarchy, not four sizes: controls, then the cards that
+  /// hold them, then the containers that hold the cards, then the two surfaces
+  /// that are nothing but themselves.
+  /// Buttons, toggles, segments.
   static let radiusControl: CGFloat = 9
+  /// `PanelCard` and anything else using `cardSurface`.
   static let radiusCard: CGFloat = 16
+  /// Containers of cards: the menu bar panel, sheets, the onboarding window.
   static let radiusPanel: CGFloat = 22
+  /// The OSD and the identify overlay — one thing, alone on screen.
   static let radiusHero: CGFloat = 28
 }
 
@@ -41,6 +49,29 @@ enum TypeScale {
   static let readout = Font.system(.callout, design: .rounded).weight(.semibold).monospacedDigit()
   static let heroReadout = Font.system(size: 26, weight: .semibold, design: .rounded).monospacedDigit()
   static let sheetTitle = Font.system(.title3, design: .rounded).weight(.semibold)
+}
+
+/// What a card is sitting on.
+///
+/// Glass over glass goes milky: the effect samples what is behind it, and when
+/// that is another glass surface the result is a flat wash with none of the
+/// depth either layer was drawing for. The menu bar panel already gets its
+/// material from its window, so its cards must not add a second one.
+///
+/// `.onOpaque` is the default deliberately. It is right for four of the five
+/// scene roots, so a new window that forgets to declare anything gets the right
+/// answer, and only the one exception has to remember — the opposite of
+/// `.withMotionTokens()`, which has to be remembered everywhere and is the
+/// reason `Layout` is a plain static in the first place.
+enum SurfaceDepth {
+  /// A window with its own opaque or vibrant background. Cards draw glass.
+  case onOpaque
+  /// Already inside a glass or material surface. Cards draw a tinted fill.
+  case onGlass
+}
+
+extension EnvironmentValues {
+  @Entry var surfaceDepth: SurfaceDepth = .onOpaque
 }
 
 /// The three status colours, named by what they mean rather than by hue.

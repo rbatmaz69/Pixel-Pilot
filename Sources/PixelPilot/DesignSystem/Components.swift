@@ -20,6 +20,8 @@ struct PanelCard<Content: View>: View {
   @ViewBuilder var content: Content
 
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.motion) private var motion
+  @State private var isHovered = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
@@ -38,7 +40,20 @@ struct PanelCard<Content: View>: View {
     }
     .padding(Layout.normal)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .cardSurface(accent: accent)
+    .cardSurface(accent: accent, isRaised: isHovered)
+    // Lift by translation and shadow, never by scale.
+    //
+    // These cards contain sliders, and a `scaleEffect` changes the coordinate
+    // space `ExpressiveSlider` maps `gesture.location.x` into — the handle
+    // would land somewhere other than the pointer. The scroll transition below
+    // already refused a scale for this exact reason; a hover effect is not a
+    // good enough excuse to make the trade the second time.
+    //
+    // One point, and none of it under reduced motion: a card that twitches
+    // under the pointer is precisely what that setting is asking to stop.
+    .offset(y: isHovered && !motion.isReduced ? -1 : 0)
+    .animation(motion.spatialFast, value: isHovered)
+    .onHover { isHovered = $0 }
   }
 }
 
@@ -53,8 +68,13 @@ struct CardStack<Content: View>: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: Layout.loose) {
-        content
+      // Each `glassEffect` is otherwise its own backdrop pass. The container is
+      // the API for telling the system that these are siblings on one surface,
+      // so they can be sampled together and can blend where they come close.
+      GlassEffectContainer(spacing: Layout.loose) {
+        VStack(alignment: .leading, spacing: Layout.loose) {
+          content
+        }
       }
       .padding(Layout.loose)
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -104,20 +124,61 @@ struct ControlRow<Control: View>: View {
 
 extension View {
   /// The card background on its own, for places that carry their own heading.
-  func cardSurface(accent: Color, radius: CGFloat = Layout.radiusCard) -> some View {
-    background {
-      RoundedRectangle(cornerRadius: radius, style: .continuous)
+  func cardSurface(
+    accent: Color, radius: CGFloat = Layout.radiusCard, isRaised: Bool = false
+  ) -> some View {
+    modifier(CardSurface(accent: accent, radius: radius, isRaised: isRaised))
+  }
+}
+
+/// The card background.
+///
+/// Real glass where there is something to refract, a tinted fill where there is
+/// not — see `SurfaceDepth`. Both keep the accent hairline, which is not
+/// decoration: it is how a window showing two monitors stays legible at a
+/// glance rather than after reading the headings, and glass draws an edge of
+/// its own but not one that says *which display*.
+private struct CardSurface: ViewModifier {
+  let accent: Color
+  let radius: CGFloat
+  let isRaised: Bool
+
+  @Environment(\.surfaceDepth) private var depth
+  @Environment(\.motion) private var motion
+
+  private var shape: RoundedRectangle {
+    RoundedRectangle(cornerRadius: radius, style: .continuous)
+  }
+
+  func body(content: Content) -> some View {
+    content
+      .background { surface }
+      .overlay {
+        shape.strokeBorder(accent.accentRim.opacity(isRaised ? 1.6 : 1), lineWidth: 1)
+      }
+      // An effect, so it must not overshoot — a rim that rings reads as a
+      // flicker rather than as the card noticing the pointer.
+      .animation(motion.effectFast, value: isRaised)
+      .shadow(
+        color: accent.accentGlow(isRaised).opacity(0.55),
+        radius: isRaised ? 14 : 0,
+        y: isRaised ? 4 : 0
+      )
+      .animation(motion.effectDefault, value: isRaised)
+  }
+
+  @ViewBuilder
+  private var surface: some View {
+    switch depth {
+    case .onOpaque:
+      // `Glass.tint` takes the accent role directly, so the old two-layer
+      // fill-then-wash sandwich collapses into the one call that was always
+      // trying to describe it.
+      Color.clear.glassEffect(.regular.tint(accent.accentWash), in: shape)
+    case .onGlass:
+      shape
         .fill(.background.secondary)
-        .overlay {
-          RoundedRectangle(cornerRadius: radius, style: .continuous)
-            .fill(accent.accentWash)
-        }
-    }
-    .overlay {
-      // A hairline rather than a border: the wash alone vanishes against a
-      // light wallpaper, and without an edge the card stops being a card.
-      RoundedRectangle(cornerRadius: radius, style: .continuous)
-        .strokeBorder(accent.accentRim, lineWidth: 1)
+        .overlay { shape.fill(accent.accentWash) }
     }
   }
 }

@@ -55,6 +55,11 @@ struct MenuBarPanel: View {
     .frame(width: 320)
     .animation(motion.spatialDefault, value: model.needsAccessibilityPermission)
     .withMotionTokens()
+    // The one surface that declares this. The panel's own material comes from
+    // the window it lives in, so its cards must not lay a second sheet of glass
+    // over the first — that reads as a flat wash with none of the depth either
+    // layer was drawing for.
+    .environment(\.surfaceDepth, .onGlass)
     // Opening the panel is a cheap, natural moment to notice a grant that
     // happened while the app was in the background.
     .onAppear { model.refreshPermissions() }

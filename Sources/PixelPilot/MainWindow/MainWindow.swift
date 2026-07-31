@@ -65,14 +65,18 @@ private struct DisplayDetail: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: Layout.section) {
-        card(0) { controls }
-        if !display.isBuiltin {
-          card(1) { InputAndPowerSection(display: display) }
+      // One backdrop pass for the column rather than one per card — see
+      // `CardStack`, which does the same for the settings tabs.
+      GlassEffectContainer(spacing: Layout.section) {
+        VStack(alignment: .leading, spacing: Layout.section) {
+          card(0) { controls }
+          if !display.isBuiltin {
+            card(1) { InputAndPowerSection(display: display) }
+          }
+          card(2) { configuration }
+          card(3) { capabilities }
+          card(4) { diagnostics }
         }
-        card(2) { configuration }
-        card(3) { capabilities }
-        card(4) { diagnostics }
       }
       .padding(Layout.loose)
       .frame(maxWidth: .infinity, alignment: .leading)

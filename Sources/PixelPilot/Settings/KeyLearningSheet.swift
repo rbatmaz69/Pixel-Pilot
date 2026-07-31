@@ -61,6 +61,14 @@ struct KeyLearningSheet: View {
     }
     .padding(Layout.loose)
     .frame(width: 440, height: 320)
+    // A sheet is a container, not a card, so it takes the container radius —
+    // that is what makes the scale read as a hierarchy rather than as four
+    // numbers that happen to be near each other.
+    .background {
+      RoundedRectangle(cornerRadius: Layout.radiusPanel, style: .continuous)
+        .fill(.background)
+    }
+    .clipShape(RoundedRectangle(cornerRadius: Layout.radiusPanel, style: .continuous))
     .onAppear { model.beginLearningKey() }
     .onDisappear { model.cancelLearningKey() }
   }
