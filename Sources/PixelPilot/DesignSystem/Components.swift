@@ -78,6 +78,11 @@ struct CardStack<Content: View>: View {
       }
       .padding(Layout.loose)
       .frame(maxWidth: .infinity, alignment: .leading)
+      // Here rather than at each scene root. A card column is exactly the scope
+      // the switch style belongs to, so a new settings tab gets it by being a
+      // card column — one fewer thing to remember than the modifier `Layout`'s
+      // documentation already complains about having to remember.
+      .toggleStyle(.morph)
     }
   }
 }

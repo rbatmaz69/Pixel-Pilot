@@ -19,13 +19,17 @@ struct KeyLearningSheet: View {
       Text("Teach a key")
         .font(TypeScale.sheetTitle)
 
-      Picker("This key should", selection: $action) {
-        ForEach(MediaKeyAction.allCases) { candidate in
-          Label(candidate.displayName, systemImage: candidate.symbolName)
-            .tag(candidate)
+      ControlRow(title: "This key should") {
+        MorphMenuPicker(title: action.displayName) {
+          ForEach(MediaKeyAction.allCases) { candidate in
+            Button {
+              action = candidate
+            } label: {
+              Label(candidate.displayName, systemImage: candidate.symbolName)
+            }
+          }
         }
       }
-      .pickerStyle(.menu)
 
       Divider()
 

@@ -94,6 +94,10 @@ private struct DisplayDetail: View {
       }
       .padding(Layout.loose)
       .frame(maxWidth: .infinity, alignment: .leading)
+      // The display's own colour, not the app accent: everything else in this
+      // column is tinted by which monitor it belongs to, and a switch that
+      // stayed blue would be the one thing that did not.
+      .toggleStyle(.morph(display.accent))
       // Switching displays rebuilds the column, so the cascade plays again and
       // the change reads as arriving rather than as a swap.
       .id(display.id)
@@ -182,10 +186,13 @@ private struct DisplayDetail: View {
   private var configuration: some View {
     PanelCard(title: "This display", systemImage: "gearshape", accent: display.accent) {
       VStack(alignment: .leading, spacing: Layout.normal) {
-        Picker("Brightness via", selection: strategyBinding) {
-          ForEach(BrightnessStrategy.allCases, id: \.self) { strategy in
-            Text(strategy.displayName).tag(strategy)
-          }
+        VStack(alignment: .leading, spacing: Layout.tight) {
+          Text("Brightness via").font(TypeScale.rowTitle)
+          SegmentedMorphPicker(
+            selection: strategyBinding,
+            options: BrightnessStrategy.allCases.map { ($0, $0.displayName) },
+            accent: display.accent
+          )
         }
         .help("Automatic picks the best available path. Override only if that choice is wrong.")
 
@@ -195,9 +202,13 @@ private struct DisplayDetail: View {
 
         Toggle("Brightness keys act on this display", isOn: mediaKeysBinding)
 
-        Picker("Timing", selection: timingBinding) {
-          Text("Standard").tag(DDCTiming.default)
-          Text("Relaxed (for fussy panels)").tag(DDCTiming.relaxed)
+        VStack(alignment: .leading, spacing: Layout.tight) {
+          Text("Timing").font(TypeScale.rowTitle)
+          SegmentedMorphPicker(
+            selection: timingBinding,
+            options: [(DDCTiming.default, "Standard"), (DDCTiming.relaxed, "Relaxed")],
+            accent: display.accent
+          )
         }
         .help("Increase this if readings fail intermittently or the display "
           + "ignores the first change after being idle.")

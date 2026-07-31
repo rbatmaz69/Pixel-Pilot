@@ -55,14 +55,17 @@ private struct GeneralSettings: View {
         Toggle("Use the keyboard's brightness and volume keys", isOn: $global.mediaKeysEnabled)
           .onChange(of: global.mediaKeysEnabled) { _, _ in apply() }
 
-        ControlRow(title: "Per key press") {
-          Picker("", selection: $global.keyStep) {
-            Text("6% (16 steps)").tag(1.0 / 16.0)
-            Text("4% (24 steps)").tag(1.0 / 24.0)
-            Text("3% (32 steps)").tag(1.0 / 32.0)
-            Text("13% (8 steps)").tag(1.0 / 8.0)
-          }
-          .labelsHidden()
+        VStack(alignment: .leading, spacing: Layout.tight) {
+          Text("Per key press").font(TypeScale.rowTitle)
+          SegmentedMorphPicker(
+            selection: $global.keyStep,
+            options: [
+              (1.0 / 8.0, "13%"),
+              (1.0 / 16.0, "6%"),
+              (1.0 / 24.0, "4%"),
+              (1.0 / 32.0, "3%"),
+            ]
+          )
           .onChange(of: global.keyStep) { _, _ in apply() }
         }
 

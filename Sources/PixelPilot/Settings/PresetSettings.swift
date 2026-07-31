@@ -14,7 +14,6 @@ struct PresetSettings: View {
 
   @State private var newPresetName = ""
   @State private var selectedSymbol = "moon.fill"
-  @Namespace private var symbolNamespace
 
   /// A small set rather than a full symbol browser — enough to tell presets
   /// apart in the menu bar at a glance.
@@ -84,38 +83,12 @@ struct PresetSettings: View {
     }
   }
 
-  /// The symbol for a new preset, as a row of chips.
-  ///
-  /// A `Picker` in a 70pt well showed one glyph at a time and made choosing an
-  /// icon feel like filling in a form. All eight at once is both faster and the
-  /// most obviously playful surface in the app, which is the right place to
-  /// spend it.
   private var symbolPicker: some View {
-    HStack(spacing: Layout.tight) {
-      ForEach(symbols, id: \.self) { symbol in
-        let isSelected = selectedSymbol == symbol
-        Image(systemName: symbol)
-          .font(.callout)
-          .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-          .frame(width: 30, height: 28)
-          .background {
-            // One highlight for the whole row, so it slides to the chip you
-            // pick instead of blinking out of one and into another.
-            if isSelected {
-              MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-                .fill(.tint.opacity(0.18))
-                .matchedGeometryEffect(id: "symbolChip", in: symbolNamespace)
-            }
-          }
-          .contentShape(.rect)
-          .onTapGesture { selectedSymbol = symbol }
-          .help(symbol)
-      }
-      Spacer(minLength: 0)
-    }
-    .animation(motion.spatialDefault, value: selectedSymbol)
-    .accessibilityElement(children: .contain)
-    .accessibilityLabel("Preset symbol")
+    SymbolChipPicker(
+      selection: $selectedSymbol,
+      symbols: symbols,
+      accessibilityLabel: "Preset symbol"
+    )
   }
 
   private func presetRow(_ preset: Preset) -> some View {
@@ -161,27 +134,11 @@ struct PresetSettings: View {
           set: { value in model.updateAppearanceBindings { $0.isEnabled = value } }
         ))
 
-        ControlRow(title: "When light") {
-          Picker("", selection: appearanceBinding(isDark: false)) {
-            Text("Do nothing").tag(UUID?.none)
-            ForEach(model.presetList) { preset in
-              Text(preset.name).tag(UUID?.some(preset.id))
-            }
-          }
-          .labelsHidden()
-        }
-        .disabled(!model.appearanceBindings.isEnabled)
+        ControlRow(title: "When light") { presetMenu(isDark: false) }
+          .disabled(!model.appearanceBindings.isEnabled)
 
-        ControlRow(title: "When dark") {
-          Picker("", selection: appearanceBinding(isDark: true)) {
-            Text("Do nothing").tag(UUID?.none)
-            ForEach(model.presetList) { preset in
-              Text(preset.name).tag(UUID?.some(preset.id))
-            }
-          }
-          .labelsHidden()
-        }
-        .disabled(!model.appearanceBindings.isEnabled)
+        ControlRow(title: "When dark") { presetMenu(isDark: true) }
+          .disabled(!model.appearanceBindings.isEnabled)
 
         // Explaining the choice, because a schedule is the obvious thing to
         // look for and its absence is deliberate.
@@ -190,6 +147,25 @@ struct PresetSettings: View {
           + "sunrise properly would mean asking for your location.")
       }
       .animation(motion.effectDefault, value: model.appearanceBindings.isEnabled)
+    }
+  }
+
+  /// The preset list grows at runtime, so this stays a menu — only its trigger
+  /// is ours. See `MorphMenuPicker` for why that line is drawn there.
+  private func presetMenu(isDark: Bool) -> some View {
+    let binding = appearanceBinding(isDark: isDark)
+    let selected = model.presetList.first { $0.id == binding.wrappedValue }
+
+    return MorphMenuPicker(title: selected?.name ?? "Do nothing") {
+      Button("Do nothing") { binding.wrappedValue = nil }
+      if !model.presetList.isEmpty { Divider() }
+      ForEach(model.presetList) { preset in
+        Button {
+          binding.wrappedValue = preset.id
+        } label: {
+          Label(preset.name, systemImage: preset.symbolName)
+        }
+      }
     }
   }
 

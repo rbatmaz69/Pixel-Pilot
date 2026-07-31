@@ -74,7 +74,11 @@ struct SystemVolumeRow: View {
     } label: {
       Image(systemName: "hifispeaker.and.appletv")
     }
-    .menuStyle(.borderlessButton)
+    // The same button as the mute control beside it. The list stays AppKit's —
+    // it grows and shrinks as devices come and go, and reimplementing it would
+    // cost type-select and keyboard navigation for nothing.
+    .menuStyle(.button)
+    .buttonStyle(.soft)
     .menuIndicator(.hidden)
     .fixedSize()
     .help(audio.currentDeviceName.map { "Output: \($0)" } ?? "Choose audio output")
