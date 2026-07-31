@@ -21,8 +21,14 @@ public struct MediaKeyDeduplicator: Sendable {
   /// going, so this has to stay well below that.
   public static let defaultWindow: Duration = .milliseconds(20)
 
+  private struct Handled {
+    let instant: ContinuousClock.Instant
+    /// Whether the event was consumed, or passed on to macOS.
+    let wasConsumed: Bool
+  }
+
   private let window: Duration
-  private var lastSeen: [Int: ContinuousClock.Instant] = [:]
+  private var lastHandled: [Int: Handled] = [:]
 
   public init(window: Duration = defaultWindow) {
     self.window = window
@@ -32,18 +38,44 @@ public struct MediaKeyDeduplicator: Sendable {
   ///
   /// `key` identifies the action, not the source — that is the point: the same
   /// action from two different paths must collide.
+  ///
+  /// Callers that consume events want `previousDecision(for:at:)` instead, so
+  /// the duplicate can be answered the same way the original was.
   public mutating func shouldHandle(
     key: Int, at instant: ContinuousClock.Instant = .now
   ) -> Bool {
-    if let previous = lastSeen[key], instant - previous < window {
-      return false
-    }
-    lastSeen[key] = instant
+    guard previousDecision(for: key, at: instant) == nil else { return false }
+    record(true, for: key, at: instant)
     return true
+  }
+
+  /// What was decided about an identical press still inside the window, or nil
+  /// when this is the first copy and the caller has to decide for itself.
+  ///
+  /// The distinction is the whole point, and getting it wrong is how the
+  /// built-in display's brightness keys stop working: when the first copy is
+  /// *declined* — because a built-in panel is deliberately left to macOS — the
+  /// duplicate has to be declined too. Answering "already handled, consume it"
+  /// swallows a key nobody acted on, and macOS never gets to dim the screen.
+  public mutating func previousDecision(
+    for key: Int, at instant: ContinuousClock.Instant = .now
+  ) -> Bool? {
+    guard let previous = lastHandled[key], instant - previous.instant < window else { return nil }
+    return previous.wasConsumed
+  }
+
+  /// Remembers what was decided, so the second copy can answer identically.
+  ///
+  /// A duplicate deliberately does not call this: extending the window on every
+  /// repeat would let a steady stream of them block the key indefinitely.
+  public mutating func record(
+    _ wasConsumed: Bool, for key: Int, at instant: ContinuousClock.Instant = .now
+  ) {
+    lastHandled[key] = Handled(instant: instant, wasConsumed: wasConsumed)
   }
 
   /// Forgets history, for when the set of input devices changes.
   public mutating func reset() {
-    lastSeen.removeAll()
+    lastHandled.removeAll()
   }
 }

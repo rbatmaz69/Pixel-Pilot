@@ -90,4 +90,58 @@ struct MediaKeyDeduplicatorTests {
     #expect(first)
     #expect(afterReset)
   }
+
+  // MARK: - What was decided, not just that something was
+
+  // The bug these exist for, which broke the built-in display's brightness keys
+  // on any Mac where both input paths see the same press:
+  //
+  // The HID copy arrives first, takes the slot, and then the app *declines* the
+  // key — a built-in panel is deliberately left to macOS. Milliseconds later
+  // the event tap sees the same press, is told "duplicate", and consumed it.
+  // macOS never received the key, so the screen never dimmed.
+  //
+  // Knowing a press was seen is not enough. What has to be remembered is what
+  // was decided about it.
+
+  @Test("A duplicate of a declined press is declined too")
+  func duplicateOfDeclinedPressIsAlsoDeclined() {
+    var deduplicator = MediaKeyDeduplicator(window: .milliseconds(20))
+    let now = ContinuousClock.now
+
+    #expect(deduplicator.previousDecision(for: brightnessUp, at: now) == nil, "the first copy decides")
+    deduplicator.record(false, for: brightnessUp, at: now)
+
+    #expect(deduplicator.previousDecision(for: brightnessUp, at: now + .milliseconds(3)) == false)
+  }
+
+  @Test("A duplicate of a consumed press is consumed too")
+  func duplicateOfConsumedPressIsAlsoConsumed() {
+    var deduplicator = MediaKeyDeduplicator(window: .milliseconds(20))
+    let now = ContinuousClock.now
+
+    deduplicator.record(true, for: brightnessUp, at: now)
+
+    #expect(deduplicator.previousDecision(for: brightnessUp, at: now + .milliseconds(3)) == true)
+  }
+
+  @Test("Past the window there is no previous decision to repeat")
+  func decisionExpiresWithTheWindow() {
+    var deduplicator = MediaKeyDeduplicator(window: .milliseconds(20))
+    let now = ContinuousClock.now
+
+    deduplicator.record(true, for: brightnessUp, at: now)
+
+    #expect(deduplicator.previousDecision(for: brightnessUp, at: now + .milliseconds(25)) == nil)
+  }
+
+  @Test("Decisions are per key")
+  func decisionsAreIndependent() {
+    var deduplicator = MediaKeyDeduplicator(window: .milliseconds(20))
+    let now = ContinuousClock.now
+
+    deduplicator.record(true, for: brightnessUp, at: now)
+
+    #expect(deduplicator.previousDecision(for: brightnessDown, at: now + .milliseconds(2)) == nil)
+  }
 }

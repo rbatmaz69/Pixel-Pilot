@@ -433,10 +433,23 @@ final class AppModel {
   /// a far worse outcome than not handling it at all.
   private func handleMediaKey(_ event: MediaKeyTap.Event) -> Bool {
     guard let display = focusedDisplay, display.isReady else { return false }
-    // Also guards the tap path, so a press that arrived over HID a moment ago
-    // is not acted on twice.
-    guard keyDeduplicator.shouldHandle(key: event.key.deduplicationKey) else { return true }
 
+    // The same physical press arrives over both paths, so the second copy must
+    // not act again — and must answer exactly as the first one did. Replying
+    // "consumed" here regardless is what broke the built-in display's
+    // brightness keys: the HID copy arrives first, the app declines it because
+    // a built-in panel is left to macOS, and then the tap copy swallows a key
+    // nobody acted on.
+    if let decided = keyDeduplicator.previousDecision(for: event.key.deduplicationKey) {
+      return decided
+    }
+
+    let consumed = decideMediaKey(event, on: display)
+    keyDeduplicator.record(consumed, for: event.key.deduplicationKey)
+    return consumed
+  }
+
+  private func decideMediaKey(_ event: MediaKeyTap.Event, on display: DisplayViewModel) -> Bool {
     let settings = preferences.global
     let step = event.isFineAdjustment ? settings.fineKeyStep : settings.keyStep
 
