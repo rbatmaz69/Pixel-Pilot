@@ -14,6 +14,10 @@ struct PresetSettings: View {
 
   @State private var newPresetName = ""
   @State private var selectedSymbol = "moon.fill"
+  /// The preset whose values are being shown, after a hover has lasted long
+  /// enough to be deliberate.
+  @State private var previewed: UUID?
+  @State private var previewTask: Task<Void, Never>?
 
   /// A small set rather than a full symbol browser — enough to tell presets
   /// apart in the menu bar at a glance.
@@ -38,16 +42,38 @@ struct PresetSettings: View {
             // gets a smaller share than the copy.
             .padding(.vertical, -Layout.snug)
           } else {
-            ForEach(model.presetList) { preset in
-              presetRow(preset)
-                // Capturing and deleting both happen with this list on screen.
-                // Growing in and fading out is the difference between a list
-                // that responds and one that flickers.
-                .transition(.asymmetric(
-                  insertion: .scale(scale: 0.92, anchor: .leading).combined(with: .opacity),
-                  removal: .opacity
-                ))
+            // A `List` nested inside the card, purely for `onMove`. That looks
+            // like a lot of chrome to suppress for a drag handle, and it is —
+            // but it also brings keyboard-accessible reordering and correct
+            // VoiceOver drag semantics, which a hand-rolled `.draggable` would
+            // have to reimplement and would get wrong.
+            List {
+              ForEach(model.presetList) { preset in
+                presetRow(preset)
+                  .listRowSeparator(.hidden)
+                  .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+                  .listRowBackground(Color.clear)
+                  // Capturing and deleting both happen with this list on
+                  // screen. Growing in and fading out is the difference between
+                  // a list that responds and one that flickers.
+                  .transition(.asymmetric(
+                    insertion: .scale(scale: 0.92, anchor: .leading).combined(with: .opacity),
+                    removal: .opacity
+                  ))
+              }
+              .onMove { source, destination in
+                model.movePresets(fromOffsets: source, toOffset: destination)
+                Haptics.detent()
+              }
             }
+            .listStyle(.plain)
+            .scrollDisabled(true)
+            .scrollContentBackground(.hidden)
+            // The card is what scrolls, so the list has to be exactly as tall
+            // as its rows. A fixed guess would either clip the last preset or
+            // leave a gap under the first.
+            .frame(height: listHeight)
+            .animation(motion.spatialDefault, value: listHeight)
           }
         }
         .animation(motion.spatialDefault, value: model.presetList.count)
@@ -91,25 +117,118 @@ struct PresetSettings: View {
     )
   }
 
-  private func presetRow(_ preset: Preset) -> some View {
-    StatusRow(
-      symbol: preset.symbolName,
-      title: preset.name,
-      detail: summary(for: preset)
-    ) {
-      HStack(spacing: Layout.tight) {
-        Button("Apply") { model.apply(preset) }
-          .buttonStyle(.soft)
+  /// One collapsed preset row, insets included.
+  private static let rowHeight: CGFloat = 46
+  /// One line of the preview strip.
+  private static let previewLineHeight: CGFloat = 17
 
-        Button {
-          model.deletePreset(id: preset.id)
-        } label: {
-          Image(systemName: "trash")
+  /// How tall the nested list has to be made.
+  ///
+  /// A `List` inside a card cannot size itself to its content — it will happily
+  /// be whatever height it is given and scroll the rest, which here means
+  /// silently hiding presets. So the height is computed, and these two
+  /// constants are tied to `presetRow`'s layout: change one and this has to
+  /// change with it.
+  private var listHeight: CGFloat {
+    var height = CGFloat(model.presetList.count) * Self.rowHeight
+    if let previewed, let preset = model.presetList.first(where: { $0.id == previewed }) {
+      height += CGFloat(preset.affectedDisplays.count) * Self.previewLineHeight + Layout.tight
+    }
+    return height
+  }
+
+  private func presetRow(_ preset: Preset) -> some View {
+    VStack(alignment: .leading, spacing: Layout.tight) {
+      StatusRow(
+        symbol: preset.symbolName,
+        title: preset.name,
+        detail: summary(for: preset)
+      ) {
+        HStack(spacing: Layout.tight) {
+          Button("Apply") { model.apply(preset) }
+            .buttonStyle(.soft)
+
+          Button {
+            model.deletePreset(id: preset.id)
+          } label: {
+            Image(systemName: "trash")
+          }
+          .buttonStyle(.soft)
+          .help("Delete this preset")
         }
-        .buttonStyle(.soft)
-        .help("Delete this preset")
+        .font(TypeScale.detail.weight(.medium))
       }
-      .font(TypeScale.detail.weight(.medium))
+
+      if previewed == preset.id {
+        preview(of: preset)
+          .transition(.blurReplace.combined(with: .scale(0.97, anchor: .top)))
+      }
+    }
+    .contentShape(.rect)
+    .onHover { hovering in
+      // A cancellable sleep, not a timer. Nothing is scheduled while the
+      // pointer is anywhere else, and moving across the list on the way to
+      // something else never opens anything.
+      previewTask?.cancel()
+      guard hovering else {
+        previewed = nil
+        return
+      }
+      previewTask = Task {
+        try? await Task.sleep(for: .milliseconds(250))
+        guard !Task.isCancelled else { return }
+        previewed = preset.id
+      }
+    }
+    .animation(motion.spatialDefault, value: previewed)
+  }
+
+  /// What the preset would actually set, as read-only tracks.
+  ///
+  /// The summary line above names the displays; this says what would happen to
+  /// them. Between the two, applying a preset stops being a guess — which
+  /// matters most for the presets captured months ago.
+  private func preview(of preset: Preset) -> some View {
+    let known = model.preferences.knownDisplays()
+
+    return VStack(alignment: .leading, spacing: 3) {
+      ForEach(preset.affectedDisplays.sorted(by: { $0.rawValue < $1.rawValue }), id: \.self) { key in
+        if let entry = preset.entry(for: key) {
+          HStack(spacing: Layout.tight) {
+            Text(known[key]?.lastKnownName.isEmpty == false
+              ? known[key]!.lastKnownName
+              : "unknown display")
+              .font(TypeScale.detail)
+              .foregroundStyle(.secondary)
+              .frame(width: 110, alignment: .leading)
+              .lineLimit(1)
+
+            if let brightness = entry.brightness {
+              miniTrack(brightness, symbol: "sun.max.fill")
+            }
+            if let contrast = entry.contrast {
+              miniTrack(contrast, symbol: "circle.lefthalf.filled")
+            }
+            Spacer(minLength: 0)
+          }
+        }
+      }
+    }
+    .padding(.leading, 22)
+  }
+
+  private func miniTrack(_ value: Double, symbol: String) -> some View {
+    HStack(spacing: 3) {
+      Image(systemName: symbol)
+        .font(.system(size: 8))
+        .foregroundStyle(.tertiary)
+      ZStack(alignment: .leading) {
+        Capsule().fill(.quaternary).frame(width: 44, height: 4)
+        Capsule().fill(.tint).frame(width: max(2, 44 * value), height: 4)
+      }
+      Text("\(Int((value * 100).rounded()))%")
+        .font(TypeScale.detail.monospacedDigit())
+        .foregroundStyle(.secondary)
     }
   }
 

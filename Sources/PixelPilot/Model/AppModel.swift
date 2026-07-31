@@ -461,6 +461,37 @@ final class AppModel {
     }
   }
 
+  // MARK: - Remembered displays
+
+  /// Every panel ever seen, newest information first, for the settings UI.
+  ///
+  /// Republished like the preset list, and for the same reason: `Preferences`
+  /// is in the UI-free package and cannot be observable.
+  private(set) var knownDisplays: [(key: DisplayKey, settings: DisplaySettings)] = []
+
+  func refreshKnownDisplays() {
+    knownDisplays = preferences.knownDisplays()
+      .sorted { $0.value.lastKnownName.localizedStandardCompare($1.value.lastKnownName) == .orderedAscending }
+      .map { (key: $0.key, settings: $0.value) }
+  }
+
+  func isConnected(_ key: DisplayKey) -> Bool {
+    displays.contains { $0.key == key }
+  }
+
+  /// Throws away everything remembered about a panel.
+  ///
+  /// If it happens to be plugged in, it is re-probed immediately rather than
+  /// left in a half state — a connected display with no capability cache would
+  /// otherwise show every control as unavailable until the next reconnect.
+  func forgetDisplay(_ key: DisplayKey) {
+    preferences.forget(key)
+    if let display = displays.first(where: { $0.key == key }) {
+      Task { await display.reprobeCapabilities() }
+    }
+    refreshKnownDisplays()
+  }
+
   // MARK: - Identifying
 
   @ObservationIgnored private let identify = IdentifyController()
