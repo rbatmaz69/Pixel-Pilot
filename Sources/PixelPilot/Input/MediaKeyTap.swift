@@ -50,6 +50,15 @@ final class MediaKeyTap {
   private var runLoopSource: CFRunLoopSource?
   private let logger = Logger(subsystem: "dev.rb.pixelpilot", category: "mediakeys")
 
+  /// Key codes whose press was consumed, and whose release therefore has to be
+  /// consumed as well.
+  ///
+  /// Tracked rather than assumed. Swallowing the release of a key that was
+  /// *passed through* leaves the system with a press it never saw the end of —
+  /// which is exactly as broken as swallowing the press, and harder to spot
+  /// because the press itself plainly arrived.
+  private var consumedPresses: Set<Int32> = []
+
   // MARK: - Permission
 
   static var isTrusted: Bool {
@@ -124,6 +133,9 @@ final class MediaKeyTap {
     }
     eventTap = nil
     runLoopSource = nil
+    // Any release still outstanding will never reach us now, and a stale entry
+    // would consume the first release after the tap comes back.
+    consumedPresses.removeAll()
   }
 
   /// Isolated so it can touch the main-actor state it has to clean up. Leaving
@@ -174,9 +186,14 @@ final class MediaKeyTap {
     let isRepeat = (keyFlags & 0x1) == 1
 
     guard isKeyDown else {
-      // Key-up for a key we consumed on the way down must be consumed too,
-      // otherwise the system sees an unmatched release.
-      return mapped(keyCode) == nil ? Unmanaged.passUnretained(event) : nil
+      // The release is consumed only when the press was. Consuming it because
+      // the key is merely one we recognise hands macOS a press with no end to
+      // it — which is how the built-in display's brightness keys stop working
+      // even though the press itself was passed through correctly.
+      let consumed = MainActor.assumeIsolated {
+        tap.consumedPresses.remove(keyCode) != nil
+      }
+      return consumed ? nil : Unmanaged.passUnretained(event)
     }
 
     guard let key = mapped(keyCode) else {
@@ -187,7 +204,16 @@ final class MediaKeyTap {
     let isFine = modifiers.contains(.shift) && modifiers.contains(.option)
 
     let consumed = MainActor.assumeIsolated {
-      tap.handler?(Event(key: key, isRepeat: isRepeat, isFineAdjustment: isFine)) ?? false
+      let consumed = tap.handler?(Event(key: key, isRepeat: isRepeat, isFineAdjustment: isFine)) ?? false
+      if consumed {
+        tap.consumedPresses.insert(keyCode)
+      } else {
+        // A key that was consumed a moment ago and is declined now — the
+        // external display it was driving has been unplugged, say — must not
+        // leave its code behind for the next release to match against.
+        tap.consumedPresses.remove(keyCode)
+      }
+      return consumed
     }
 
     return consumed ? nil : Unmanaged.passUnretained(event)
