@@ -34,7 +34,7 @@ struct MenuBarPanel: View {
         .padding(.top, Layout.tight)
         .entrance(index: trailingIndex)
 
-      if !model.presets.presets.isEmpty {
+      if !model.presetList.isEmpty {
         presetRow
           .entrance(index: trailingIndex + 1)
       }
@@ -85,7 +85,7 @@ struct MenuBarPanel: View {
   /// vertical space — the sliders are what the panel is for.
   private var presetRow: some View {
     HStack(spacing: Layout.tight) {
-      ForEach(model.presets.presets) { preset in
+      ForEach(model.presetList) { preset in
         Button {
           model.apply(preset)
         } label: {

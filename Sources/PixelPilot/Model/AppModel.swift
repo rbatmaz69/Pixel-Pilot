@@ -33,7 +33,18 @@ final class AppModel {
   /// matched, which is a different problem from a keyboard that sends nothing.
   private(set) var watchedKeyboards: [String] = []
 
-  let keyBindings = KeyBindingStore.shared
+  /// The taught keys, mirrored out of the store.
+  ///
+  /// The store itself is not observable and cannot be: it lives in the UI-free
+  /// package, where importing Observation to satisfy SwiftUI would be exactly
+  /// the dependency that package exists to avoid. Nor would `@Observable` help
+  /// if it were imported — a `let` property is not instrumented by the macro,
+  /// so a view reading `model.keyBindings.bindings` establishes no dependency
+  /// at all and never redraws when a key is taught or forgotten.
+  ///
+  /// So the store stays private and every mutation goes through this type,
+  /// which republishes the result. Views read the mirror.
+  private(set) var keyBindingList: [KeyBindingStore.Binding] = []
 
   /// The press captured while the learning sheet is open, awaiting confirmation.
   private(set) var pendingLearnedPress: HIDMediaKeyMonitor.RawPress?
@@ -43,22 +54,46 @@ final class AppModel {
   let preferences: Preferences
 
   let hotkeys = HotkeyStore()
-  let presets = PresetStore.shared
   let systemAudio = SystemAudioModel()
+
+  /// The presets, mirrored out of the store — see `keyBindingList` for why the
+  /// store cannot be read directly from a view.
+  private(set) var presetList: [Preset] = []
+  /// Which preset follows which system appearance, mirrored for the same reason.
+  private(set) var appearanceBindings = PresetStore.AppearanceBindings()
 
   /// Where displays come from. Injectable so reconnect and disappearance can be
   /// tested without unplugging a cable.
   @ObservationIgnored private let discovery: any DisplayDiscovering
   @ObservationIgnored private let gamma: GammaDimmer
+  @ObservationIgnored private let presets: PresetStore
+  @ObservationIgnored private let keyBindings: KeyBindingStore
 
   init(
     discovery: any DisplayDiscovering = SystemDisplayDiscovery(),
     gamma: GammaDimmer = .shared,
-    preferences: Preferences = .shared
+    preferences: Preferences = .shared,
+    presets: PresetStore = .shared,
+    keyBindings: KeyBindingStore = .shared
   ) {
     self.discovery = discovery
     self.gamma = gamma
     self.preferences = preferences
+    self.presets = presets
+    self.keyBindings = keyBindings
+    syncPresets()
+    syncKeyBindings()
+  }
+
+  /// Republishes the preset store. Called after every mutation, and once at
+  /// init — a mirror that is only refreshed on change starts out empty.
+  private func syncPresets() {
+    presetList = presets.presets
+    appearanceBindings = presets.appearanceBindings
+  }
+
+  private func syncKeyBindings() {
+    keyBindingList = keyBindings.bindings
   }
 
   @ObservationIgnored private var presetTask: Task<Void, Never>?
@@ -315,6 +350,7 @@ final class AppModel {
     // about the new one or the key it just learned would not be watched.
     hidKeys.learnedSignatures = keyBindings.watchedSignatures()
     hidKeys.refreshMatching()
+    syncKeyBindings()
 
     log.record(.info("Learned \(press.signature.description) as \(action.displayName)"))
   }
@@ -323,6 +359,7 @@ final class AppModel {
     keyBindings.unbind(signature)
     hidKeys.learnedSignatures = keyBindings.watchedSignatures()
     hidKeys.refreshMatching()
+    syncKeyBindings()
   }
 
   /// Runs a taught binding.
@@ -449,6 +486,7 @@ final class AppModel {
     }
     let preset = Preset(name: name, symbolName: symbolName, entries: entries)
     presets.save(preset)
+    syncPresets()
     return preset
   }
 
@@ -456,6 +494,19 @@ final class AppModel {
     presets.delete(id: id)
     hotkeys.pruneMissingPresets(existing: Set(presets.presets.map(\.id)))
     registerHotkeys()
+    // After `pruneMissingPresets`, because deleting a preset can clear an
+    // appearance binding that pointed at it, and the mirror has to show that.
+    syncPresets()
+  }
+
+  func movePresets(fromOffsets source: IndexSet, toOffset destination: Int) {
+    presets.move(fromOffsets: source, toOffset: destination)
+    syncPresets()
+  }
+
+  func updateAppearanceBindings(_ mutate: (inout PresetStore.AppearanceBindings) -> Void) {
+    presets.updateAppearanceBindings(mutate)
+    syncPresets()
   }
 
   /// Applies whichever preset is bound to the current appearance.

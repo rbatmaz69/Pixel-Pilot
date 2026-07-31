@@ -27,14 +27,14 @@ struct PresetSettings: View {
     CardStack {
       PanelCard(title: "Presets", systemImage: "square.stack") {
         VStack(alignment: .leading, spacing: Layout.snug) {
-          if model.presets.presets.isEmpty {
+          if model.presetList.isEmpty {
             Text("No presets yet. Set your displays the way you want them, "
               + "then capture that below.")
               .font(.callout)
               .foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           } else {
-            ForEach(model.presets.presets) { preset in
+            ForEach(model.presetList) { preset in
               presetRow(preset)
                 // Capturing and deleting both happen with this list on screen.
                 // Growing in and fading out is the difference between a list
@@ -46,7 +46,7 @@ struct PresetSettings: View {
             }
           }
         }
-        .animation(motion.spatialDefault, value: model.presets.presets.count)
+        .animation(motion.spatialDefault, value: model.presetList.count)
       }
       .entrance(index: 0)
 
@@ -152,31 +152,31 @@ struct PresetSettings: View {
     PanelCard(title: "Automatic", systemImage: "circle.lefthalf.filled") {
       VStack(alignment: .leading, spacing: Layout.normal) {
         Toggle("Switch presets with the system appearance", isOn: Binding(
-          get: { model.presets.appearanceBindings.isEnabled },
-          set: { value in model.presets.updateAppearanceBindings { $0.isEnabled = value } }
+          get: { model.appearanceBindings.isEnabled },
+          set: { value in model.updateAppearanceBindings { $0.isEnabled = value } }
         ))
 
         ControlRow(title: "When light") {
           Picker("", selection: appearanceBinding(isDark: false)) {
             Text("Do nothing").tag(UUID?.none)
-            ForEach(model.presets.presets) { preset in
+            ForEach(model.presetList) { preset in
               Text(preset.name).tag(UUID?.some(preset.id))
             }
           }
           .labelsHidden()
         }
-        .disabled(!model.presets.appearanceBindings.isEnabled)
+        .disabled(!model.appearanceBindings.isEnabled)
 
         ControlRow(title: "When dark") {
           Picker("", selection: appearanceBinding(isDark: true)) {
             Text("Do nothing").tag(UUID?.none)
-            ForEach(model.presets.presets) { preset in
+            ForEach(model.presetList) { preset in
               Text(preset.name).tag(UUID?.some(preset.id))
             }
           }
           .labelsHidden()
         }
-        .disabled(!model.presets.appearanceBindings.isEnabled)
+        .disabled(!model.appearanceBindings.isEnabled)
 
         // Explaining the choice, because a schedule is the obvious thing to
         // look for and its absence is deliberate.
@@ -184,7 +184,7 @@ struct PresetSettings: View {
           + "change, so nothing has to run in the background waiting for it — and following "
           + "sunrise properly would mean asking for your location.")
       }
-      .animation(motion.effectDefault, value: model.presets.appearanceBindings.isEnabled)
+      .animation(motion.effectDefault, value: model.appearanceBindings.isEnabled)
     }
   }
 
@@ -192,11 +192,11 @@ struct PresetSettings: View {
     Binding(
       get: {
         isDark
-          ? model.presets.appearanceBindings.darkPresetID
-          : model.presets.appearanceBindings.lightPresetID
+          ? model.appearanceBindings.darkPresetID
+          : model.appearanceBindings.lightPresetID
       },
       set: { value in
-        model.presets.updateAppearanceBindings {
+        model.updateAppearanceBindings {
           if isDark { $0.darkPresetID = value } else { $0.lightPresetID = value }
         }
       }

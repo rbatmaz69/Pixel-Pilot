@@ -42,12 +42,30 @@ private func makeDisplay(
   )
 }
 
-/// Preferences on a throwaway suite, so tests never touch the real ones.
-private func makePreferences() -> Preferences {
+/// A throwaway defaults suite, so tests never touch the real preferences.
+private func makeDefaults() -> UserDefaults {
   let name = "dev.rb.pixelpilot.apptests.\(UUID().uuidString)"
   let defaults = UserDefaults(suiteName: name)!
   defaults.removePersistentDomain(forName: name)
-  return Preferences(defaults: defaults)
+  return defaults
+}
+
+private func makePreferences() -> Preferences {
+  Preferences(defaults: makeDefaults())
+}
+
+/// A model wired to throwaway storage throughout, for the preset tests.
+@MainActor
+private func makeModelWithPresets(displays: [DiscoveredDisplay] = []) -> AppModel {
+  let model = AppModel(
+    discovery: StubDiscovery(displays: displays),
+    gamma: GammaDimmer(),
+    preferences: makePreferences(),
+    presets: PresetStore(defaults: makeDefaults()),
+    keyBindings: KeyBindingStore(defaults: makeDefaults())
+  )
+  model.refresh()
+  return model
 }
 
 @MainActor
@@ -168,5 +186,115 @@ struct AppModelTests {
     model.refresh()
 
     #expect(discovery.callCount == 3)
+  }
+
+  // MARK: - The preset mirror
+
+  // `PresetStore` lives in the UI-free package and is not observable, and a
+  // `let` property would not be instrumented by `@Observable` even if it were.
+  // A view reading the store directly establishes no dependency on it and never
+  // redraws. These tests pin the mirror that replaced that read — they are the
+  // only thing standing between a preset list and rows that are simply wrong.
+
+  @Test("Capturing a preset shows up in the published list")
+  func captureUpdatesPresetList() {
+    let model = makeModelWithPresets(displays: [makeDisplay(id: 1, key: "aaa", name: "U32T1")])
+    #expect(model.presetList.isEmpty)
+
+    let preset = model.captureCurrentState(name: "Evening", symbolName: "moon")
+
+    #expect(model.presetList.map(\.id) == [preset.id])
+    #expect(model.presetList.first?.name == "Evening")
+  }
+
+  /// The path with no coincidental `@State` write to redraw it, and therefore
+  /// the one that was visibly broken.
+  @Test("Deleting a preset removes it from the published list")
+  func deleteUpdatesPresetList() {
+    let model = makeModelWithPresets()
+    let first = model.captureCurrentState(name: "Day", symbolName: "sun.max")
+    let second = model.captureCurrentState(name: "Night", symbolName: "moon")
+
+    model.deletePreset(id: first.id)
+
+    #expect(model.presetList.map(\.id) == [second.id])
+  }
+
+  @Test("Reordering presets is published")
+  func moveUpdatesPresetList() {
+    let model = makeModelWithPresets()
+    let first = model.captureCurrentState(name: "Day", symbolName: "sun.max")
+    let second = model.captureCurrentState(name: "Night", symbolName: "moon")
+
+    model.movePresets(fromOffsets: IndexSet(integer: 1), toOffset: 0)
+
+    #expect(model.presetList.map(\.id) == [second.id, first.id])
+  }
+
+  @Test("Appearance bindings are published")
+  func appearanceBindingsAreMirrored() {
+    let model = makeModelWithPresets()
+    let preset = model.captureCurrentState(name: "Night", symbolName: "moon")
+
+    model.updateAppearanceBindings {
+      $0.isEnabled = true
+      $0.darkPresetID = preset.id
+    }
+
+    #expect(model.appearanceBindings.isEnabled)
+    #expect(model.appearanceBindings.darkPresetID == preset.id)
+  }
+
+  /// Deleting a preset clears any binding pointing at it. The mirror has to
+  /// show that too, or the picker keeps naming a preset that is gone.
+  @Test("Deleting a bound preset clears the published binding")
+  func deleteClearsPublishedBinding() {
+    let model = makeModelWithPresets()
+    let preset = model.captureCurrentState(name: "Night", symbolName: "moon")
+    model.updateAppearanceBindings { $0.darkPresetID = preset.id }
+
+    model.deletePreset(id: preset.id)
+
+    #expect(model.appearanceBindings.darkPresetID == nil)
+  }
+
+  @Test("A model built on an existing store starts with its presets")
+  func mirrorIsPopulatedAtInit() {
+    let defaults = makeDefaults()
+    PresetStore(defaults: defaults).save(
+      Preset(name: "Existing", symbolName: "sun.max", entries: [:])
+    )
+
+    let model = AppModel(
+      discovery: StubDiscovery(),
+      gamma: GammaDimmer(),
+      preferences: makePreferences(),
+      presets: PresetStore(defaults: defaults),
+      keyBindings: KeyBindingStore(defaults: makeDefaults())
+    )
+
+    #expect(model.presetList.map(\.name) == ["Existing"])
+  }
+
+  // MARK: - The key binding mirror
+
+  @Test("Forgetting a taught key is published")
+  func forgetUpdatesKeyBindingList() {
+    let defaults = makeDefaults()
+    let signature = KeySignature(usagePage: 0x0C, usage: 0x6F, vendorID: 0x05AC, productID: 0x0250)
+    KeyBindingStore(defaults: defaults).bind(signature, to: .brightnessUp, keyboardName: "Test")
+
+    let model = AppModel(
+      discovery: StubDiscovery(),
+      gamma: GammaDimmer(),
+      preferences: makePreferences(),
+      presets: PresetStore(defaults: makeDefaults()),
+      keyBindings: KeyBindingStore(defaults: defaults)
+    )
+    #expect(model.keyBindingList.count == 1)
+
+    model.forgetLearnedKey(signature)
+
+    #expect(model.keyBindingList.isEmpty)
   }
 }

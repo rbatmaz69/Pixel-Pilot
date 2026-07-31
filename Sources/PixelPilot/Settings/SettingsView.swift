@@ -202,7 +202,7 @@ private struct GeneralSettings: View {
   @ViewBuilder
   private var learnedKeys: some View {
     VStack(alignment: .leading, spacing: Layout.tight) {
-      ForEach(model.keyBindings.bindings) { binding in
+      ForEach(model.keyBindingList) { binding in
         StatusRow(
           symbol: binding.action.symbolName,
           title: binding.action.displayName,
@@ -230,7 +230,7 @@ private struct GeneralSettings: View {
           .fixedSize(horizontal: false, vertical: true)
       }
     }
-    .animation(motion.spatialDefault, value: model.keyBindings.bindings.count)
+    .animation(motion.spatialDefault, value: model.keyBindingList.count)
   }
 
   /// Both permission states, as one row that reacts when the answer changes.
@@ -300,10 +300,10 @@ private struct ShortcutSettings: View {
       }
       .entrance(index: 0)
 
-      if !model.presets.presets.isEmpty {
+      if !model.presetList.isEmpty {
         PanelCard(title: "Presets", systemImage: "square.stack") {
           VStack(alignment: .leading, spacing: Layout.snug) {
-            ForEach(model.presets.presets) { preset in
+            ForEach(model.presetList) { preset in
               row(for: .preset(preset.id), label: preset.name, symbol: preset.symbolName)
             }
           }
