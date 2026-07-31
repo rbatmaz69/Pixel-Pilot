@@ -46,6 +46,15 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
   /// Manual override of the derived accent colour, as an index into the palette.
   public var accentOverride: Int?
 
+  /// The chosen white point, in Kelvin. `nil` means neutral — the display is
+  /// left completely alone, which is not the same as "set to 6500".
+  public var colorTemperatureKelvin: Double?
+
+  /// Result of the on-demand colour probe, cached like `capabilities` is.
+  /// Present means "already asked"; absent means the colour card has never
+  /// been opened for this panel.
+  public var colorCapabilities: DisplayCapabilities?
+
   /// The display's own capability string, once read.
   ///
   /// Cached separately from `capabilities` because it is far more expensive —
@@ -82,6 +91,10 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
       ?? fallback.respondsToMediaKeys
     accentOverride = try container.decodeIfPresent(Int.self, forKey: .accentOverride)
     capabilityString = try container.decodeIfPresent(String.self, forKey: .capabilityString)
+    colorTemperatureKelvin = try container.decodeIfPresent(Double.self, forKey: .colorTemperatureKelvin)
+    colorCapabilities = try? container.decodeIfPresent(
+      DisplayCapabilities.self, forKey: .colorCapabilities
+    )
   }
 
   /// Whether this configuration puts anything into the display's gamma table.

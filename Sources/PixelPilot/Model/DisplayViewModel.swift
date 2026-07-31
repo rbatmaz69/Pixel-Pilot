@@ -73,6 +73,8 @@ final class DisplayViewModel: Identifiable {
     self.capabilities = settings.capabilities
     self.capabilityString = settings.capabilityString.map(CapabilityString.init(raw:))
     self.accent = AccentPalette.color(for: display.key, override: settings.accentOverride)
+    self.colorTemperatureKelvin = settings.colorTemperatureKelvin
+    self.colorCapabilities = settings.colorCapabilities
 
     let queue = display.transport.map {
       DDCQueue(transport: $0, timing: settings.timing, log: log)
@@ -108,6 +110,11 @@ final class DisplayViewModel: Identifiable {
 
     await brightnessController.prime()
     await volumeController.prime()
+
+    // A white point chosen on a previous launch has to be put back: the gamma
+    // table does not survive a reboot, and a slider showing 3000 K over a
+    // display that is actually neutral is worse than not remembering at all.
+    applyWhitePoint()
 
     brightness = await brightnessController.brightness()
     brightnessStrategy = await brightnessController.effectiveStrategy
@@ -264,6 +271,89 @@ final class DisplayViewModel: Identifiable {
     await queue?.flush()
   }
 
+  // MARK: - Colour temperature
+
+  /// The chosen white point in Kelvin, or nil for "leave it alone".
+  ///
+  /// Nil is not 6500. A display at neutral has no gamma table of ours on it at
+  /// all, so its own colour profile is doing exactly what it was going to do.
+  private(set) var colorTemperatureKelvin: Double?
+  private(set) var colorCapabilities: DisplayCapabilities?
+  private(set) var isProbingColor = false
+
+  /// How many times the system has reset our gamma table recently.
+  ///
+  /// Night Shift writes the same table we do. There is no public way to ask
+  /// whether it is on — `CBBlueLightClient` is private and stays unused — so
+  /// the app watches for the symptom instead and says what it sees. Counting is
+  /// the honest version of guessing.
+  private(set) var recentColorResets = 0
+  private var lastColorReset: Date?
+
+  var isFightingSomethingOverColor: Bool {
+    colorTemperatureKelvin != nil && recentColorResets >= 3
+  }
+
+  /// Whether this panel has a colour control of its own that DDC can reach.
+  ///
+  /// Currently informational only: the white point is applied through the gamma
+  /// table either way. Panels that do expose 0x0C do so in coarse steps their
+  /// own menu offers, and switching between two mechanisms depending on the
+  /// monitor would make the same slider mean different things on two screens.
+  var hasNativeColorControl: Bool {
+    guard let colorCapabilities else { return false }
+    return colorCapabilities.isUsable(.colorTemperature) || colorCapabilities.hasUsableGains
+  }
+
+  func setColorTemperature(_ kelvin: Double?) {
+    colorTemperatureKelvin = kelvin
+    preferences.update(key) { $0.colorTemperatureKelvin = kelvin }
+    applyWhitePoint()
+    recentColorResets = 0
+  }
+
+  private func applyWhitePoint() {
+    let point = colorTemperatureKelvin.map { ColorTemperature.whitePoint(kelvin: $0) } ?? .neutral
+    GammaDimmer.shared.setWhitePoint(point, for: displayID)
+  }
+
+  /// Called when something outside the app resets the gamma table.
+  func noteColorSettingsChanged() {
+    guard colorTemperatureKelvin != nil else { return }
+    let now = Date()
+    // Only count resets that arrive in a burst. One after a wake is normal and
+    // means nothing; four in a minute means something else is driving the same
+    // table.
+    if let lastColorReset, now.timeIntervalSince(lastColorReset) > 60 {
+      recentColorResets = 0
+    }
+    lastColorReset = now
+    recentColorResets += 1
+  }
+
+  /// Asks the panel what colour features it really has.
+  ///
+  /// On demand rather than at first contact, and cached against the panel — the
+  /// same arrangement as `readCapabilityString()`, for the same reason. Six
+  /// round trips is too much to spend at connect time on a card most people
+  /// never open.
+  func probeColorSupport() async {
+    guard colorCapabilities == nil, !isProbingColor, let transport = arm64Transport else { return }
+    isProbingColor = true
+    defer { isProbingColor = false }
+
+    let timing = settings.timing
+    let log = log
+    let probed = await Task.detached(priority: .utility) {
+      DisplayCapabilities.probe(
+        transport: transport, timing: timing, features: VCPCode.colorProbeSet, log: log
+      )
+    }.value
+
+    colorCapabilities = probed
+    preferences.update(key) { $0.colorCapabilities = probed }
+  }
+
   // MARK: - Inputs and power
 
   /// Reads the capability string, which is the only way to learn which input
@@ -344,7 +434,10 @@ final class DisplayViewModel: Identifiable {
         // The gamma path and the DDC path can be at different levels; leaving
         // the old one applied would mean the slider no longer matches the screen.
         if before.usesGamma {
-          GammaDimmer.shared.clear(displayID)
+          // Only the dimming, not `clear(_:)`. The gamma table now carries the
+          // colour temperature as well, and changing how brightness is
+          // delivered is no reason to throw away a white point the user chose.
+          GammaDimmer.shared.setDimming(1.0, for: displayID)
         }
         await brightnessController.reprime()
         brightness = await brightnessController.brightness()

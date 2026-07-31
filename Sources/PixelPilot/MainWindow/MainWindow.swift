@@ -87,9 +87,10 @@ private struct DisplayDetail: View {
           if !display.isBuiltin {
             card(1) { InputAndPowerSection(display: display) }
           }
-          card(2) { configuration }
-          card(3) { capabilities }
-          card(4) { diagnostics }
+          card(2) { ColorSection(display: display) }
+          card(3) { configuration }
+          card(4) { capabilities }
+          card(5) { diagnostics }
         }
       }
       .padding(Layout.loose)
@@ -107,6 +108,10 @@ private struct DisplayDetail: View {
         .frame(height: 260)
     }
     .navigationTitle(display.name)
+    // On demand, once ever per panel: six round trips is too much to spend at
+    // connect time on a card most people will never open. Cached against the
+    // `DisplayKey` after that, so this is a no-op on every later visit.
+    .task(id: display.id) { await display.probeColorSupport() }
   }
 
   /// Cards fade rather than scale as they scroll.

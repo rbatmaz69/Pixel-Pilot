@@ -21,6 +21,13 @@ struct ExpressiveSlider: View {
   var range: ClosedRange<Double> = 0 ... 1
   var accent: Color
   var icon: String?
+  /// Overrides the accent fill on the filled part of the track.
+  ///
+  /// Exists for the warmth control, whose track is a Kelvin gradient built from
+  /// the same function that drives the hardware — so the colour under the
+  /// handle is the colour the screen is about to be. Defaulted to nil, so no
+  /// existing call site changes.
+  var trackStyle: AnyShapeStyle?
   /// Marks that tug back, as 0...1 fractions of the track. Felt and drawn,
   /// never enforced — see `SliderDetents`.
   ///
@@ -112,7 +119,7 @@ struct ExpressiveSlider: View {
       detentMarks(width: width)
 
       MorphingRoundedRectangle(cornerRadius: metrics.trackHeight / 2)
-        .fill(accent.accentFill)
+        .fill(trackStyle ?? AnyShapeStyle(accent.accentFill))
         .frame(width: max(metrics.trackHeight, knobX))
 
       if let icon {

@@ -131,4 +131,105 @@ struct DisplayCapabilitiesTests {
   func unprobedIsNotUsable() {
     #expect(!DisplayCapabilities().isUsable(.luminance))
   }
+
+  // MARK: - Colour
+
+  @Test("A colour temperature spanning a real range is believed")
+  func plausibleColorTemperature() {
+    // 0...120 steps of 50 K above 3000 K — 3000 to 9000 K, which is what a
+    // monitor's own menu offers.
+    let support = DisplayCapabilities.classify(
+      DDCReading(current: 70, maximum: 120), for: .colorTemperature
+    )
+    #expect(support.isUsable)
+  }
+
+  /// The register answers, correctly checksummed, with a number that would mean
+  /// a colour temperature no object has. That is the whole "panels lie" problem
+  /// in one reading.
+  @Test("A colour temperature implying an absurd range is refused, with a reason")
+  func implausibleColorTemperature() {
+    let support = DisplayCapabilities.classify(
+      DDCReading(current: 100, maximum: 900), for: .colorTemperature
+    )
+    guard case let .implausible(_, _, reason) = support else {
+      Issue.record("expected implausible, got \(support)")
+      return
+    }
+    #expect(reason.contains("K"))
+    #expect(!support.isUsable)
+  }
+
+  @Test("A zero maximum is not a colour temperature control")
+  func zeroMaximumColorTemperature() {
+    #expect(!DisplayCapabilities.classify(
+      DDCReading(current: 0, maximum: 0), for: .colorTemperature
+    ).isUsable)
+  }
+
+  @Test("An increment outside the usable step range is refused")
+  func implausibleIncrement() {
+    #expect(DisplayCapabilities.classify(
+      DDCReading(current: 50, maximum: 5000), for: .colorTemperatureIncrement
+    ).isUsable)
+    #expect(!DisplayCapabilities.classify(
+      DDCReading(current: 0, maximum: 5000), for: .colorTemperatureIncrement
+    ).isUsable)
+    #expect(!DisplayCapabilities.classify(
+      DDCReading(current: 30000, maximum: 40000), for: .colorTemperatureIncrement
+    ).isUsable)
+  }
+
+  @Test("A colour preset of zero means nothing is selected, which cannot be true")
+  func zeroColorPreset() {
+    #expect(!DisplayCapabilities.classify(
+      DDCReading(current: 0, maximum: 11), for: .selectColorPreset
+    ).isUsable)
+    #expect(DisplayCapabilities.classify(
+      DDCReading(current: 5, maximum: 11), for: .selectColorPreset
+    ).isUsable)
+  }
+
+  // MARK: - Gains
+
+  @Test("Three gains sharing a maximum are a colour control")
+  func completeGains() {
+    let capabilities = DisplayCapabilities(features: [
+      .redGain: .supported(current: 50, maximum: 100),
+      .greenGain: .supported(current: 50, maximum: 100),
+      .blueGain: .supported(current: 50, maximum: 100),
+    ])
+    #expect(capabilities.hasUsableGains)
+  }
+
+  /// A panel answering for red but not green is not exposing a colour control.
+  /// Driving it would tint the picture with no way to put it back.
+  @Test("A missing channel disqualifies the whole set")
+  func incompleteGains() {
+    let capabilities = DisplayCapabilities(features: [
+      .redGain: .supported(current: 50, maximum: 100),
+      .blueGain: .supported(current: 50, maximum: 100),
+    ])
+    #expect(!capabilities.hasUsableGains)
+  }
+
+  @Test("Gains on different scales are not three channels of one control")
+  func mismatchedGainMaxima() {
+    let capabilities = DisplayCapabilities(features: [
+      .redGain: .supported(current: 50, maximum: 100),
+      .greenGain: .supported(current: 50, maximum: 255),
+      .blueGain: .supported(current: 50, maximum: 100),
+    ])
+    #expect(!capabilities.hasUsableGains)
+  }
+
+  @Test("A phantom channel disqualifies the set even though it answered")
+  func phantomGain() {
+    let capabilities = DisplayCapabilities(features: [
+      .redGain: .supported(current: 50, maximum: 100),
+      .greenGain: .implausible(current: 100, maximum: 0xFFFF, reason: "not implemented"),
+      .blueGain: .supported(current: 50, maximum: 100),
+    ])
+    #expect(!capabilities.hasUsableGains)
+  }
 }

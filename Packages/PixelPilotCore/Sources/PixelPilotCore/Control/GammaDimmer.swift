@@ -13,15 +13,46 @@ enum GammaRamp {
 
   /// A linear ramp scaled by `fraction`, where 1.0 is the identity.
   static func linear(fraction: Double, entries: Int = entryCount) -> [CGGammaValue] {
-    let scale = clampFraction(fraction)
+    ramp(scale: clampFraction(fraction), entries: entries)
+  }
+
+  /// The ramp itself, without the "never go fully dark" floor.
+  ///
+  /// Separate because that floor protects a *display*, not a channel. A blue
+  /// channel at 0.3 is what 3000 K looks like; clamping it up to the floor
+  /// would quietly change the colour that was asked for. The floor still
+  /// applies to luminance, and a white point is normalised so one channel is
+  /// always at full — so nothing here can black out a screen either.
+  private static func ramp(scale: Double, entries: Int) -> [CGGammaValue] {
     let last = Double(entries - 1)
+    let clamped = min(1, max(0, scale))
     return (0 ..< entries).map { index in
-      CGGammaValue(Double(index) / last * scale)
+      CGGammaValue(Double(index) / last * clamped)
     }
   }
 
   static func clampFraction(_ fraction: Double) -> Double {
     min(1.0, max(minimumFraction, fraction))
+  }
+
+  /// Luminance and colour, in one set of ramps.
+  ///
+  /// Composition falls out of multiplication, which is the whole reason
+  /// warming and dimming can coexist without either fighting the other:
+  /// dimming to 60 % at 3000 K is the 3000 K white point scaled by 0.6, and the
+  /// order the two were asked for makes no difference.
+  ///
+  /// A neutral white point reproduces `linear` exactly, which is what lets the
+  /// existing dimming tests keep pinning the luminance behaviour unchanged.
+  static func channels(
+    luminance: Double, whitePoint: WhitePoint, entries: Int = entryCount
+  ) -> (red: [CGGammaValue], green: [CGGammaValue], blue: [CGGammaValue]) {
+    let scale = clampFraction(luminance)
+    return (
+      red: ramp(scale: scale * whitePoint.red, entries: entries),
+      green: ramp(scale: scale * whitePoint.green, entries: entries),
+      blue: ramp(scale: scale * whitePoint.blue, entries: entries)
+    )
   }
 
   static var isIdentity: (Double) -> Bool {
@@ -66,7 +97,12 @@ public final class GammaDimmer: @unchecked Sendable {
   /// real screen. That bookkeeping is the part where a mistake leaves someone
   /// staring at a black monitor, so it is the part that needs tests.
   public protocol Backend: Sendable {
-    func applyRamp(_ ramp: [CGGammaValue], to displayID: CGDirectDisplayID)
+    /// Three ramps, because this is now a luminance *and* colour change. The
+    /// single-ramp form below is the special case where all three are equal.
+    func applyRamps(
+      red: [CGGammaValue], green: [CGGammaValue], blue: [CGGammaValue],
+      to displayID: CGDirectDisplayID
+    )
     func restore(_ displayID: CGDirectDisplayID)
     func restoreAll()
   }
@@ -74,12 +110,20 @@ public final class GammaDimmer: @unchecked Sendable {
   struct CoreGraphicsBackend: Backend {
     private let logger = Logger(subsystem: "dev.rb.pixelpilot", category: "gamma")
 
-    func applyRamp(_ ramp: [CGGammaValue], to displayID: CGDirectDisplayID) {
-      let result = ramp.withUnsafeBufferPointer { buffer -> CGError in
-        guard let base = buffer.baseAddress else { return .failure }
-        // The same ramp for all three channels: this is a luminance change,
-        // not a colour correction.
-        return CGSetDisplayTransferByTable(displayID, UInt32(buffer.count), base, base, base)
+    func applyRamps(
+      red: [CGGammaValue], green: [CGGammaValue], blue: [CGGammaValue],
+      to displayID: CGDirectDisplayID
+    ) {
+      let result = red.withUnsafeBufferPointer { redBuffer -> CGError in
+        green.withUnsafeBufferPointer { greenBuffer -> CGError in
+          blue.withUnsafeBufferPointer { blueBuffer -> CGError in
+            guard let r = redBuffer.baseAddress,
+                  let g = greenBuffer.baseAddress,
+                  let b = blueBuffer.baseAddress
+            else { return .failure }
+            return CGSetDisplayTransferByTable(displayID, UInt32(redBuffer.count), r, g, b)
+          }
+        }
       }
       if result != .success {
         logger.error(
@@ -102,6 +146,10 @@ public final class GammaDimmer: @unchecked Sendable {
   private let lock = NSLock()
   /// Desired dimming per display. Also the source of truth for reasserting.
   private var fractions: [CGDirectDisplayID: Double] = [:]
+  /// Desired colour per display, kept separately for the same reason: both have
+  /// to survive a wake, a colour profile change and a Night Shift transition,
+  /// and `reassertAll` can only restore what it still knows.
+  private var whitePoints: [CGDirectDisplayID: WhitePoint] = [:]
   private var safetyNetInstalled = false
 
   private let logger = Logger(subsystem: "dev.rb.pixelpilot", category: "gamma")
@@ -113,6 +161,16 @@ public final class GammaDimmer: @unchecked Sendable {
   /// Displays currently dimmed, for tests and diagnostics.
   public var dimmedDisplays: Set<CGDirectDisplayID> {
     lock.withLock { Set(fractions.keys) }
+  }
+
+  /// Displays currently carrying a colour cast.
+  public var tintedDisplays: Set<CGDirectDisplayID> {
+    lock.withLock { Set(whitePoints.keys) }
+  }
+
+  /// Every display this dimmer is holding something on, of either kind.
+  private var touchedDisplaysLocked: Set<CGDirectDisplayID> {
+    Set(fractions.keys).union(whitePoints.keys)
   }
 
   /// `fraction` of 1.0 removes dimming; lower values darken. Values below the
@@ -127,29 +185,60 @@ public final class GammaDimmer: @unchecked Sendable {
       fractions[displayID] = clamped
       installSafetyNetLocked()
     }
+    let state = stateLocked(for: displayID)
     lock.unlock()
 
-    apply(clamped, to: displayID)
+    apply(state, to: displayID)
+  }
+
+  /// `.neutral` removes the cast.
+  ///
+  /// Composes with dimming rather than replacing it: the two are multiplied,
+  /// so the order they were asked for makes no difference and neither has to
+  /// know about the other.
+  public func setWhitePoint(_ whitePoint: WhitePoint, for displayID: CGDirectDisplayID) {
+    lock.lock()
+    if whitePoint.isNeutral {
+      whitePoints.removeValue(forKey: displayID)
+    } else {
+      whitePoints[displayID] = whitePoint
+      installSafetyNetLocked()
+    }
+    let state = stateLocked(for: displayID)
+    lock.unlock()
+
+    apply(state, to: displayID)
   }
 
   public func dimming(for displayID: CGDirectDisplayID) -> Double {
     lock.withLock { fractions[displayID] ?? 1.0 }
   }
 
+  public func whitePoint(for displayID: CGDirectDisplayID) -> WhitePoint {
+    lock.withLock { whitePoints[displayID] ?? .neutral }
+  }
+
+  /// Drops both the dimming and the cast for one display.
   public func clear(_ displayID: CGDirectDisplayID) {
-    setDimming(1.0, for: displayID)
+    lock.lock()
+    fractions.removeValue(forKey: displayID)
+    whitePoints.removeValue(forKey: displayID)
+    lock.unlock()
+
+    apply((luminance: 1.0, whitePoint: .neutral), to: displayID)
   }
 
   /// Restores every display we touched. Called on quit, and safe to call when
   /// nothing is dimmed.
   public func clearAll() {
     lock.lock()
-    let displays = Array(fractions.keys)
+    let displays = touchedDisplaysLocked
     fractions.removeAll()
+    whitePoints.removeAll()
     lock.unlock()
 
     for displayID in displays {
-      apply(1.0, to: displayID)
+      apply((luminance: 1.0, whitePoint: .neutral), to: displayID)
     }
     backend.restoreAll()
   }
@@ -159,13 +248,15 @@ public final class GammaDimmer: @unchecked Sendable {
   /// Drive this from display reconfiguration, wake, and appearance/Night Shift
   /// notifications — never from a timer.
   public func reassertAll() {
-    let current = lock.withLock { fractions }
-    guard !current.isEmpty else { return }
-
-    for (displayID, fraction) in current {
-      apply(fraction, to: displayID)
+    let states: [CGDirectDisplayID: GammaState] = lock.withLock {
+      Dictionary(uniqueKeysWithValues: touchedDisplaysLocked.map { ($0, stateLocked(for: $0)) })
     }
-    logger.debug("Reasserted gamma on \(current.count, privacy: .public) display(s)")
+    guard !states.isEmpty else { return }
+
+    for (displayID, state) in states {
+      apply(state, to: displayID)
+    }
+    logger.debug("Reasserted gamma on \(states.count, privacy: .public) display(s)")
   }
 
   /// Drops displays that are no longer online, so a disconnected monitor does
@@ -173,17 +264,29 @@ public final class GammaDimmer: @unchecked Sendable {
   public func pruneOffline(onlineDisplayIDs: Set<CGDirectDisplayID>) {
     lock.withLock {
       fractions = fractions.filter { onlineDisplayIDs.contains($0.key) }
+      whitePoints = whitePoints.filter { onlineDisplayIDs.contains($0.key) }
     }
   }
 
   // MARK: - Applying
 
-  private func apply(_ fraction: Double, to displayID: CGDirectDisplayID) {
-    guard fraction < 1.0 else {
+  private typealias GammaState = (luminance: Double, whitePoint: WhitePoint)
+
+  /// Caller must hold `lock`.
+  private func stateLocked(for displayID: CGDirectDisplayID) -> GammaState {
+    (fractions[displayID] ?? 1.0, whitePoints[displayID] ?? .neutral)
+  }
+
+  private func apply(_ state: GammaState, to displayID: CGDirectDisplayID) {
+    // Nothing to hold means hand the table back rather than writing an identity
+    // ramp over it — the system's own profile is not necessarily linear, and
+    // "restore" is the only way to return whatever it really was.
+    guard state.luminance < 1.0 || !state.whitePoint.isNeutral else {
       backend.restore(displayID)
       return
     }
-    backend.applyRamp(GammaRamp.linear(fraction: fraction), to: displayID)
+    let ramps = GammaRamp.channels(luminance: state.luminance, whitePoint: state.whitePoint)
+    backend.applyRamps(red: ramps.red, green: ramps.green, blue: ramps.blue, to: displayID)
   }
 
   // MARK: - Safety net

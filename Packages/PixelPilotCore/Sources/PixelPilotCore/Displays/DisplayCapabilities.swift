@@ -95,6 +95,37 @@ public struct DisplayCapabilities: Sendable, Codable, Equatable {
   /// — is uninitialised memory, not a control.
   private static let plausibleContinuousMaximum: UInt16 = 1000
 
+  /// What a colour temperature control could conceivably span. Panels offer
+  /// roughly 5000–9300 K; this is generous on both sides and still excludes the
+  /// nonsense a phantom register produces.
+  private static let plausibleKelvin: ClosedRange<Double> = 2000 ... 12000
+
+  /// MCCS 0x0C's base. The value is an offset above this.
+  static let colorTemperatureBase: Double = 3000
+  /// Assumed step when a display has no readable 0x0B. 50 K is the common one.
+  static let defaultColorTemperatureIncrement: Double = 50
+
+  static func impliedKelvinRange(
+    maximum: UInt16, increment: Double = defaultColorTemperatureIncrement
+  ) -> ClosedRange<Double> {
+    let top = colorTemperatureBase + Double(maximum) * increment
+    return colorTemperatureBase ... max(colorTemperatureBase, top)
+  }
+
+  /// Whether this panel really has RGB gain control.
+  ///
+  /// All three channels or none. A display that answers for red but not green
+  /// is not exposing a colour control — it is a register that happens to reply,
+  /// and driving it would tint the picture with no way to put it back. The
+  /// shared maximum is the second half of the same argument: three gains on
+  /// different scales are not three channels of one control.
+  public var hasUsableGains: Bool {
+    let gains = [VCPCode.redGain, .greenGain, .blueGain].map { support(for: $0) }
+    guard gains.allSatisfy(\.isUsable) else { return false }
+    let maxima = Set(gains.compactMap { $0.reading?.maximum })
+    return maxima.count == 1
+  }
+
   static func classify(_ reading: DDCReading, for vcp: VCPCode) -> Support {
     // Checked before anything type-specific: 0xFFFF is the signature of a field
     // the firmware never filled in, and it appears on enumerated controls too.
@@ -128,13 +159,48 @@ public struct DisplayCapabilities: Sendable, Codable, Equatable {
       }
       return .supported(current: reading.current, maximum: 5)
 
-    case .inputSource, .inputSourceAlternate:
+    case .colorTemperature:
+      // MCCS defines this as an offset above 3000 K, counted in units of the
+      // 0x0B increment. The raw number is therefore meaningless on its own —
+      // what has to be plausible is the temperature range it implies. A panel
+      // whose maximum works out to 40000 K is not describing a colour control.
+      guard reading.maximum > 0 else {
+        return .implausible(
+          current: reading.current, maximum: reading.maximum, reason: "maximum is zero"
+        )
+      }
+      let implied = Self.impliedKelvinRange(maximum: reading.maximum)
+      guard Self.plausibleKelvin.contains(implied.lowerBound),
+            Self.plausibleKelvin.contains(implied.upperBound)
+      else {
+        return .implausible(
+          current: reading.current, maximum: reading.maximum,
+          reason: "range implies \(Int(implied.lowerBound))–\(Int(implied.upperBound)) K, "
+            + "which is not a colour temperature control"
+        )
+      }
+      return .supported(current: reading.current, maximum: reading.maximum)
+
+    case .colorTemperatureIncrement:
+      // The unit 0x0C is counted in. MCCS allows 1...5000 K per step; anything
+      // outside that makes the feature above uninterpretable rather than wrong.
+      guard (1 ... 5000).contains(reading.current) else {
+        return .implausible(
+          current: reading.current, maximum: reading.maximum,
+          reason: "increment of \(reading.current) K is not a usable step size"
+        )
+      }
+      return .supported(current: reading.current, maximum: reading.maximum)
+
+    case .selectColorPreset, .inputSource, .inputSourceAlternate:
       // An enumeration: the maximum is not a range, so only the current value
       // is meaningful. Zero means nothing is selected, which cannot be true.
       guard reading.current > 0 else {
         return .implausible(
           current: reading.current, maximum: reading.maximum,
-          reason: "no input source reported"
+          reason: vcp == .selectColorPreset
+            ? "no colour preset reported"
+            : "no input source reported"
         )
       }
       return .supported(current: reading.current, maximum: reading.maximum)

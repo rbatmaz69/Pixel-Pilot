@@ -120,6 +120,10 @@ final class AppModel {
     events.onColorSettingsChanged = { [weak self] in
       // Night Shift or a profile change just reset the gamma table.
       self?.gamma.reassertAll()
+      // And it may keep doing it. Displays carrying a white point of ours count
+      // the resets so the colour card can say what is happening, rather than
+      // the app silently fighting something it cannot see.
+      self?.displays.forEach { $0.noteColorSettingsChanged() }
     }
     events.onAppearanceChanged = { [weak self] isDark in
       self?.applyAppearancePreset(isDark: isDark)

@@ -14,11 +14,14 @@ public struct VCPCode: RawRepresentable, Hashable, Sendable, Codable, CustomStri
   public static let inputSource = VCPCode(rawValue: 0x60)
   public static let powerMode = VCPCode(rawValue: 0xD6)
 
-  // Read during capability probing / shown in diagnostics.
+  // Colour. Probed on demand rather than at first contact — see `colorProbeSet`.
   public static let redGain = VCPCode(rawValue: 0x16)
   public static let greenGain = VCPCode(rawValue: 0x18)
   public static let blueGain = VCPCode(rawValue: 0x1A)
   public static let colorTemperature = VCPCode(rawValue: 0x0C)
+  /// The step size 0x0C's value is measured in, in Kelvin.
+  public static let colorTemperatureIncrement = VCPCode(rawValue: 0x0B)
+  public static let selectColorPreset = VCPCode(rawValue: 0x14)
 
   /// LG panels expose a second input-source control on the alternate I2C
   /// offset. Kept because it is the one widely-confirmed exception.
@@ -101,6 +104,18 @@ public struct VCPCode: RawRepresentable, Hashable, Sendable, Codable, CustomStri
   /// Deliberately short: every entry costs a full DDC round trip.
   public static let probeSet: [VCPCode] = [
     .luminance, .contrast, .audioSpeakerVolume, .audioMute, .inputSource, .powerMode,
+  ]
+
+  /// The colour features, kept out of `probeSet` on purpose.
+  ///
+  /// `probeSet` runs unattended the moment a display is plugged in, and it is
+  /// short for a reason. Six more round trips would roughly double how long a
+  /// new monitor takes to become usable — for a control most people will never
+  /// open. This set is probed on demand instead, the first time the colour card
+  /// is looked at, and cached against the panel like the capability string is.
+  public static let colorProbeSet: [VCPCode] = [
+    .colorTemperatureIncrement, .colorTemperature, .selectColorPreset,
+    .redGain, .greenGain, .blueGain,
   ]
 }
 
