@@ -123,4 +123,51 @@ struct PreferencesTests {
     #expect(restored.keyStep == 1.0 / 32.0)
     #expect(restored.showsOSD, "untouched fields keep their defaults")
   }
+
+  // MARK: - Forward compatibility
+
+  // Every stored blob was written by an older build, and every new preference
+  // adds a key that build never wrote. `decode` swallows the error with `try?`,
+  // so a decoder that insists on the missing key does not fail loudly — it
+  // silently resets every setting the user has ever changed. These tests stand
+  // in for that older build.
+
+  @Test("A blob missing newer keys keeps the values it does carry")
+  func globalSettingsToleratesMissingKeys() {
+    let defaults = makeDefaults()
+    // What a build predating `hidMediaKeysEnabled`, `keyStep` and the rest wrote.
+    defaults.set(Data(#"{"mediaKeysEnabled":false}"#.utf8), forKey: "global")
+
+    let restored = Preferences(defaults: defaults).global
+    #expect(!restored.mediaKeysEnabled, "the one stored value must survive")
+    #expect(restored.keyStep == 1.0 / 16.0, "absent keys fall back to their defaults")
+    #expect(restored.hidMediaKeysEnabled)
+    #expect(restored.showsOSD)
+  }
+
+  @Test("Display settings missing newer keys keep the values they do carry")
+  func displaySettingsToleratesMissingKeys() {
+    let defaults = makeDefaults()
+    defaults.set(
+      Data(#"{"4485219c2d511fb4":{"lastKnownName":"U32T1","brightnessStrategy":"gamma"}}"#.utf8),
+      forKey: "displays"
+    )
+
+    let restored = Preferences(defaults: defaults).settings(for: key)
+    #expect(restored.lastKnownName == "U32T1")
+    #expect(restored.brightnessStrategy == .gamma)
+    #expect(restored.timing == .default, "absent keys fall back to their defaults")
+    #expect(restored.respondsToMediaKeys)
+    #expect(!restored.extraDimmingEnabled)
+  }
+
+  /// The other half of the promise: a blob written by a *newer* build must not
+  /// take the settings down with it either.
+  @Test("Unknown keys from a newer build are ignored")
+  func toleratesUnknownKeys() {
+    let defaults = makeDefaults()
+    defaults.set(Data(#"{"mediaKeysEnabled":false,"somethingFromTheFuture":42}"#.utf8), forKey: "global")
+
+    #expect(!Preferences(defaults: defaults).global.mediaKeysEnabled)
+  }
 }

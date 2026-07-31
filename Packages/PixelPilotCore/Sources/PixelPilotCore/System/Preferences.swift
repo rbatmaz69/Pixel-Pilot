@@ -55,6 +55,35 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
 
   public init() {}
 
+  /// Written by hand rather than synthesised, for the reason spelled out on
+  /// `GlobalSettings.init(from:)`: the synthesised version throws on a key that
+  /// an older build never wrote, and `Preferences.decode` turns a throw into a
+  /// full reset.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let fallback = DisplaySettings()
+    lastKnownName = try container.decodeIfPresent(String.self, forKey: .lastKnownName)
+      ?? fallback.lastKnownName
+    brightnessStrategy = try container.decodeIfPresent(BrightnessStrategy.self, forKey: .brightnessStrategy)
+      ?? fallback.brightnessStrategy
+    // The two composites use `try?` rather than `try`. `decodeIfPresent` covers
+    // a key that is absent, but not a key that is present and was written by a
+    // build whose *nested* shape differed — that still throws, and one changed
+    // field inside `DDCTiming` would otherwise take this whole display's
+    // settings with it. Degrading is the right answer for both: timing falls
+    // back to the standard profile, and a lost capability cache re-probes on the
+    // next connect, which is exactly what a display that has never been seen
+    // does anyway.
+    timing = (try? container.decodeIfPresent(DDCTiming.self, forKey: .timing)) ?? fallback.timing
+    capabilities = try? container.decodeIfPresent(DisplayCapabilities.self, forKey: .capabilities)
+    extraDimmingEnabled = try container.decodeIfPresent(Bool.self, forKey: .extraDimmingEnabled)
+      ?? fallback.extraDimmingEnabled
+    respondsToMediaKeys = try container.decodeIfPresent(Bool.self, forKey: .respondsToMediaKeys)
+      ?? fallback.respondsToMediaKeys
+    accentOverride = try container.decodeIfPresent(Int.self, forKey: .accentOverride)
+    capabilityString = try container.decodeIfPresent(String.self, forKey: .capabilityString)
+  }
+
   /// Whether this configuration puts anything into the display's gamma table.
   ///
   /// Callers need this when switching strategies: gamma is global to the display
@@ -86,6 +115,31 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   public var launchAtLogin: Bool = false
 
   public init() {}
+
+  /// Decoded by hand, and this is not boilerplate worth deleting.
+  ///
+  /// Swift's synthesised `init(from:)` ignores property defaults: a key that is
+  /// absent from the stored JSON throws `keyNotFound` rather than falling back.
+  /// Every blob on disk was written by an older build, so every preference
+  /// added here is a key that build never wrote — and `Preferences.decode`
+  /// swallows the throw with `try?` and returns a fresh `GlobalSettings`.
+  ///
+  /// The failure mode is therefore not a decode error anyone would notice: it
+  /// is every setting the user ever changed quietly reverting, once, on the
+  /// update that introduced the field. `decodeIfPresent` is what makes adding a
+  /// preference a safe thing to do.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let fallback = GlobalSettings()
+    mediaKeysEnabled = try container.decodeIfPresent(Bool.self, forKey: .mediaKeysEnabled)
+      ?? fallback.mediaKeysEnabled
+    hidMediaKeysEnabled = try container.decodeIfPresent(Bool.self, forKey: .hidMediaKeysEnabled)
+      ?? fallback.hidMediaKeysEnabled
+    showsOSD = try container.decodeIfPresent(Bool.self, forKey: .showsOSD) ?? fallback.showsOSD
+    keyStep = try container.decodeIfPresent(Double.self, forKey: .keyStep) ?? fallback.keyStep
+    fineKeyStep = try container.decodeIfPresent(Double.self, forKey: .fineKeyStep) ?? fallback.fineKeyStep
+    launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? fallback.launchAtLogin
+  }
 }
 
 /// Persisted settings, keyed by `DisplayKey` so they follow the panel rather
