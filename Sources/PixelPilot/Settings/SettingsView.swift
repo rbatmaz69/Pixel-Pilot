@@ -95,16 +95,16 @@ private struct GeneralSettings: View {
         // Both statuses are always shown, granted or not. A warning that only
         // appears when something is missing leaves no way to tell "granted"
         // from "the app has not noticed yet".
-        permissionRow(
-          "Accessibility",
+        PermissionRow(
+          title: "Accessibility",
           detail: "Needed to see the keys at all.",
-          granted: model.accessibilityGranted,
+          isGranted: model.accessibilityGranted,
           action: model.requestAccessibilityPermission
         )
-        permissionRow(
-          "Input Monitoring",
+        PermissionRow(
+          title: "Input Monitoring",
           detail: "Needed for brightness keys on keyboards other than Apple's.",
-          granted: model.inputMonitoringGranted,
+          isGranted: model.inputMonitoringGranted,
           action: model.requestInputMonitoringPermission
         )
 
@@ -303,33 +303,6 @@ private struct GeneralSettings: View {
       }
     }
     .animation(motion.spatialDefault, value: model.keyBindingList.count)
-  }
-
-  /// Both permission states, as one row that reacts when the answer changes.
-  ///
-  /// The glyph swap is the whole point of the animation here: coming back from
-  /// System Settings having granted something, the confirmation should be
-  /// unmissable rather than a redraw you have to go looking for.
-  private func permissionRow(
-    _ title: String,
-    detail: String,
-    granted: Bool,
-    action: @escaping () -> Void
-  ) -> some View {
-    StatusRow(
-      symbol: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-      tint: granted ? Status.ok : Status.warn,
-      title: title,
-      detail: detail
-    ) {
-      if !granted {
-        Button("Open Settings…", action: action)
-          .buttonStyle(.soft(Status.warn))
-          .font(TypeScale.detail.weight(.medium))
-          .transition(.blurReplace)
-      }
-    }
-    .animation(motion.spatialDefault, value: granted)
   }
 
   private func apply() {

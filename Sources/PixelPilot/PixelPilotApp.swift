@@ -33,6 +33,9 @@ final class PixelPilotMain: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     model.start()
     statusItem.install()
+    // After the status item exists, so the introduction can point at an icon
+    // that is actually in the menu bar while it is being talked about.
+    windows.showOnboardingIfNeeded()
   }
 
   /// If the app quits while a display is dimmed via the gamma table, that

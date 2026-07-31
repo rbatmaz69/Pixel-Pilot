@@ -1,4 +1,5 @@
 import AppKit
+import PixelPilotCore
 import SwiftUI
 
 /// Owns the app's windows.
@@ -27,6 +28,7 @@ final class WindowCoordinator: NSObject {
 
   private var displaysWindow: NSWindow?
   private var settingsWindow: NSWindow?
+  private var onboardingWindow: NSWindow?
 
   init(model: AppModel) {
     self.model = model
@@ -70,6 +72,41 @@ final class WindowCoordinator: NSObject {
       content: SettingsView(model: model)
     )
     settingsWindow = window
+    present(window)
+  }
+
+  // MARK: - Onboarding
+
+  /// Shows the introduction if it has never been dismissed.
+  ///
+  /// Called once at launch. A fresh install would otherwise present a menu bar
+  /// icon, two ungranted permissions and a keyboard key that quietly does
+  /// nothing, with no explanation of any of it.
+  func showOnboardingIfNeeded() {
+    guard !Preferences.shared.global.hasCompletedOnboarding else { return }
+    showOnboarding()
+  }
+
+  func showOnboarding() {
+    if let onboardingWindow {
+      present(onboardingWindow)
+      return
+    }
+
+    let window = makeWindow(
+      title: "Welcome to Pixel Pilot",
+      autosaveName: "onboarding",
+      minSize: CGSize(width: 560, height: 460),
+      defaultSize: CGSize(width: 560, height: 460),
+      isResizable: false,
+      content: OnboardingFlow(model: model) { [weak self] in
+        // On dismissal, whether finished or skipped. Showing it again to
+        // someone who chose to skip it is worse than never having shown it.
+        Preferences.shared.updateGlobal { $0.hasCompletedOnboarding = true }
+        self?.onboardingWindow?.close()
+      }
+    )
+    onboardingWindow = window
     present(window)
   }
 
@@ -141,5 +178,11 @@ extension WindowCoordinator: NSWindowDelegate {
     window.contentView = nil
     if window === displaysWindow { displaysWindow = nil }
     if window === settingsWindow { settingsWindow = nil }
+    if window === onboardingWindow {
+      // Closed by the window's own button rather than by finishing the flow.
+      // Either way it has been dismissed, and that is the thing recorded.
+      Preferences.shared.updateGlobal { $0.hasCompletedOnboarding = true }
+      onboardingWindow = nil
+    }
   }
 }

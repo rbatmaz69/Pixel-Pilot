@@ -127,6 +127,13 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   public var fineKeyStep: Double = 1.0 / 64.0
   public var launchAtLogin: Bool = false
 
+  /// Whether the first-run introduction has been seen.
+  ///
+  /// Written when it is dismissed, whether it was completed or skipped —
+  /// showing it again to someone who chose to skip it is worse than never
+  /// having shown it.
+  public var hasCompletedOnboarding: Bool = false
+
   /// The day schedule. Disabled by default; an app that started changing the
   /// brightness on its own without being asked would be a fault, not a feature.
   public var schedule: DaySchedule = .init()
@@ -179,6 +186,12 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
     schedule = (try? container.decodeIfPresent(DaySchedule.self, forKey: .schedule)) ?? fallback.schedule
     latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
     longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
+    // Absent means an existing installation, which has plainly already got
+    // past the first run — so the default when decoding is the opposite of the
+    // default for a fresh one.
+    hasCompletedOnboarding = try container.decodeIfPresent(
+      Bool.self, forKey: .hasCompletedOnboarding
+    ) ?? true
   }
 }
 

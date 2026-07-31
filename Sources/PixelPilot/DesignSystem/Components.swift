@@ -242,6 +242,43 @@ extension StatusRow where Trailing == EmptyView {
   }
 }
 
+/// A permission, granted or not.
+///
+/// Both states are always drawn, never only the bad one. A warning that appears
+/// solely when something is missing leaves no way to tell "granted" apart from
+/// "the app has not noticed yet" — which matters here more than usual, because
+/// macOS ties these grants to the code signature and a stale entry from an
+/// earlier build looks exactly like a working one.
+///
+/// The glyph swap is the point of the animation: coming back from System
+/// Settings having just granted something, the confirmation should be
+/// unmissable rather than a redraw you have to go looking for.
+struct PermissionRow: View {
+  let title: String
+  let detail: String
+  let isGranted: Bool
+  let action: () -> Void
+
+  @Environment(\.motion) private var motion
+
+  var body: some View {
+    StatusRow(
+      symbol: isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+      tint: isGranted ? Status.ok : Status.warn,
+      title: title,
+      detail: detail
+    ) {
+      if !isGranted {
+        Button("Open Settings…", action: action)
+          .buttonStyle(.soft(Status.warn))
+          .font(TypeScale.detail.weight(.medium))
+          .transition(.blurReplace)
+      }
+    }
+    .animation(motion.spatialDefault, value: isGranted)
+  }
+}
+
 /// A title with the value as a percentage, over its control.
 ///
 /// The percentage rolls rather than jumps: `.numericText` plus monospaced

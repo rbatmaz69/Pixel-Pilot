@@ -161,6 +161,18 @@ struct PreferencesTests {
     #expect(!restored.extraDimmingEnabled)
   }
 
+  /// The one field whose decoding default is the opposite of its declared one.
+  /// An existing installation has plainly got past the first run already, so
+  /// an update must not put the introduction in front of it.
+  @Test("An existing installation is not shown the introduction again")
+  func onboardingIsNotReplayedOnUpdate() {
+    let defaults = makeDefaults()
+    defaults.set(Data(#"{"mediaKeysEnabled":true}"#.utf8), forKey: "global")
+
+    #expect(Preferences(defaults: defaults).global.hasCompletedOnboarding)
+    #expect(!GlobalSettings().hasCompletedOnboarding, "but a fresh install does see it")
+  }
+
   /// The other half of the promise: a blob written by a *newer* build must not
   /// take the settings down with it either.
   @Test("Unknown keys from a newer build are ignored")
