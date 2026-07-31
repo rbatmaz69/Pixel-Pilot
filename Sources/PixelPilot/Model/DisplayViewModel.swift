@@ -45,6 +45,11 @@ final class DisplayViewModel: Identifiable {
   /// panels do not all use 100 as the maximum.
   private var contrastMaximum: UInt16 = 100
 
+  /// When this app last moved brightness, so `resyncNativeBrightness` never
+  /// reads back a value its own previous write has not landed on yet. Not
+  /// observed: nothing in the UI depends on when a write happened.
+  @ObservationIgnored private var lastBrightnessWrite: ContinuousClock.Instant?
+
   private let brightnessController: BrightnessController
   private let volumeController: VolumeController
   private let queue: DDCQueue?
@@ -256,6 +261,7 @@ final class DisplayViewModel: Identifiable {
   /// Continuous updates during a drag. Cheap: the DDC write is coalesced.
   func setBrightness(_ value: Double) {
     brightness = value
+    lastBrightnessWrite = .now
     Task { await brightnessController.setBrightness(value) }
   }
 
@@ -448,15 +454,58 @@ final class DisplayViewModel: Identifiable {
 
   var settings: DisplaySettings { preferences.settings(for: key) }
 
+  /// How long after our own write the cached value is trusted without asking.
+  ///
+  /// Key repeat runs at roughly 30 ms, and the write is fired at an actor rather
+  /// than awaited — so a re-read inside a burst would come back with the value
+  /// from before the previous press, and the screen would stop moving under a
+  /// held key. Long enough to cover a whole burst, short enough that the next
+  /// deliberate press asks again.
+  private static let brightnessResyncQuietPeriod: Duration = .milliseconds(500)
+
+  /// Asks the built-in panel where it actually is, before stepping from there.
+  ///
+  /// The cached value is normally right, because nothing but this app moves an
+  /// external display. The built-in panel is the opposite: auto-brightness,
+  /// Control Centre, the lid opening and any other app all move it behind our
+  /// back, and it is primed exactly once at connect. Stepping from that number
+  /// hours later makes the first key press throw the screen somewhere it has
+  /// not been all day.
+  ///
+  /// Only affordable on the native path, and only worth doing there. Native is a
+  /// local call into DisplayServices; asking DDC the same question is a round
+  /// trip on the I2C bus, per key press, which is the idle cost this app exists
+  /// to avoid — see `BrightnessController.prime()`. Gamma needs no asking at
+  /// all: the app owns that table outright.
+  ///
+  /// DisplayServices can also push these changes
+  /// (`DisplayServicesRegisterForBrightnessChangeNotifications`), which would
+  /// cost nothing while nothing changes and is the better answer if this read
+  /// ever proves visible. It is not in the C shim, and adding a private callback
+  /// registration is a larger and riskier change than a gated read.
+  @discardableResult
+  func resyncNativeBrightness() -> Double {
+    guard brightnessStrategy == .native else { return brightness }
+    if let lastBrightnessWrite,
+       ContinuousClock.now - lastBrightnessWrite < Self.brightnessResyncQuietPeriod {
+      return brightness
+    }
+    guard let actual = NativeBrightness.get(displayID) else { return brightness }
+    brightness = actual
+    return actual
+  }
+
   /// Nudges brightness by a step and returns the new value *synchronously*.
   ///
   /// The caller needs the value right away to render the HUD in the same frame
   /// as the key press. Awaiting the actor first would put the indicator a frame
-  /// behind the keyboard, which is exactly the lag people notice.
+  /// behind the keyboard, which is exactly the lag people notice — which is also
+  /// why the re-sync above is a plain call and not a hop.
   @discardableResult
   func adjustBrightness(by step: Double) -> Double {
-    let target = min(1, max(0, brightness + step))
+    let target = min(1, max(0, resyncNativeBrightness() + step))
     brightness = target
+    lastBrightnessWrite = .now
     Task { await brightnessController.setBrightness(target) }
     return target
   }

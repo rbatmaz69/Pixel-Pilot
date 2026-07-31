@@ -14,7 +14,8 @@ Requires macOS 26 (Tahoe) on Apple Silicon.
   [Warmth, and what it costs](#warmth-and-what-it-costs).
 - **The keyboard's brightness and volume keys**, intercepted and acted on,
   with its own indicator — macOS 26 no longer renders third-party values in
-  the system one.
+  the system one. The built-in panel included: while the app runs its keys are
+  the app's, which also means macOS stops dimming it for the room.
 - **Scroll over the menu bar icon** to change brightness.
 - **One slider for every display**, keeping the differences between them.
 - **Presets**, applied by hand, by global shortcut, by system appearance, on a

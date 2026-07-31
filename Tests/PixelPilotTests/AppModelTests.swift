@@ -42,6 +42,14 @@ private func makeDisplay(
   )
 }
 
+private func makeBuiltinDisplay(
+  id: CGDirectDisplayID, key: String, name: String = "Built-in Display"
+) -> DiscoveredDisplay {
+  DiscoveredDisplay(
+    displayID: id, key: DisplayKey(rawValue: key), name: name, isBuiltin: true
+  )
+}
+
 /// A throwaway defaults suite, so tests never touch the real preferences.
 private func makeDefaults() -> UserDefaults {
   let name = "dev.rb.pixelpilot.apptests.\(UUID().uuidString)"
@@ -157,6 +165,21 @@ struct AppModelTests {
 
     #expect(model.displays.isEmpty)
     #expect(model.focusedDisplay == nil)
+  }
+
+  /// The laptop-only case, which the keys used to be switched off for entirely.
+  /// Now the built-in panel is a legitimate target, so it has to survive
+  /// discovery and be what a key press is pointed at.
+  @Test("A built-in panel on its own is still a focused display")
+  func builtinOnlyIsFocusable() {
+    let discovery = StubDiscovery(displays: [makeBuiltinDisplay(id: 1, key: "builtin")])
+    let model = AppModel(
+      discovery: discovery, gamma: GammaDimmer(), preferences: makePreferences()
+    )
+    model.refresh()
+
+    #expect(model.displays.count == 1)
+    #expect(model.focusedDisplay?.isBuiltin == true)
   }
 
   @Test("Quitting restores every dimmed display")

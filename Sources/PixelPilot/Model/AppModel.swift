@@ -254,40 +254,32 @@ final class AppModel {
         guard !Task.isCancelled else { return }
         await display.activate()
       }
-      // Whether the keys are worth watching depends on what is plugged in, so
-      // it has to be decided again every time that changes — and after
-      // activation, because `respondsToMediaKeys` is read from settings the
-      // panel has only just been identified against.
-      guard !Task.isCancelled else { return }
-      startMediaKeys()
     }
   }
 
   // MARK: - Media keys
 
-  /// Whether there is a display the keys could actually act on.
+  /// Whether the app can stop macOS acting on a key, as opposed to merely
+  /// seeing it.
   ///
-  /// With only the built-in panel there is not. macOS already does brightness
-  /// there — better than this app could, since it has the ambient light sensor
-  /// — and it does system volume too. Watching the keys in that situation means
-  /// installing an event tap for the sole purpose of declining everything it
-  /// sees, which is all risk and no benefit: a declined key still has to
-  /// survive the trip out through the tap and back into the system, and a key
-  /// that does not survive it is a Mac whose brightness keys have stopped
-  /// working. That is a far worse outcome than not watching at all.
-  var hasKeyDrivableDisplay: Bool {
-    displays.contains { !$0.isBuiltin && $0.respondsToMediaKeys }
-  }
-
-  /// True when the keys are switched on but there is nothing to point them at,
-  /// so the settings window can say which of the two it is.
-  var mediaKeysIdleForLackOfDisplays: Bool {
-    preferences.global.mediaKeysEnabled && !hasKeyDrivableDisplay
-  }
+  /// This replaces `hasKeyDrivableDisplay`, which asked whether an external
+  /// display was plugged in and refused to watch the keys at all otherwise.
+  /// That was the right question while the built-in panel was left to macOS and
+  /// the two never aimed at the same thing. Now that the keys are taken over
+  /// completely they do aim at the same thing — the same backlight, the same
+  /// system output — and the only thing separating "the app changes it" from
+  /// "the app and macOS both change it, two steps per press" is the event tap,
+  /// because the HID monitor can watch a key but never swallow it.
+  ///
+  /// So anything macOS would have done itself is declined while this is false,
+  /// and macOS is left to do it alone. An external panel's own backlight and
+  /// its own speakers stay fair game either way: macOS does not know they
+  /// exist.
+  var canTakeOverFromSystem: Bool { mediaKeysActive }
 
   @discardableResult
   func startMediaKeys() -> Bool {
-    guard preferences.global.mediaKeysEnabled, hasKeyDrivableDisplay else {
+    guard preferences.global.mediaKeysEnabled else {
       mediaKeysActive = false
       hidKeysActive = false
       mediaKeys.stop()
@@ -465,10 +457,10 @@ final class AppModel {
 
     // The same physical press arrives over both paths, so the second copy must
     // not act again — and must answer exactly as the first one did. Replying
-    // "consumed" here regardless is what broke the built-in display's
-    // brightness keys: the HID copy arrives first, the app declines it because
-    // a built-in panel is left to macOS, and then the tap copy swallows a key
-    // nobody acted on.
+    // "consumed" here regardless is what broke the brightness keys once: the
+    // HID copy arrives first, the app declines it — the display it was pointed
+    // at is still being probed, say, or its own key switch is off — and then
+    // the tap copy swallows a key nobody acted on.
     if let decided = keyDeduplicator.previousDecision(for: event.key.deduplicationKey) {
       return decided
     }
@@ -484,9 +476,12 @@ final class AppModel {
 
     switch event.key {
     case .brightnessUp, .brightnessDown:
-      // The built-in panel already does the right thing natively, including the
-      // ambient-light behaviour we cannot reproduce. Leave it alone.
-      guard !display.isBuiltin, display.respondsToMediaKeys else { return false }
+      guard MediaKeyPolicy.handlesBrightness(
+        isBuiltin: display.isBuiltin,
+        respondsToMediaKeys: display.respondsToMediaKeys,
+        strategy: display.brightnessStrategy,
+        canTakeOverFromSystem: canTakeOverFromSystem
+      ) else { return false }
       let value = display.adjustBrightness(by: event.key == .brightnessUp ? step : -step)
       present(.brightness, value: value, on: display)
       return true
@@ -499,7 +494,10 @@ final class AppModel {
         present(display.isMuted ? .muted : .volume, value: value, on: display)
         return true
       }
-      guard systemAudio.isControllable else { return false }
+      guard MediaKeyPolicy.handlesSystemVolume(
+        isControllable: systemAudio.isControllable,
+        canTakeOverFromSystem: canTakeOverFromSystem
+      ) else { return false }
       let value = systemAudio.adjustVolume(by: event.key == .volumeUp ? step : -step)
       present(systemAudio.isMuted ? .muted : .volume, value: value, on: display)
       return true
@@ -510,7 +508,10 @@ final class AppModel {
         present(display.isMuted ? .muted : .volume, value: display.volume, on: display)
         return true
       }
-      guard systemAudio.isControllable else { return false }
+      guard MediaKeyPolicy.handlesSystemVolume(
+        isControllable: systemAudio.isControllable,
+        canTakeOverFromSystem: canTakeOverFromSystem
+      ) else { return false }
       systemAudio.toggleMute()
       present(systemAudio.isMuted ? .muted : .volume, value: systemAudio.volume, on: display)
       return true

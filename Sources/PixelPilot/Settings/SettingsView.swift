@@ -135,20 +135,6 @@ private struct GeneralSettings: View {
         Toggle("Use the keyboard's brightness and volume keys", isOn: $global.mediaKeysEnabled)
           .onChange(of: global.mediaKeysEnabled) { _, _ in apply() }
 
-        // Saying so rather than leaving a switch that is on while nothing
-        // happens. "Enabled but idle" and "enabled and broken" look identical
-        // from the outside, and this is the one that is not a fault.
-        if model.mediaKeysIdleForLackOfDisplays {
-          StatusRow(
-            symbol: "moon.zzz",
-            title: "Standing by",
-            detail: "No external display to act on, so the keys are left to macOS — which "
-              + "does brightness on the built-in panel better anyway, ambient light and all. "
-              + "This starts on its own when a monitor is connected."
-          )
-          .transition(.blurReplace)
-        }
-
         VStack(alignment: .leading, spacing: Layout.tight) {
           Text("Per key press").font(TypeScale.rowTitle)
           SegmentedMorphPicker(
@@ -169,11 +155,13 @@ private struct GeneralSettings: View {
         Toggle("Tap the trackpad at ends and quarters", isOn: $global.hapticsEnabled)
           .onChange(of: global.hapticsEnabled) { _, _ in apply() }
 
-        CardFooter("Hold Shift and Option while pressing a key for finer steps. The trackpad "
-          + "taps only on hardware that can — macOS decides that, and its own setting in "
-          + "Trackpad preferences wins over this one.")
+        CardFooter("While this is on the keys belong to Pixel Pilot — including on the "
+          + "built-in panel, which means macOS no longer dims it as the room gets darker. "
+          + "That trade is the point: one indicator and one step size on every screen. "
+          + "Turning this off hands every key straight back. Hold Shift and Option while "
+          + "pressing for finer steps. The trackpad taps only on hardware that can — macOS "
+          + "decides that, and its own setting in Trackpad preferences wins over this one.")
       }
-      .animation(motion.spatialDefault, value: model.mediaKeysIdleForLackOfDisplays)
     }
   }
 

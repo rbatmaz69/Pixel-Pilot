@@ -52,11 +52,12 @@ public struct MediaKeyDeduplicator: Sendable {
   /// What was decided about an identical press still inside the window, or nil
   /// when this is the first copy and the caller has to decide for itself.
   ///
-  /// The distinction is the whole point, and getting it wrong is how the
-  /// built-in display's brightness keys stop working: when the first copy is
-  /// *declined* — because a built-in panel is deliberately left to macOS — the
-  /// duplicate has to be declined too. Answering "already handled, consume it"
-  /// swallows a key nobody acted on, and macOS never gets to dim the screen.
+  /// The distinction is the whole point, and getting it wrong is how brightness
+  /// keys stop working: when the first copy is *declined* — because the display
+  /// it would have acted on is not ready yet, or its own key switch is off —
+  /// the duplicate has to be declined too. Answering "already handled, consume
+  /// it" swallows a key nobody acted on, and macOS never gets to dim the
+  /// screen.
   public mutating func previousDecision(
     for key: Int, at instant: ContinuousClock.Instant = .now
   ) -> Bool? {
