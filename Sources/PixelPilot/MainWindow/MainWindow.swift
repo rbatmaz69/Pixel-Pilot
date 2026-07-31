@@ -14,18 +14,41 @@ struct MainWindow: View {
       // a sliding pill. The pill would look better and would cost arrow-key
       // navigation of the sidebar, which is not a trade worth making for a
       // highlight.
-      List(model.displays, selection: $selection) { display in
-        HStack(spacing: Layout.tight) {
-          AccentDot(accent: display.accent, isReady: display.isReady, size: 9)
-          VStack(alignment: .leading, spacing: 1) {
-            Text(display.name).font(TypeScale.rowTitle)
-            Text(display.isBuiltin ? "Built-in" : display.routeDescription)
-              .font(TypeScale.detail)
-              .foregroundStyle(.secondary)
+      VStack(spacing: 0) {
+        if model.displays.count > 1 {
+          // Only with more than one. A map of a single display is a rectangle
+          // saying what the row below it already says.
+          DisplayMap(
+            displays: model.displays,
+            selection: $selection,
+            layoutTick: model.screenLayoutTick
+          )
+          .padding(.horizontal, Layout.snug)
+          .padding(.top, Layout.snug)
+
+          Button {
+            model.identifyDisplays()
+          } label: {
+            Label("Identify", systemImage: "number.circle")
+              .font(TypeScale.detail.weight(.medium))
           }
+          .buttonStyle(.soft)
+          .padding(.vertical, Layout.tight)
         }
-        .padding(.vertical, 3)
-        .tag(display.id)
+
+        List(model.displays, selection: $selection) { display in
+          HStack(spacing: Layout.tight) {
+            AccentDot(accent: display.accent, isReady: display.isReady, size: 9)
+            VStack(alignment: .leading, spacing: 1) {
+              Text(display.name).font(TypeScale.rowTitle)
+              Text(display.isBuiltin ? "Built-in" : display.routeDescription)
+                .font(TypeScale.detail)
+                .foregroundStyle(.secondary)
+            }
+          }
+          .padding(.vertical, 3)
+          .tag(display.id)
+        }
       }
       .navigationSplitViewColumnWidth(min: 200, ideal: 220)
     } detail: {

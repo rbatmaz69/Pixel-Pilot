@@ -49,6 +49,10 @@ enum TypeScale {
   static let readout = Font.system(.callout, design: .rounded).weight(.semibold).monospacedDigit()
   static let heroReadout = Font.system(size: 26, weight: .semibold, design: .rounded).monospacedDigit()
   static let sheetTitle = Font.system(.title3, design: .rounded).weight(.semibold)
+
+  /// The identify overlay's numeral. Sized to be read from across a desk rather
+  /// than from in front of the keyboard, which is the whole point of it.
+  static let identityNumeral = Font.system(size: 120, weight: .bold, design: .rounded)
 }
 
 /// What a card is sitting on.

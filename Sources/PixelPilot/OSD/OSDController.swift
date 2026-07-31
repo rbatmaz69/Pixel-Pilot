@@ -12,15 +12,7 @@ final class OSDController {
   /// How long the HUD stays up after the last change, matching the system OSD.
   private let visibleDuration: Duration = .milliseconds(1400)
 
-  /// AppKit's side of the reduce-motion setting.
-  ///
-  /// This controller is outside the SwiftUI environment, so `MotionTokens`
-  /// cannot reach it. Without this the window would keep fading and springing
-  /// in while everything drawn inside it had been flattened — half-honoured is
-  /// worse than not honoured, because it looks like the setting is broken.
-  private var reduceMotion: Bool {
-    NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-  }
+  private var reduceMotion: Bool { OverlayPanel.reduceMotion }
 
   private var fadeInDuration: TimeInterval { reduceMotion ? 0 : 0.10 }
   private var fadeOutDuration: TimeInterval { reduceMotion ? 0.08 : 0.22 }
@@ -67,15 +59,10 @@ final class OSDController {
     position(panel, on: screen)
 
     if panel.alphaValue < 1 {
-      panel.alphaValue = 0
-      panel.orderFrontRegardless()
       // Short, and shorter than the SwiftUI spring inside: the window fade is
       // only there to cover the first frame of compositing. Letting it run as
       // long as the entrance makes the two curves fight and the HUD look soft.
-      NSAnimationContext.runAnimationGroup { context in
-        context.duration = fadeInDuration
-        panel.animator().alphaValue = 1
-      }
+      OverlayPanel.fadeIn(panel, duration: fadeInDuration)
     }
 
     scheduleDismiss()
@@ -90,52 +77,20 @@ final class OSDController {
   // MARK: - Panel lifecycle
 
   private func makePanel(content: AnyView, on screen: NSScreen) {
-    let hosting = NSHostingView(rootView: content)
-    hosting.sizingOptions = [.intrinsicContentSize]
-
-    let panel = NSPanel(
-      contentRect: .zero,
-      // .nonactivatingPanel is the important one: showing the HUD must never
-      // steal focus from whatever the user is working in.
-      styleMask: [.borderless, .nonactivatingPanel],
-      backing: .buffered,
-      defer: false
-    )
-    panel.contentView = hosting
-    panel.isOpaque = false
-    panel.backgroundColor = .clear
-    // The glass material draws its own shadow; a window shadow on top of it
-    // produces a visible double edge.
-    panel.hasShadow = false
-    panel.isMovable = false
-    panel.ignoresMouseEvents = true
-    panel.hidesOnDeactivate = false
-    panel.level = .screenSaver
-    panel.collectionBehavior = [
-      .canJoinAllSpaces,
-      .fullScreenAuxiliary,
-      .ignoresCycle,
-      .stationary,
-    ]
-    panel.alphaValue = 0
-
-    self.panel = panel
-    self.hostingView = hosting
+    let made = OverlayPanel.make(content: content)
+    self.panel = made.panel
+    self.hostingView = made.hosting
   }
 
   private func position(_ panel: NSPanel, on screen: NSScreen) {
-    panel.layoutIfNeeded()
-    let size = panel.contentView?.fittingSize ?? CGSize(width: 200, height: 150)
-    panel.setContentSize(size)
-
-    let frame = screen.frame
-    let origin = CGPoint(
-      x: frame.midX - size.width / 2,
-      // Roughly where the system places its own OSD, so the two never feel like
-      // they belong to different machines.
-      y: frame.minY + frame.height * 0.12
-    )
-    panel.setFrameOrigin(origin)
+    OverlayPanel.position(panel, on: screen) { frame, size in
+      CGPoint(
+        x: frame.midX - size.width / 2,
+        // Roughly where the system places its own OSD, so the two never feel
+        // like they belong to different machines.
+        y: frame.minY + frame.height * 0.12
+      )
+    }
   }
 
   /// A one-shot delayed task, cancelled on every new value. Not a timer: once

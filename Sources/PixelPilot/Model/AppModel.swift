@@ -213,6 +213,7 @@ final class AppModel {
   /// display" can only be established via `DisplayKey`, and the per-display
   /// state that matters is persisted under that key anyway.
   func refresh() {
+    screenLayoutTick += 1
     let discovered = discovery.discoverDisplays(log: log)
 
     gamma.pruneOffline(
@@ -458,6 +459,27 @@ final class AppModel {
       present(systemAudio.isMuted ? .muted : .volume, value: systemAudio.volume, on: display)
       return true
     }
+  }
+
+  // MARK: - Identifying
+
+  @ObservationIgnored private let identify = IdentifyController()
+
+  /// Bumped when the screens are added, removed or rearranged, so the display
+  /// map recomputes its geometry then and at no other time.
+  private(set) var screenLayoutTick = 0
+
+  /// Puts a number on every screen for a couple of seconds.
+  ///
+  /// The numbers match the sidebar order rather than anything the system
+  /// assigns, because the sidebar is what the question is being asked about.
+  func identifyDisplays() {
+    Haptics.confirm()
+    var labels: [CGDirectDisplayID: (number: Int, name: String, accent: Color)] = [:]
+    for (index, display) in displays.enumerated() {
+      labels[display.displayID] = (index + 1, display.name, display.accent)
+    }
+    identify.show(labels: labels)
   }
 
   // MARK: - Moving every display at once
