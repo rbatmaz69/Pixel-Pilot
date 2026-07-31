@@ -406,6 +406,57 @@ extension View {
   }
 }
 
+extension View {
+  /// A pulse of the display's own colour, running along a column of cards.
+  ///
+  /// For the moments when one action changes several displays at once — the
+  /// master brightness slider, and applying a preset. The problem it solves is
+  /// that those moments are invisible: the values update instantly and
+  /// correctly, and nothing on screen says they belong to the same gesture.
+  ///
+  /// Crucially it is **light, not movement**. The obvious idea — animating the
+  /// follower sliders so their handles glide into place — is unavailable and
+  /// should stay that way: `ExpressiveSlider` pins `.animation(nil, value: x)`
+  /// on its handle, because a handle that lags is a handle that is lying about
+  /// where the display is. Any transaction opened above it would reach in and
+  /// undo that. So the numbers jump, which is the truth, and the *cards* light
+  /// up in sequence, which is the part worth staging.
+  func accentWave(index: Int, trigger: Int, accent: Color) -> some View {
+    modifier(AccentWave(index: index, trigger: trigger, accent: accent))
+  }
+}
+
+private struct AccentWave: ViewModifier {
+  let index: Int
+  let trigger: Int
+  let accent: Color
+
+  @Environment(\.motion) private var motion
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if motion.isReduced {
+      content
+    } else {
+      content.phaseAnimator([0, 1, 2], trigger: trigger) { view, phase in
+        view
+          .shadow(color: accent.accentGlow(phase == 1), radius: phase == 1 ? 18 : 0)
+          .brightness(phase == 1 ? 0.045 : 0)
+      } animation: { phase in
+        switch phase {
+        // The same capped-index arithmetic as `Entrance`, for the same reason:
+        // past the eighth card the last one lights up late enough to look like
+        // a hitch rather than a rhythm. Doubled, because a wave wants to be
+        // read as travelling where an entrance only wants to feel unhurried.
+        case 1: motion.effectFast.delay(Double(min(index, 8)) * motion.stagger * 2)
+        case 2: .linear(duration: 0.01)
+        default: motion.effectDefault
+        }
+      }
+    }
+  }
+}
+
 private struct Entrance: ViewModifier {
   let index: Int
 

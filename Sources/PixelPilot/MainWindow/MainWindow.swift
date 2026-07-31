@@ -30,7 +30,7 @@ struct MainWindow: View {
       .navigationSplitViewColumnWidth(min: 200, ideal: 220)
     } detail: {
       if let display = model.displays.first(where: { $0.id == selection }) {
-        DisplayDetail(display: display, log: model.log)
+        DisplayDetail(display: display, log: model.log, groupChangeTick: model.groupChangeTick)
       } else if model.displays.isEmpty {
         // Two empty states, not one. "Nothing is plugged in" and "nothing is
         // selected" are different problems with different next steps, and
@@ -73,6 +73,8 @@ private struct DisplayDetail: View {
 
   @Bindable var display: DisplayViewModel
   let log: DiagnosticsLog
+  /// Bumped whenever something outside this card changed the values in it.
+  let groupChangeTick: Int
 
   @Namespace private var accentNamespace
   @State private var hoveredAccent: Int?
@@ -84,6 +86,7 @@ private struct DisplayDetail: View {
       GlassEffectContainer(spacing: Layout.section) {
         VStack(alignment: .leading, spacing: Layout.section) {
           card(0) { controls }
+            .accentWave(index: 0, trigger: groupChangeTick, accent: display.accent)
           if !display.isBuiltin {
             card(1) { InputAndPowerSection(display: display) }
           }
@@ -127,6 +130,11 @@ private struct DisplayDetail: View {
       .entrance(index: index)
   }
 
+  /// Index zero, so this is a single pulse rather than a wave.
+  ///
+  /// The wave means "these several things moved together", and this window
+  /// shows one display at a time. What is worth saying here is only that
+  /// something changed the values from outside the card.
   private var controls: some View {
     PanelCard(title: "Controls", systemImage: "slider.horizontal.3", accent: display.accent) {
       VStack(alignment: .leading, spacing: Layout.loose) {

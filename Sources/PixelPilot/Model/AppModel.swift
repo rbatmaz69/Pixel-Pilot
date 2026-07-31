@@ -460,6 +460,65 @@ final class AppModel {
     }
   }
 
+  // MARK: - Moving every display at once
+
+  /// Whether the brightness sliders are ganged together.
+  private(set) var isSyncingBrightness = false
+  /// Where the master sits. Only meaningful while syncing.
+  private(set) var masterBrightness: Double = 1
+
+  /// Captured when the group is armed, and never re-derived.
+  ///
+  /// Re-deriving from what the displays are currently at would destroy the
+  /// spread the moment one of them clamps at an end — see `BrightnessSync`,
+  /// where the arithmetic and the test for that live.
+  @ObservationIgnored private var syncOffsets: [DisplayKey: Double] = [:]
+
+  /// Bumped whenever several displays change together, to run the accent wave.
+  private(set) var groupChangeTick = 0
+
+  /// Only worth offering when there is more than one thing to gang.
+  var canSyncBrightness: Bool { displays.count > 1 }
+
+  func setSyncingBrightness(_ isOn: Bool) {
+    isSyncingBrightness = isOn
+    guard isOn else {
+      syncOffsets = [:]
+      return
+    }
+    let levels = Dictionary(uniqueKeysWithValues: displays.map { ($0.key, $0.brightness) })
+    masterBrightness = BrightnessSync.suggestedMaster(levels: levels)
+    syncOffsets = BrightnessSync.offsets(levels: levels, master: masterBrightness)
+  }
+
+  /// Moves every display, keeping their differences.
+  ///
+  /// Called continuously while the master is dragged, so it must stay cheap:
+  /// `setBrightness` goes through `DDCQueue`, which coalesces. The expensive
+  /// verified write happens once, in `commitMasterBrightness`.
+  func setMasterBrightness(_ value: Double) {
+    masterBrightness = value
+    let levels = BrightnessSync.levels(master: value, offsets: syncOffsets)
+    for display in displays {
+      guard let level = levels[display.key] else { continue }
+      display.setBrightness(level)
+    }
+  }
+
+  func commitMasterBrightness() {
+    groupChangeTick += 1
+    presetTask?.cancel()
+    presetTask = Task { [displays] in
+      // Sequential, for the same reason applying a preset is: these share an
+      // I2C bus, and overlapping transactions on it corrupt each other rather
+      // than queueing.
+      for display in displays {
+        guard !Task.isCancelled else { return }
+        await display.commitBrightnessAndWait()
+      }
+    }
+  }
+
   // MARK: - Presets
 
   /// Applies a preset, one display at a time.
@@ -473,6 +532,7 @@ final class AppModel {
     // acknowledgement that arrives at the end of that has stopped being an
     // acknowledgement of the click.
     Haptics.confirm()
+    groupChangeTick += 1
 
     presetTask?.cancel()
     presetTask = Task { [displays] in

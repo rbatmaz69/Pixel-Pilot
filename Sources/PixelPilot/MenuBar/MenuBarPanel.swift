@@ -29,11 +29,21 @@ struct MenuBarPanel: View {
       if model.displays.isEmpty {
         emptyState
       } else {
+        if model.canSyncBrightness {
+          masterRow
+            .entrance(index: 0)
+        }
+
         ForEach(Array(model.displays.enumerated()), id: \.element.id) { index, display in
           // Cards separate themselves; the dividers that used to sit between
           // these groups were doing a job the card edges now do better.
           DisplayControlGroup(display: display)
-            .entrance(index: index)
+            .accentWave(
+              index: index,
+              trigger: model.groupChangeTick,
+              accent: display.accent
+            )
+            .entrance(index: index + (model.canSyncBrightness ? 1 : 0))
         }
       }
 
@@ -74,7 +84,59 @@ struct MenuBarPanel: View {
   }
 
   /// Where the cascade has got to by the time the per-display cards are done.
-  private var trailingIndex: Int { model.displays.count }
+  private var trailingIndex: Int {
+    model.displays.count + (model.canSyncBrightness ? 1 : 0)
+  }
+
+  /// One slider for every display at once.
+  ///
+  /// Only shown with more than one display, because with one it would be a
+  /// second copy of the slider directly below it. The differences between
+  /// displays are captured when the switch is flipped and kept from then on —
+  /// a monitor set 20 % dimmer than the other stays 20 % dimmer, including
+  /// after a trip to the bottom of the range.
+  private var masterRow: some View {
+    VStack(alignment: .leading, spacing: Layout.tight) {
+      HStack(spacing: Layout.tight) {
+        Image(systemName: "square.on.square.dashed")
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(.secondary)
+        Text("All displays")
+          .font(TypeScale.rowTitle)
+        Spacer(minLength: 0)
+        if model.isSyncingBrightness {
+          Text("\(Int((model.masterBrightness * 100).rounded()))%")
+            .font(TypeScale.readout)
+            .foregroundStyle(.secondary)
+            .contentTransition(.numericText(value: model.masterBrightness))
+            .animation(motion.effectFast, value: model.masterBrightness)
+        }
+        Toggle("", isOn: Binding(
+          get: { model.isSyncingBrightness },
+          set: { model.setSyncingBrightness($0) }
+        ))
+        .labelsHidden()
+        .toggleStyle(.morph)
+      }
+
+      if model.isSyncingBrightness {
+        ExpressiveSlider(
+          value: Binding(
+            get: { model.masterBrightness },
+            set: { model.setMasterBrightness($0) }
+          ),
+          accent: .accentColor,
+          icon: "sun.max.fill",
+          onCommit: { _ in model.commitMasterBrightness() }
+        )
+        .transition(.blurReplace.combined(with: .scale(0.97, anchor: .top)))
+      }
+    }
+    .padding(Layout.snug)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .cardSurface(accent: .accentColor)
+    .animation(motion.spatialDefault, value: model.isSyncingBrightness)
+  }
 
   /// Still the warning card rather than a full empty state.
   ///
