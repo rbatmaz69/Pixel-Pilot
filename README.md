@@ -1,10 +1,28 @@
 # Pixel Pilot
 
-Brightness, contrast and volume control for external displays on macOS, over
-DDC/CI. A menu bar app with its own on-screen indicator, built to cost nothing
-while idle.
+Brightness, contrast, colour temperature and volume control for external
+displays on macOS, over DDC/CI. A menu bar app with its own on-screen
+indicator, built to cost nothing while idle.
 
 Requires macOS 26 (Tahoe) on Apple Silicon.
+
+## What it does
+
+- **Brightness, contrast and volume** per display, over DDC/CI, with software
+  gamma dimming as a fallback and for going below the backlight minimum.
+- **Colour temperature** per display, applied through the gamma table. See
+  [Warmth, and what it costs](#warmth-and-what-it-costs).
+- **The keyboard's brightness and volume keys**, intercepted and acted on,
+  with its own indicator — macOS 26 no longer renders third-party values in
+  the system one.
+- **Scroll over the menu bar icon** to change brightness. The icon itself is a
+  gauge showing the current level.
+- **One slider for every display**, keeping the differences between them.
+- **Presets**, applied by hand, by global shortcut, by system appearance, on a
+  schedule, or by which application is in front.
+- **A schedule** following the clock or the sun.
+- **Identify**, putting a number on each screen, plus a map of how they are
+  arranged.
 
 ## Design goals
 
@@ -15,11 +33,17 @@ before a single view existed. `ppctl` still exists for exactly that reason.
 Displays are read once when they connect; after that the app writes but never
 reads. With every surface closed, measured idle cost is 0.0 % CPU.
 
-The accent washes behind the panels do drift, and that is the one exception —
-but only while a panel is actually on screen. The animation lives in the view
-hierarchy, and with the panel shut there is no hierarchy for it to live in, so
-there is nothing to stop and nothing to clean up. A window that has been left
+Two things are allowed to be scheduled, and both are bounded. The accent washes
+behind the panels drift, but only while a panel is actually on screen: the
+animation lives in the view hierarchy, and closing a panel destroys the
+hierarchy, so there is nothing to stop and nothing to clean up. A window left
 open behind other windows stops moving too.
+
+And the day schedule sleeps until its next stop — one task, re-armed after it
+fires, four to six wake-ups a day with nothing at all in between. That is not a
+timer, and it is why the schedule is made of stops rather than a slow fade: a
+schedule easing continuously from one value to the next would be a repeating
+timer wearing a costume.
 
 **Apple's shapes, Material 3 Expressive's movement.** The interface uses Liquid
 Glass, SF Pro, SF Rounded for figures, and a small token layer for spacing,
@@ -31,6 +55,15 @@ springs that must not (colour, opacity).
 
 Reduce Motion removes it all — the stagger collapses to zero, every loop is
 taken out of the hierarchy rather than slowed down, and the HUD stops springing.
+Haptics are deliberately *not* suppressed by it: that setting is about visible
+motion, and taking away the tap as well would leave the people who asked for
+less movement with the least feedback of anyone.
+
+One rule runs through the whole interface: **nothing that contains a slider is
+ever scaled.** A `scaleEffect` changes the coordinate space a drag is mapped
+into, so the handle would land somewhere other than the pointer. Hover lifts,
+scroll transitions and card presses are all built from translation, shadow and
+opacity for that reason.
 
 ## Layout
 
@@ -45,9 +78,21 @@ Packages/PixelPilotCore/   UI-free core, unit tested
   Sources/ppctl/           CLI for verifying against real hardware
 Sources/PixelPilot/        The app
   DesignSystem/            Tokens, motion, morphing shapes, accents, components
-  MenuBar/ OSD/ MainWindow/ Settings/ Input/ Model/
+  AppKit/                  Window ownership; the app's shell is AppKit
+  MenuBar/ OSD/ MainWindow/ Settings/ Onboarding/ Input/ Model/
 project.yml                Xcode project definition (the .xcodeproj is generated)
 ```
+
+The shell is AppKit rather than SwiftUI's `App`. The menu bar item is a
+hand-built `NSStatusItem` and `NSPanel`, because `MenuBarExtra` can neither
+receive a scroll event nor let the icon be drawn — and once it is gone, no
+scene is eagerly instantiated, so `openWindow` and `SettingsLink` have nothing
+to bind to. Every surface inside the shell is still SwiftUI.
+
+The property that arrangement has to keep: closing the menu bar panel drops its
+hosting view, not just the window. The panel's staggered entrance is free
+precisely because the hierarchy is rebuilt on every open, and the ambient drift
+stops because there is nothing left for it to run in.
 
 ## Building
 
@@ -188,6 +233,26 @@ Its speakers and headphone jack can only be driven from its own on-screen menu.
 The menu bar's volume row therefore controls the system output and offers a
 device picker, which is the one thing that helps when audio is going somewhere
 with a fixed level.
+
+## Warmth, and what it costs
+
+Colour temperature goes through the gamma table, even on panels that expose
+VCP 0x0C. Those implement it as the four or five coarse presets their own menu
+offers, and one slider meaning "continuous" on one monitor and "four steps" on
+another is worse than a mechanism that behaves the same everywhere. The probe
+still runs, and the colour card reports what your panel really has.
+
+Two properties of the maths, both tested across the range. No channel ever
+exceeds unity — a component above 1 asks the panel for output it cannot make,
+and the hardware answers by flattening the highlights. And some channel is
+always at full, by normalising to the peak rather than to 255, so warming does
+not double as an unlabelled second brightness control. Warmth and dimming
+compose by multiplication, so the order they are asked for makes no difference.
+
+**Night Shift writes the same table.** There is no public way to ask whether it
+is running — `CBBlueLightClient` is private and is not used here — so the app
+counts how often its own tables are reset in a burst and says what it sees. It
+cannot win that fight, and it does not pretend to.
 
 ## Panels lie
 
