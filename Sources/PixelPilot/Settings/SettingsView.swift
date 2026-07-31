@@ -13,6 +13,8 @@ struct SettingsView: View {
         .tabItem { Label("Presets", systemImage: "square.stack") }
       ScheduleSettings(model: model)
         .tabItem { Label("Schedule", systemImage: "sun.horizon") }
+      AppRuleSettings(model: model)
+        .tabItem { Label("Apps", systemImage: "app.badge") }
       ShortcutSettings(model: model)
         .tabItem { Label("Shortcuts", systemImage: "keyboard") }
     }

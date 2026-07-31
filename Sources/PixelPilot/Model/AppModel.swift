@@ -68,21 +68,25 @@ final class AppModel {
   @ObservationIgnored private let gamma: GammaDimmer
   @ObservationIgnored private let presets: PresetStore
   @ObservationIgnored private let keyBindings: KeyBindingStore
+  @ObservationIgnored private let appRules: AppRuleStore
 
   init(
     discovery: any DisplayDiscovering = SystemDisplayDiscovery(),
     gamma: GammaDimmer = .shared,
     preferences: Preferences = .shared,
     presets: PresetStore = .shared,
-    keyBindings: KeyBindingStore = .shared
+    keyBindings: KeyBindingStore = .shared,
+    appRules: AppRuleStore = .shared
   ) {
     self.discovery = discovery
     self.gamma = gamma
     self.preferences = preferences
     self.presets = presets
     self.keyBindings = keyBindings
+    self.appRules = appRules
     syncPresets()
     syncKeyBindings()
+    syncAppRules()
   }
 
   /// Republishes the preset store. Called after every mutation, and once at
@@ -178,11 +182,22 @@ final class AppModel {
 
     // Coming back from System Settings is the moment a grant becomes real, and
     // it is an event rather than something to poll for.
+    // One observer, two jobs. A second registration for the app rules would be
+    // a second thing to remember to tear down, for an event that is already
+    // being delivered here.
     activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
       forName: NSWorkspace.didActivateApplicationNotification,
       object: nil, queue: .main
-    ) { [weak self] _ in
-      MainActor.assumeIsolated { self?.refreshPermissions() }
+    ) { [weak self] notification in
+      // Read out of the notification here, in the delivering context, and only
+      // the string is carried across — `NSRunningApplication` is not `Sendable`
+      // and the identifier is all this needs.
+      let identifier = (notification.userInfo?[NSWorkspace.applicationUserInfoKey]
+        as? NSRunningApplication)?.bundleIdentifier
+      MainActor.assumeIsolated {
+        self?.refreshPermissions()
+        self?.frontmostAppChanged(to: identifier)
+      }
     }
     refreshPermissions()
 
@@ -465,6 +480,69 @@ final class AppModel {
     }
   }
 
+  // MARK: - App rules
+
+  /// The rules, mirrored out of the store — see `keyBindingList` for why.
+  private(set) var appRuleList: [AppRule] = []
+  var fallbackPresetID: UUID? { appRules.fallbackPresetID }
+
+  /// The last bundle identifier a rule was applied for.
+  ///
+  /// Guards against re-applying on every activation of the same app. Coming
+  /// back from a Finder window or a dialog is an activation too, and putting a
+  /// round of DDC writes behind each of those would make the whole machine feel
+  /// slow for no visible reason.
+  @ObservationIgnored private var lastRuleTarget: String?
+
+  /// Rounds up bursts of app switching. ⌘-Tab held down sends one of these per
+  /// app passed through, and each would otherwise be a preset pushed down the
+  /// I2C bus.
+  @ObservationIgnored private let ruleDebouncer = Debouncer(delay: .milliseconds(200))
+
+  func saveAppRule(_ rule: AppRule) {
+    appRules.save(rule)
+    syncAppRules()
+  }
+
+  func deleteAppRule(id: UUID) {
+    appRules.delete(id: id)
+    syncAppRules()
+  }
+
+  func setFallbackPreset(_ id: UUID?) {
+    appRules.fallbackPresetID = id
+    syncAppRules()
+  }
+
+  private func syncAppRules() {
+    appRuleList = appRules.rules
+  }
+
+  private func frontmostAppChanged(to bundleIdentifier: String?) {
+    guard !appRuleList.isEmpty || fallbackPresetID != nil else { return }
+
+    // Which preset the new frontmost app calls for — its own rule, or the
+    // fallback. Deciding this before the debounce keeps the comparison against
+    // `lastRuleTarget` honest when several apps flash past.
+    let target = bundleIdentifier.flatMap { appRules.rule(forBundleIdentifier: $0)?.presetID }
+      ?? fallbackPresetID
+    guard let target else { return }
+
+    let identity = "\(target)"
+    guard identity != lastRuleTarget else { return }
+
+    Task { [weak self] in
+      await self?.ruleDebouncer.trigger {
+        await MainActor.run {
+          guard let self, let preset = self.presets.preset(id: target) else { return }
+          self.lastRuleTarget = identity
+          self.log.record(.info("Applying '\(preset.name)' for the frontmost app"))
+          self.apply(preset)
+        }
+      }
+    }
+  }
+
   // MARK: - Schedule
 
   @ObservationIgnored private lazy var scheduleRunner = ScheduleRunner { [weak self] stop in
@@ -692,7 +770,12 @@ final class AppModel {
 
   func deletePreset(id: UUID) {
     presets.delete(id: id)
-    hotkeys.pruneMissingPresets(existing: Set(presets.presets.map(\.id)))
+    let existing = Set(presets.presets.map(\.id))
+    hotkeys.pruneMissingPresets(existing: existing)
+    // A rule aimed at a deleted preset is the worst kind of broken: still
+    // listed, still looks right, and never fires.
+    appRules.pruneMissingPresets(existing: existing)
+    syncAppRules()
     registerHotkeys()
     // After `pruneMissingPresets`, because deleting a preset can clear an
     // appearance binding that pointed at it, and the mirror has to show that.
