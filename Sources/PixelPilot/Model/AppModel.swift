@@ -130,6 +130,9 @@ final class AppModel {
       self?.displays.forEach { $0.noteColorSettingsChanged() }
     }
     events.onAppearanceChanged = { [weak self] isDark in
+      // The theme follows the system only when it has been asked to, but the
+      // store needs the fact either way — this is the app's one observer of it.
+      ThemeStore.shared.systemIsDark = isDark
       self?.applyAppearancePreset(isDark: isDark)
     }
     events.start()

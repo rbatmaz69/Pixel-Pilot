@@ -16,21 +16,26 @@ import SwiftUI
 struct PanelCard<Content: View>: View {
   let title: String
   let systemImage: String
-  var accent: Color = .accentColor
+  /// Left unset by everything that is not about one particular display, and
+  /// then it is the theme's — which is what makes a settings tab take the
+  /// chosen colour without every card being told to.
+  var accent: Color?
   @ViewBuilder var content: Content
 
-  @Environment(\.colorScheme) private var colorScheme
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
   @State private var isHovered = false
+
+  private var tone: Color { accent ?? theme.tone }
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
       HStack(spacing: Layout.tight) {
         Image(systemName: systemImage)
           .font(.caption.weight(.semibold))
-          .foregroundStyle(accent.accentText(colorScheme))
+          .foregroundStyle(theme.ink(for: tone))
           .frame(width: 22, height: 22)
-          .background(Circle().fill(accent.accentWash))
+          .background(Circle().fill(tone.accentWash))
         Text(title)
           .font(TypeScale.cardTitle)
         Spacer(minLength: 0)
@@ -40,7 +45,7 @@ struct PanelCard<Content: View>: View {
     }
     .padding(Layout.normal)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .cardSurface(accent: accent, isRaised: isHovered)
+    .cardSurface(accent: tone, isRaised: isHovered)
     // Lift by translation and shadow, never by scale.
     //
     // These cards contain sliders, and a `scaleEffect` changes the coordinate
@@ -68,13 +73,11 @@ struct CardStack<Content: View>: View {
 
   var body: some View {
     ScrollView {
-      // Each `glassEffect` is otherwise its own backdrop pass. The container is
-      // the API for telling the system that these are siblings on one surface,
-      // so they can be sampled together and can blend where they come close.
-      GlassEffectContainer(spacing: Layout.loose) {
-        VStack(alignment: .leading, spacing: Layout.loose) {
-          content
-        }
+      // No `GlassEffectContainer` any more: it exists to let sibling glass
+      // surfaces share one backdrop pass, and since `CardSurface` stopped
+      // drawing glass in windows there is no glass here to group.
+      VStack(alignment: .leading, spacing: Layout.loose) {
+        content
       }
       .padding(Layout.loose)
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -84,6 +87,9 @@ struct CardStack<Content: View>: View {
       // documentation already complains about having to remember.
       .toggleStyle(.morph)
     }
+    // The window's field shows through: a scroll view of its own would paint
+    // the system's background over it.
+    .scrollContentBackground(.hidden)
   }
 }
 
@@ -138,11 +144,21 @@ extension View {
 
 /// The card background.
 ///
-/// Real glass where there is something to refract, a tinted fill where there is
-/// not — see `SurfaceDepth`. Both keep the accent hairline, which is not
-/// decoration: it is how a window showing two monitors stays legible at a
-/// glance rather than after reading the headings, and glass draws an edge of
-/// its own but not one that says *which display*.
+/// **No glass here, and that is the fix for a real bug.** These cards used to
+/// draw `.regular` glass whenever they were in a window. Liquid Glass works by
+/// refracting what is behind it, and behind a card in one of this app's windows
+/// there was a flat window background and nothing else — so it rendered as an
+/// even milky plate and the labels on it, most of them `.secondary`, became
+/// genuinely unreadable. The file already warned that glass over glass goes
+/// milky; glass over *nothing* does the same thing for the same reason.
+///
+/// So a card is now a solid surface from the theme, with the display's accent
+/// washed over it. Glass is kept for the two overlays, which float over the
+/// desktop and do have something to refract.
+///
+/// Both depths keep the accent hairline, which is not decoration: it is how a
+/// window showing two monitors stays legible at a glance rather than after
+/// reading the headings.
 private struct CardSurface: ViewModifier {
   let accent: Color
   let radius: CGFloat
@@ -150,6 +166,7 @@ private struct CardSurface: ViewModifier {
 
   @Environment(\.surfaceDepth) private var depth
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
 
   private var shape: RoundedRectangle {
     RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -174,17 +191,17 @@ private struct CardSurface: ViewModifier {
 
   @ViewBuilder
   private var surface: some View {
-    switch depth {
-    case .onOpaque:
-      // `Glass.tint` takes the accent role directly, so the old two-layer
-      // fill-then-wash sandwich collapses into the one call that was always
-      // trying to describe it.
-      Color.clear.glassEffect(.regular.tint(accent.accentWash), in: shape)
-    case .onGlass:
-      shape
-        .fill(.background.secondary)
-        .overlay { shape.fill(accent.accentWash) }
-    }
+    let fill = depth == .onOpaque
+      ? (isRaised ? theme.surfaceRaised : theme.surface)
+      : theme.onGlassSurface
+
+    shape
+      .fill(fill)
+      // The theme says what the app is; the wash says which display this card
+      // belongs to. Two layers rather than one blended colour, so the accent
+      // stays the same strength whichever theme is underneath it.
+      .overlay { shape.fill(accent.accentWash) }
+      .animation(motion.effectFast, value: isRaised)
   }
 }
 
@@ -287,11 +304,11 @@ struct LabeledReadout<Content: View>: View {
   let title: String
   let value: Double
   var font: Font = TypeScale.readout
-  var accent: Color = .accentColor
+  var accent: Color?
   @ViewBuilder var content: Content
 
   @Environment(\.motion) private var motion
-  @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.theme) private var theme
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.tight) {
@@ -302,7 +319,7 @@ struct LabeledReadout<Content: View>: View {
         Spacer()
         Text("\(Int((value * 100).rounded()))%")
           .font(font)
-          .foregroundStyle(accent.accentText(colorScheme))
+          .foregroundStyle(theme.ink(for: accent ?? theme.tone))
           .contentTransition(.numericText(value: value))
           .animation(motion.effectFast, value: value)
       }
@@ -361,6 +378,67 @@ struct AccentDot: View {
   }
 }
 
+/// The palette, as a row of swatches with one ring that travels.
+///
+/// Written twice before this — once for a display's accent override and once
+/// for the app's theme — with the same `matchedGeometryEffect` and the same
+/// comment explaining why the ring is shared. `SegmentedMorphPicker` already
+/// says where the line is: the third copy is where a pattern becomes a
+/// component.
+///
+/// `selection` is optional because the two callers mean different things by
+/// "nothing": a display can fall back to the colour derived from its identity,
+/// and the theme cannot. `allowsNone` is what separates them — with it off, a
+/// tap on the current swatch does nothing rather than clearing it.
+struct AccentSwatchPicker: View {
+  @Binding var selection: Int?
+  var allowsNone = true
+  var accessibilityLabel: String
+
+  @Environment(\.motion) private var motion
+  @Namespace private var ring
+  @State private var hovered: Int?
+
+  var body: some View {
+    HStack(spacing: Layout.tight) {
+      ForEach(Array(AccentPalette.tones.enumerated()), id: \.offset) { index, tone in
+        swatch(index: index, tone: tone)
+      }
+    }
+    .animation(motion.spatialDefault, value: selection)
+    .animation(motion.spatialFast, value: hovered)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel(accessibilityLabel)
+  }
+
+  private func swatch(index: Int, tone: Color) -> some View {
+    let isSelected = selection == index
+
+    return Circle()
+      .fill(tone.accentFill)
+      .frame(width: 18, height: 18)
+      .overlay {
+        // One ring for the whole row, so choosing a colour makes it travel
+        // there instead of blinking out here and in again over there.
+        if isSelected {
+          Circle()
+            .strokeBorder(.primary, lineWidth: 2)
+            .matchedGeometryEffect(id: "accentRing", in: ring)
+        }
+      }
+      .scaleEffect(hovered == index ? 1.25 : 1)
+      .onHover { hovering in
+        hovered = hovering ? index : (hovered == index ? nil : hovered)
+      }
+      .onTapGesture {
+        guard !isSelected || allowsNone else { return }
+        selection = isSelected ? nil : index
+        Haptics.detent()
+      }
+      .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+  }
+}
+
 // MARK: - Buttons
 
 /// The app's button.
@@ -388,9 +466,10 @@ struct SoftButtonStyle: ButtonStyle {
 
     @Environment(\.motion) private var motion
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.theme) private var theme
     @State private var isHovered = false
 
-    private var tone: Color { accent ?? .accentColor }
+    private var tone: Color { accent ?? theme.tone }
 
     var body: some View {
       configuration.label

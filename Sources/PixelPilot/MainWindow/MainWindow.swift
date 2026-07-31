@@ -49,6 +49,10 @@ struct MainWindow: View {
           .padding(.vertical, 3)
           .tag(display.id)
         }
+        // A `List` paints the system's sidebar material over whatever is behind
+        // it, which here is the theme's field. Hiding it is what keeps the
+        // sidebar the same colour as the rest of the window.
+        .scrollContentBackground(.hidden)
       }
       .navigationSplitViewColumnWidth(min: 200, ideal: 220)
     } detail: {
@@ -99,25 +103,21 @@ private struct DisplayDetail: View {
   /// Bumped whenever something outside this card changed the values in it.
   let groupChangeTick: Int
 
-  @Namespace private var accentNamespace
-  @State private var hoveredAccent: Int?
-
   var body: some View {
     ScrollView {
-      // One backdrop pass for the column rather than one per card — see
-      // `CardStack`, which does the same for the settings tabs.
-      GlassEffectContainer(spacing: Layout.section) {
-        VStack(alignment: .leading, spacing: Layout.section) {
-          card(0) { controls }
-            .accentWave(index: 0, trigger: groupChangeTick, accent: display.accent)
-          if !display.isBuiltin {
-            card(1) { InputAndPowerSection(display: display) }
-          }
-          card(2) { ColorSection(display: display) }
-          card(3) { configuration }
-          card(4) { capabilities }
-          card(5) { diagnostics }
+      // No `GlassEffectContainer`: the cards stopped drawing glass — see
+      // `CardSurface`, and `CardStack`, which lost the same wrapper for the
+      // same reason.
+      VStack(alignment: .leading, spacing: Layout.section) {
+        card(0) { controls }
+          .accentWave(index: 0, trigger: groupChangeTick, accent: display.accent)
+        if !display.isBuiltin {
+          card(1) { InputAndPowerSection(display: display) }
         }
+        card(2) { ColorSection(display: display) }
+        card(3) { configuration }
+        card(4) { capabilities }
+        card(5) { diagnostics }
       }
       .padding(Layout.loose)
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -129,6 +129,7 @@ private struct DisplayDetail: View {
       // the change reads as arriving rather than as a swap.
       .id(display.id)
     }
+    .scrollContentBackground(.hidden)
     .background(alignment: .top) {
       AmbientBackdrop(accent: display.accent, isVisible: controlActive != .inactive)
         .frame(height: 260)
@@ -284,34 +285,17 @@ private struct DisplayDetail: View {
       Spacer()
       // The default is derived from the display's identity, so the same monitor
       // keeps its colour across launches. The override is for when that choice
-      // collides with a wallpaper.
-      ForEach(Array(AccentPalette.tones.enumerated()), id: \.offset) { index, tone in
-        let isSelected = display.settings.accentOverride == index
-        Circle()
-          .fill(tone.accentFill)
-          .frame(width: 18, height: 18)
-          .overlay {
-            // One ring shared across all eight swatches, so picking a new
-            // colour makes it travel there instead of blinking out here and in
-            // again over there.
-            if isSelected {
-              Circle()
-                .strokeBorder(.primary, lineWidth: 2)
-                .matchedGeometryEffect(id: "accentRing", in: accentNamespace)
-            }
-          }
-          .scaleEffect(hoveredAccent == index ? 1.25 : 1)
-          .onHover { hovering in
-            hoveredAccent = hovering ? index : (hoveredAccent == index ? nil : hoveredAccent)
-          }
-          .onTapGesture {
-            display.updateSettings { $0.accentOverride = isSelected ? nil : index }
-          }
-          .help("Use this colour for \(display.name)")
-      }
+      // collides with a wallpaper — and clearing it goes back to the derived
+      // one, which is why this picker allows none and the theme's does not.
+      AccentSwatchPicker(
+        selection: Binding(
+          get: { display.settings.accentOverride },
+          set: { value in display.updateSettings { $0.accentOverride = value } }
+        ),
+        accessibilityLabel: "Accent colour for \(display.name)"
+      )
+      .help("The colour this display is shown in")
     }
-    .animation(motion.spatialDefault, value: display.settings.accentOverride)
-    .animation(motion.spatialFast, value: hoveredAccent)
   }
 
   // Bindings that read from persisted settings and write through the view

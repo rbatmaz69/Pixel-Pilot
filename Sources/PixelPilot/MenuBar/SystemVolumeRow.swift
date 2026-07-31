@@ -11,6 +11,7 @@ struct SystemVolumeRow: View {
   @Bindable var audio: SystemAudioModel
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.tight) {
@@ -32,7 +33,7 @@ struct SystemVolumeRow: View {
             get: { audio.volume },
             set: { audio.setVolume($0) }
           ),
-          accent: .accentColor
+          accent: theme.tone
         )
         .disabled(!audio.isControllable)
 

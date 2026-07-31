@@ -34,9 +34,10 @@ final class IdentifyController {
         IdentifyOverlay(
           number: label?.number ?? index + 1,
           name: label?.name ?? screen.localizedName,
-          accent: label?.accent ?? .accentColor
+          accent: label?.accent ?? ThemeStore.shared.theme.tone
         )
         .withMotionTokens()
+        .withAppTheme(paintsWindow: false)
       )
 
       let made = OverlayPanel.make(content: content)

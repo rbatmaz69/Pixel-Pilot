@@ -22,6 +22,7 @@ struct DayArc: View {
   var onMove: (UUID, Double) -> Void = { _, _ in }
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
   @State private var dragging: UUID?
 
   private static let height: CGFloat = 96
@@ -121,7 +122,7 @@ struct DayArc: View {
   }
 
   private func tint(for stop: ScheduleStop) -> Color {
-    guard let kelvin = stop.kelvin else { return .accentColor }
+    guard let kelvin = stop.kelvin else { return theme.tone }
     let point = ColorTemperature.whitePoint(kelvin: kelvin)
     return Color(red: point.red, green: point.green, blue: point.blue)
   }

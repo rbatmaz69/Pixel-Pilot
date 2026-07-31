@@ -31,6 +31,10 @@ private struct GeneralSettings: View {
 
   @Environment(\.motion) private var motion
 
+  /// The store rather than `\.theme`: this card writes to it, and the resolved
+  /// theme in the environment is derived from it one level further out.
+  private var theme: ThemeStore { .shared }
+
   @State private var global = Preferences.shared.global
   @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
   @State private var launchAtLoginError: String?
@@ -40,11 +44,12 @@ private struct GeneralSettings: View {
 
   var body: some View {
     CardStack {
-      keysCard.entrance(index: 0)
-      permissionsCard.entrance(index: 1)
-      detectionCard.entrance(index: 2)
-      rememberedCard.entrance(index: 3)
-      startupCard.entrance(index: 4)
+      themeCard.entrance(index: 0)
+      keysCard.entrance(index: 1)
+      permissionsCard.entrance(index: 2)
+      detectionCard.entrance(index: 3)
+      rememberedCard.entrance(index: 4)
+      startupCard.entrance(index: 5)
     }
     .animation(motion.spatialDefault, value: model.needsRelaunchForPermissions)
     // Re-check on appearance as well as on activation: opening this window is
@@ -53,6 +58,74 @@ private struct GeneralSettings: View {
     .sheet(isPresented: $isLearningKey) {
       KeyLearningSheet(model: model, isPresented: $isLearningKey)
         .withMotionTokens()
+    }
+  }
+
+  /// The colour the whole application is drawn in.
+  ///
+  /// First card in the first tab, because it is the only setting here that
+  /// changes something the moment it is touched — every open window repaints
+  /// while this card is being looked at, which is the demonstration.
+  private var themeCard: some View {
+    PanelCard(title: "Colour theme", systemImage: "paintpalette") {
+      VStack(alignment: .leading, spacing: Layout.normal) {
+        HStack {
+          VStack(alignment: .leading, spacing: 1) {
+            Text("Accent").font(TypeScale.rowTitle)
+            Text("Sliders, switches and highlights")
+              .font(TypeScale.detail)
+              .foregroundStyle(.secondary)
+          }
+          Spacer(minLength: Layout.snug)
+          AccentSwatchPicker(
+            selection: Binding(
+              get: { theme.toneIndex },
+              // There is always an accent: no derived fallback to return to the
+              // way a display has, so `allowsNone` is off and this can only
+              // ever be handed an index.
+              set: { value in if let value { theme.toneIndex = value } }
+            ),
+            allowsNone: false,
+            accessibilityLabel: "Accent colour"
+          )
+        }
+
+        HStack {
+          VStack(alignment: .leading, spacing: 1) {
+            Text("Background").font(TypeScale.rowTitle)
+            Text(theme.backdropToneIndex == nil
+              ? "Following the accent — pick one to set it apart"
+              : "Windows, menus and cards")
+              .font(TypeScale.detail)
+              .foregroundStyle(.secondary)
+          }
+          Spacer(minLength: Layout.snug)
+          // Allows none, and that is the difference from the row above: with
+          // nothing chosen the field follows the accent, which is what the
+          // whole interface looked like before these could differ. Tapping the
+          // selected swatch again goes back to that.
+          AccentSwatchPicker(
+            selection: Binding(
+              get: { theme.backdropToneIndex },
+              set: { theme.backdropToneIndex = $0 }
+            ),
+            accessibilityLabel: "Background colour"
+          )
+        }
+        .animation(motion.effectDefault, value: theme.backdropToneIndex)
+
+        VStack(alignment: .leading, spacing: Layout.tight) {
+          Text("Depth").font(TypeScale.rowTitle)
+          SegmentedMorphPicker(
+            selection: Binding(get: { theme.mode }, set: { theme.mode = $0 }),
+            options: ThemeMode.allCases.map { ($0, $0.displayName) }
+          )
+        }
+
+        CardFooter("Neither end is grey: light is a pale wash of the background colour and "
+          + "dark is a deep one. Automatic follows the system. Each display also keeps its "
+          + "own accent for telling monitors apart — that one is in the Displays window.")
+      }
     }
   }
 

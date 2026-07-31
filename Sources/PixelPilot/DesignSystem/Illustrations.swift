@@ -25,11 +25,14 @@ import SwiftUI
 /// For "no display selected" — the app is not busy, it is waiting, and the
 /// difference matters. A spinner would claim work is happening.
 struct BreathingMonitor: View {
-  var accent: Color = .accentColor
+  /// Unset means the theme's, the same convention `PanelCard` follows.
+  var accent: Color?
   var size: CGFloat = 76
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
 
+  private var tone: Color { accent ?? theme.tone }
   private var isStill: Bool { motion.isReduced || motion.ambientPeriod <= 0 }
 
   var body: some View {
@@ -55,16 +58,16 @@ struct BreathingMonitor: View {
   private var monitor: some View {
     VStack(spacing: 0) {
       MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-        .fill(accent.accentWash)
+        .fill(tone.accentWash)
         .overlay {
           MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-            .strokeBorder(accent.accentRim, lineWidth: 1.5)
+            .strokeBorder(tone.accentRim, lineWidth: 1.5)
         }
         .overlay {
           // The glow the panel would be putting out. Blurred once, on a static
           // shape, and carried by the group's transform from there.
           Ellipse()
-            .fill(accent.opacity(0.35))
+            .fill(tone.opacity(0.35))
             .frame(width: size * 0.5, height: size * 0.28)
             .blur(radius: 14)
         }
@@ -73,10 +76,10 @@ struct BreathingMonitor: View {
       // Stand and foot, at the widths that read as a monitor rather than as a
       // rectangle with a stick under it.
       Rectangle()
-        .fill(accent.accentRim)
+        .fill(tone.accentRim)
         .frame(width: size * 0.12, height: size * 0.1)
       MorphingRoundedRectangle(cornerRadius: 2)
-        .fill(accent.accentRim)
+        .fill(tone.accentRim)
         .frame(width: size * 0.36, height: 3)
     }
   }
@@ -88,11 +91,13 @@ struct BreathingMonitor: View {
 /// keyboard, and presets it has been given. A radar says looking; an empty box
 /// says broken.
 struct SearchingRadar: View {
-  var accent: Color = .accentColor
+  var accent: Color?
   var size: CGFloat = 72
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
 
+  private var tone: Color { accent ?? theme.tone }
   private var isStill: Bool { motion.isReduced || motion.ambientPeriod <= 0 }
   private static let ringCount = 3
 
@@ -103,9 +108,9 @@ struct SearchingRadar: View {
       }
 
       Circle()
-        .fill(accent.accentFill)
+        .fill(tone.accentFill)
         .frame(width: 9, height: 9)
-        .shadow(color: accent.accentGlow(true), radius: 5)
+        .shadow(color: tone.accentGlow(true), radius: 5)
     }
     .frame(width: size, height: size)
     .accessibilityHidden(true)
@@ -113,7 +118,7 @@ struct SearchingRadar: View {
 
   @ViewBuilder
   private func ring(delayedBy index: Double) -> some View {
-    let shape = Circle().strokeBorder(accent, lineWidth: 1.5).frame(width: size, height: size)
+    let shape = Circle().strokeBorder(tone, lineWidth: 1.5).frame(width: size, height: size)
 
     if isStill {
       // Concentric and stationary: still legible as a radar, with nothing
@@ -152,7 +157,7 @@ struct CharacterfulEmptyState<Illustration: View>: View {
   let message: String
   var actionTitle: String?
   var action: (() -> Void)?
-  var accent: Color = .accentColor
+  var accent: Color?
   @ViewBuilder var illustration: Illustration
 
   var body: some View {

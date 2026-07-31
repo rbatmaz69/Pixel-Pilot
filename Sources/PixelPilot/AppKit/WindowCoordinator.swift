@@ -137,11 +137,14 @@ final class WindowCoordinator: NSObject {
 
     // The one place the environment is set up for a window's contents, so a
     // new window cannot be added without it — the failure mode `Layout`'s
-    // documentation warns about, arranged out of existence.
+    // documentation warns about, arranged out of existence. `withAppTheme()`
+    // also paints the window's field and hands AppKit the matching appearance,
+    // so a window added later is themed by being a window.
     window.contentView = NSHostingView(
       rootView: AnyView(
         content
           .withMotionTokens()
+          .withAppTheme()
           .environment(\.surfaceDepth, .onOpaque)
       )
     )

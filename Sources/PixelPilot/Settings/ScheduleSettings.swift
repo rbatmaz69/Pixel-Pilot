@@ -7,6 +7,7 @@ struct ScheduleSettings: View {
   let model: AppModel
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
 
   @State private var schedule = Preferences.shared.global.schedule
   @State private var selected: UUID?
@@ -150,7 +151,7 @@ struct ScheduleSettings: View {
               get: { schedule.stops[index].brightness ?? 0.7 },
               set: { schedule.stops[index].brightness = $0 }
             ),
-            accent: .accentColor,
+            accent: theme.tone,
             icon: "sun.max.fill",
             onCommit: { _ in save() }
           )
@@ -158,7 +159,7 @@ struct ScheduleSettings: View {
       }
     }
     .padding(Layout.snug)
-    .cardSurface(accent: selected == stop.id ? .accentColor : .secondary, radius: Layout.radiusControl)
+    .cardSurface(accent: selected == stop.id ? theme.tone : .secondary, radius: Layout.radiusControl)
     .contentShape(.rect)
     .onTapGesture { selected = stop.id }
   }

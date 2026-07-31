@@ -19,6 +19,7 @@ import SwiftUI
 /// which is the right amount for it to know.
 struct MenuBarPanel: View {
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
 
   let model: AppModel
   var onOpenDisplays: () -> Void = {}
@@ -72,12 +73,11 @@ struct MenuBarPanel: View {
     // any shorter than they were.
     .frame(width: 320)
     .animation(motion.spatialDefault, value: model.needsAccessibilityPermission)
-    .withMotionTokens()
-    // The one surface that declares this. The panel's own material comes from
-    // the window it lives in, so its cards must not lay a second sheet of glass
-    // over the first — that reads as a flat wash with none of the depth either
-    // layer was drawing for.
-    .environment(\.surfaceDepth, .onGlass)
+    // The motion tokens, the theme and `surfaceDepth` are set by
+    // `MenuBarPanelWindow`, not here. A view cannot read an environment value
+    // its own body installs — `@Environment(\.motion)` above was quietly seeing
+    // the default and ignoring Reduce Motion — so the panel's environment is
+    // set up one level out, the way `WindowCoordinator` does it for windows.
     // Opening the panel is a cheap, natural moment to notice a grant that
     // happened while the app was in the background.
     .onAppear { model.refreshPermissions() }
@@ -125,7 +125,7 @@ struct MenuBarPanel: View {
             get: { model.masterBrightness },
             set: { model.setMasterBrightness($0) }
           ),
-          accent: .accentColor,
+          accent: theme.tone,
           icon: "sun.max.fill",
           onCommit: { _ in model.commitMasterBrightness() }
         )
@@ -134,7 +134,7 @@ struct MenuBarPanel: View {
     }
     .padding(Layout.snug)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .cardSurface(accent: .accentColor)
+    .cardSurface(accent: theme.tone)
     .animation(motion.spatialDefault, value: model.isSyncingBrightness)
   }
 
@@ -243,7 +243,7 @@ struct MenuBarPanel: View {
 /// The controls for one display, as a card in that display's own colour.
 private struct DisplayControlGroup: View {
   @Environment(\.motion) private var motion
-  @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.theme) private var theme
 
   @Bindable var display: DisplayViewModel
 
@@ -310,7 +310,7 @@ private struct DisplayControlGroup: View {
 
       Text("\(Int((display.brightness * 100).rounded()))%")
         .font(TypeScale.readout)
-        .foregroundStyle(display.accent.accentText(colorScheme))
+        .foregroundStyle(theme.ink(for: display.accent))
         .contentTransition(.numericText(value: display.brightness))
         .animation(motion.effectFast, value: display.brightness)
     }

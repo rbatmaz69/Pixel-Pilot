@@ -22,6 +22,9 @@ Requires macOS 26 (Tahoe) on Apple Silicon.
 - **A schedule** following the clock or the sun.
 - **Identify**, putting a number on each screen, plus a map of how they are
   arranged.
+- **A colour theme** for the whole interface — window, menu bar panel, HUD and
+  all — chosen from the same palette the displays use. See
+  [The theme](#the-theme).
 
 ## Design goals
 
@@ -44,9 +47,10 @@ timer, and it is why the schedule is made of stops rather than a slow fade: a
 schedule easing continuously from one value to the next would be a repeating
 timer wearing a costume.
 
-**Apple's shapes, Material 3 Expressive's movement.** The interface uses Liquid
-Glass, SF Pro, SF Rounded for figures, and a small token layer for spacing,
-radii and the roles each display's accent plays. The motion is borrowed from
+**Apple's shapes, Material 3 Expressive's movement.** The interface uses SF Pro,
+SF Rounded for figures, Liquid Glass where there is something behind it to
+refract, and a small token layer for spacing, radii and the roles a colour
+plays. The motion is borrowed from
 Android's design language: spring physics instead of easing, handles that morph
 as you grab them, staggered arrivals rather than everything at once, and a
 strict separation between springs that may overshoot (position, size, shape) and
@@ -57,6 +61,31 @@ taken out of the hierarchy rather than slowed down, and the HUD stops springing.
 Haptics are deliberately *not* suppressed by it: that setting is about visible
 motion, and taking away the tap as well would leave the people who asked for
 less movement with the least feedback of anyone.
+
+### The theme
+
+Two colours, chosen in Settings → General. The **accent** is what a control is
+at full strength — a filled track, a switch that is on, a card's edge. The
+**background** is what the window field, the cards, the menu bar panel, the HUD
+and the identify overlay are made of; leave it unset and it follows the accent,
+which is the whole interface in one colour. They are separate because a colour
+that is right for a 42 pt switch is rarely right for several hundred square
+points of wall behind everything else.
+
+There is no grey and no black-or-white state — "light" is a pale wash of the
+background colour and "dark" is a deep one, and Automatic follows the system.
+Each display keeps its own accent on top of all this, because that is what tells
+two monitors apart.
+
+Surface colours are derived arithmetically from the two tones rather than picked
+by hand, so they can be *checked*: `ThemeTests` holds all 8 × 8 combinations in
+both modes to WCAG contrast ratios — 7∶1 for body text on a card, 4.5∶1 on the
+window field, 4.5∶1 for any accent set as type on any background — and renders a
+real card to confirm the pixels come out as the colour the theme claims. That test exists because of a real bug: cards used to draw
+Liquid Glass in windows, where there is nothing behind them to refract, and it
+rendered as an even milky plate with unreadable labels on it. Glass is now kept
+to the two overlays, which float over the desktop and do have something to
+work with.
 
 One rule runs through the whole interface: **nothing that contains a slider is
 ever scaled.** A `scaleEffect` changes the coordinate space a drag is mapped
@@ -76,7 +105,7 @@ Packages/PixelPilotCore/   UI-free core, unit tested
     System/                Preferences, diagnostics log
   Sources/ppctl/           CLI for verifying against real hardware
 Sources/PixelPilot/        The app
-  DesignSystem/            Tokens, motion, morphing shapes, accents, components
+  DesignSystem/            Tokens, motion, morphing shapes, theme, components
   AppKit/                  Window ownership; the app's shell is AppKit
   MenuBar/ OSD/ MainWindow/ Settings/ Onboarding/ Input/ Model/
 project.yml                Xcode project definition (the .xcodeproj is generated)

@@ -32,7 +32,22 @@ final class MenuBarPanelWindow: NSObject {
 
   /// Builds and shows a panel, anchored under `anchor`.
   func show(anchoredTo anchor: NSStatusBarButton, content: some View) {
-    let hosting = NSHostingView(rootView: AnyView(content))
+    // The panel's counterpart to `WindowCoordinator.makeWindow`: the one place
+    // the environment is set up, so the view inside can read every value rather
+    // than installing them over itself and seeing the defaults.
+    let hosting = NSHostingView(rootView: AnyView(
+      content
+        .withMotionTokens()
+        // The field is painted below, over a vibrancy view — so the theme
+        // supplies the colours and the ink but must not lay a second backdrop
+        // inside the rounded corners.
+        .withAppTheme(paintsWindow: false)
+        // The panel's own material comes from the window it lives in, so its
+        // cards must not lay a second sheet of glass over the first — that
+        // reads as a flat wash with none of the depth either layer was drawing
+        // for.
+        .environment(\.surfaceDepth, .onGlass)
+    ))
     hosting.sizingOptions = [.intrinsicContentSize]
 
     let panel = KeyablePanel(
@@ -46,25 +61,45 @@ final class MenuBarPanelWindow: NSObject {
       defer: false
     )
 
+    let theme = ThemeStore.shared.theme
+
     let background = NSVisualEffectView()
     background.material = .popover
     background.blendingMode = .behindWindow
     background.state = .active
+    // Without this the material resolves against the system's light/dark
+    // setting while everything drawn on top of it follows the theme — which
+    // shows up as a pale popover under dark cards, or the reverse.
+    background.appearance = theme.appearance
     background.wantsLayer = true
     background.layer?.cornerRadius = Layout.radiusPanel
     background.layer?.cornerCurve = .continuous
     background.layer?.masksToBounds = true
 
-    hosting.translatesAutoresizingMaskIntoConstraints = false
-    background.addSubview(hosting)
-    NSLayoutConstraint.activate([
-      hosting.leadingAnchor.constraint(equalTo: background.leadingAnchor),
-      hosting.trailingAnchor.constraint(equalTo: background.trailingAnchor),
-      hosting.topAnchor.constraint(equalTo: background.topAnchor),
-      hosting.bottomAnchor.constraint(equalTo: background.bottomAnchor),
-    ])
+    // The material stays — the desktop blurring through it is real depth, and
+    // this is the one surface in the app that has something behind it worth
+    // sampling. What it does not have is a colour, so the theme's field goes
+    // over it at most of the way to opaque: enough to read as the app's own
+    // colour rather than as a grey system popover, and not so much that the
+    // blur underneath stops showing through at the edges.
+    let tint = NSView()
+    tint.wantsLayer = true
+    tint.layer?.backgroundColor = NSColor(theme.backdropTop)
+      .withAlphaComponent(0.82).cgColor
+
+    for subview in [tint, hosting] {
+      subview.translatesAutoresizingMaskIntoConstraints = false
+      background.addSubview(subview)
+      NSLayoutConstraint.activate([
+        subview.leadingAnchor.constraint(equalTo: background.leadingAnchor),
+        subview.trailingAnchor.constraint(equalTo: background.trailingAnchor),
+        subview.topAnchor.constraint(equalTo: background.topAnchor),
+        subview.bottomAnchor.constraint(equalTo: background.bottomAnchor),
+      ])
+    }
 
     panel.contentView = background
+    panel.appearance = theme.appearance
     panel.isOpaque = false
     panel.backgroundColor = .clear
     panel.hasShadow = true

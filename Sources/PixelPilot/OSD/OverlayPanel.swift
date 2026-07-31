@@ -31,6 +31,11 @@ enum OverlayPanel {
       defer: false
     )
     panel.contentView = hosting
+    // Both overlays are glass over whatever is on screen, and glass resolves
+    // against an appearance. Left to the system's it would be light while the
+    // theme is deep, which is exactly the combination that turns a HUD into a
+    // white slab.
+    panel.appearance = ThemeStore.shared.theme.appearance
     panel.isOpaque = false
     panel.backgroundColor = .clear
     panel.hasShadow = false

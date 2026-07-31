@@ -79,6 +79,13 @@ extension Color {
   /// the foreground fixes all eight at once and keeps them recognisably
   /// themselves.
   func accentText(_ scheme: ColorScheme) -> Color {
-    mix(with: scheme == .dark ? .white : .black, by: 0.3)
+    accentText(isDark: scheme == .dark)
+  }
+
+  /// The same, for callers holding a theme rather than a colour scheme. The
+  /// theme knows which end it is at; asking the environment for it again is a
+  /// second source of the same truth.
+  func accentText(isDark: Bool) -> Color {
+    mix(with: isDark ? .white : .black, by: 0.3)
   }
 }

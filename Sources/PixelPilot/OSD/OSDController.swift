@@ -39,6 +39,7 @@ final class OSDController {
     let content = AnyView(
       OSDView(kind: kind, value: value, accent: accent, displayName: displayName)
         .withMotionTokens()
+        .withAppTheme(paintsWindow: false)
     )
 
     if panel == nil || currentDisplayID != displayID {

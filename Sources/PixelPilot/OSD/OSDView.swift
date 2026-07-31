@@ -44,7 +44,7 @@ struct OSDView: View {
   let displayName: String
 
   @Environment(\.motion) private var motion
-  @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.theme) private var theme
 
   /// Drives the arrival. Flipped in `onAppear`, which fires once per panel —
   /// `OSDController` swaps `rootView` rather than rebuilding the hosting view,
@@ -74,7 +74,7 @@ struct OSDView: View {
       if !isMuted {
         Text("\(Int((value * 100).rounded()))%")
           .font(TypeScale.heroReadout)
-          .foregroundStyle(accent.accentText(colorScheme))
+          .foregroundStyle(theme.ink(for: accent))
           .contentTransition(.numericText(value: value))
           .animation(motion.effectFast, value: value)
       }
@@ -89,7 +89,12 @@ struct OSDView: View {
     .padding(.horizontal, Layout.loose)
     .padding(.vertical, Layout.loose)
     .frame(width: 210)
-    .glassEffect(.regular, in: .rect(cornerRadius: Layout.radiusHero))
+    // Tinted rather than plain glass. This is the surface the app is seen on
+    // most often, and an untinted one is the app's own colour missing from the
+    // only place it appears without being asked for.
+    .glassEffect(
+      .regular.tint(theme.surface.opacity(0.55)), in: .rect(cornerRadius: Layout.radiusHero)
+    )
     // Arrival: a spring in from slightly small and slightly soft. The blur is
     // on the finished glass rather than on anything being animated per frame.
     .scaleEffect(hasArrived ? 1 : 0.90)

@@ -11,6 +11,7 @@ struct IdentifyOverlay: View {
   let accent: Color
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
   @State private var hasArrived = false
 
   var body: some View {
@@ -27,7 +28,13 @@ struct IdentifyOverlay: View {
     }
     .padding(.horizontal, Layout.section * 2)
     .padding(.vertical, Layout.section)
-    .glassEffect(.regular.tint(accent.accentWash), in: .rect(cornerRadius: Layout.radiusHero))
+    // The plate is the app's colour and the numeral is the display's. Tinting
+    // the plate with the accent too would put the same hue at two strengths on
+    // top of each other, and the numeral is the part meant to be read from
+    // across a desk.
+    .glassEffect(
+      .regular.tint(theme.surface.opacity(0.55)), in: .rect(cornerRadius: Layout.radiusHero)
+    )
     // The HUD's arrival, in one line each: scale from slightly small, fade in,
     // and unblur. The blur is what makes it read as materialising rather than
     // as a window appearing.

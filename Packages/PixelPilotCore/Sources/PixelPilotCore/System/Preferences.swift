@@ -107,6 +107,27 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
   }
 }
 
+/// Which end of the theme the interface is drawn at.
+///
+/// Neither end is grey: "light" is a pale wash of the chosen colour and "dark"
+/// is a deep one. The distinction exists because the surrounding system chrome
+/// — menus, the titlebar, scrollbars — resolves against an `NSAppearance`, and
+/// that has to agree with how light the app's own surfaces are.
+public enum ThemeMode: String, Codable, Sendable, CaseIterable {
+  /// Follow the system's light/dark setting.
+  case system
+  case light
+  case dark
+
+  public var displayName: String {
+    switch self {
+    case .system: "Automatic"
+    case .light: "Light"
+    case .dark: "Dark"
+    }
+  }
+}
+
 /// Preferences that are not per-display.
 public struct GlobalSettings: Codable, Sendable, Equatable {
   public var mediaKeysEnabled: Bool = true
@@ -156,6 +177,26 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   /// is here so the app can be told to be quiet on its own.
   public var hapticsEnabled: Bool = true
 
+  /// The interface colour, as an index into the accent palette.
+  ///
+  /// Stored as an index rather than as a colour for the same reason
+  /// `DisplaySettings.accentOverride` is: the palette is curated, and a stored
+  /// hex value would outlive a tone being retuned.
+  public var themeToneIndex: Int = 0
+
+  /// The colour the windows and menus are made of, as an index into the same
+  /// palette.
+  ///
+  /// `nil` means "whatever the accent is", which is both the default and what
+  /// the interface looked like before the two could be chosen apart. Stored as
+  /// an optional rather than defaulting to the accent's index, so following it
+  /// keeps working when the accent is changed later.
+  public var themeBackdropToneIndex: Int?
+
+  /// Whether those colours are drawn pale or deep, and whether the system
+  /// decides.
+  public var themeMode: ThemeMode = .system
+
   public init() {}
 
   /// Decoded by hand, and this is not boilerplate worth deleting.
@@ -182,6 +223,12 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
     fineKeyStep = try container.decodeIfPresent(Double.self, forKey: .fineKeyStep) ?? fallback.fineKeyStep
     launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? fallback.launchAtLogin
     hapticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? fallback.hapticsEnabled
+    themeToneIndex = try container.decodeIfPresent(Int.self, forKey: .themeToneIndex)
+      ?? fallback.themeToneIndex
+    themeBackdropToneIndex = try container.decodeIfPresent(
+      Int.self, forKey: .themeBackdropToneIndex
+    )
+    themeMode = try container.decodeIfPresent(ThemeMode.self, forKey: .themeMode) ?? fallback.themeMode
     // `try?` for the composite, same reasoning as `DisplaySettings.timing`.
     schedule = (try? container.decodeIfPresent(DaySchedule.self, forKey: .schedule)) ?? fallback.schedule
     latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)

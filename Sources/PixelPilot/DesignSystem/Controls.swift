@@ -38,11 +38,12 @@ struct MorphToggleStyle: ToggleStyle {
 
     @Environment(\.motion) private var motion
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.theme) private var theme
     @State private var isHovered = false
     @State private var isPressed = false
     @State private var flip = 0
 
-    private var tone: Color { accent ?? .accentColor }
+    private var tone: Color { accent ?? theme.tone }
 
     // Sized against the slider's track so the two controls sit at the same
     // visual weight in a column that contains both.
@@ -151,12 +152,15 @@ extension ToggleStyle where Self == MorphToggleStyle {
 struct SegmentedMorphPicker<Value: Hashable>: View {
   @Binding var selection: Value
   let options: [(value: Value, title: String)]
-  var accent: Color = .accentColor
+  var accent: Color?
 
   @Environment(\.motion) private var motion
   @Environment(\.isEnabled) private var isEnabled
+  @Environment(\.theme) private var theme
   @Namespace private var highlight
   @State private var hovered: Value?
+
+  private var tone: Color { accent ?? theme.tone }
 
   var body: some View {
     HStack(spacing: 2) {
@@ -186,10 +190,10 @@ struct SegmentedMorphPicker<Value: Hashable>: View {
       .background {
         if isSelected {
           MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-            .fill(accent.accentWash)
+            .fill(tone.accentWash)
             .overlay {
               MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-                .strokeBorder(accent.accentRim, lineWidth: 1)
+                .strokeBorder(tone.accentRim, lineWidth: 1)
             }
             .matchedGeometryEffect(id: "segment", in: highlight)
         }
@@ -221,8 +225,10 @@ struct SegmentedMorphPicker<Value: Hashable>: View {
 /// a second at a time. So the button is styled and the list is left alone.
 struct MorphMenuPicker<Content: View>: View {
   let title: String
-  var accent: Color = .accentColor
+  var accent: Color?
   @ViewBuilder var content: Content
+
+  @Environment(\.theme) private var theme
 
   var body: some View {
     Menu {
@@ -236,7 +242,7 @@ struct MorphMenuPicker<Content: View>: View {
       }
     }
     .menuStyle(.button)
-    .buttonStyle(.soft(accent))
+    .buttonStyle(.soft(accent ?? theme.tone))
     .menuIndicator(.hidden)
     .fixedSize()
   }
@@ -253,11 +259,14 @@ struct MorphMenuPicker<Content: View>: View {
 struct SymbolChipPicker: View {
   @Binding var selection: String
   let symbols: [String]
-  var accent: Color = .accentColor
+  var accent: Color?
   var accessibilityLabel: String
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
   @Namespace private var chip
+
+  private var tone: Color { accent ?? theme.tone }
 
   var body: some View {
     HStack(spacing: Layout.tight) {
@@ -265,14 +274,14 @@ struct SymbolChipPicker: View {
         let isSelected = selection == symbol
         Image(systemName: symbol)
           .font(.callout)
-          .foregroundStyle(isSelected ? AnyShapeStyle(accent) : AnyShapeStyle(.secondary))
+          .foregroundStyle(isSelected ? AnyShapeStyle(tone) : AnyShapeStyle(.secondary))
           .frame(width: 30, height: 28)
           .background {
             // One highlight for the whole row, so it slides to the chip you
             // pick instead of blinking out of one and into another.
             if isSelected {
               MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-                .fill(accent.accentWash)
+                .fill(tone.accentWash)
                 .matchedGeometryEffect(id: "symbolChip", in: chip)
             }
           }

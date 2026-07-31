@@ -15,6 +15,7 @@ struct OnboardingFlow: View {
   let onFinish: () -> Void
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
   @State private var step: Step = .welcome
   @State private var presetName = ""
   @State private var presetSymbol = "sun.max.fill"
@@ -55,7 +56,7 @@ struct OnboardingFlow: View {
     .background {
       // The same drifting wash as the main window, and it stops existing with
       // this window — nothing to tear down.
-      AmbientBackdrop(accent: .accentColor)
+      AmbientBackdrop(accent: theme.tone)
         .frame(height: 300)
         .frame(maxHeight: .infinity, alignment: .top)
     }
@@ -238,6 +239,7 @@ private struct OnboardingProgress: View {
   let current: OnboardingFlow.Step
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
   @Namespace private var marker
 
   private enum Metrics {
@@ -251,7 +253,7 @@ private struct OnboardingProgress: View {
       ForEach(OnboardingFlow.Step.allCases, id: \.rawValue) { step in
         let isPassed = step.rawValue <= current.rawValue
         MorphingRoundedRectangle(cornerRadius: Metrics.height / 2)
-          .fill(isPassed ? AnyShapeStyle(Color.accentColor.accentFill) : AnyShapeStyle(.quaternary))
+          .fill(isPassed ? AnyShapeStyle(theme.tone.accentFill) : AnyShapeStyle(.quaternary))
           .frame(
             width: isPassed ? Metrics.pill : Metrics.dot,
             height: Metrics.height
@@ -259,7 +261,7 @@ private struct OnboardingProgress: View {
           .overlay {
             if step == current {
               MorphingRoundedRectangle(cornerRadius: Metrics.height / 2)
-                .strokeBorder(Color.accentColor, lineWidth: 1.5)
+                .strokeBorder(theme.tone, lineWidth: 1.5)
                 .matchedGeometryEffect(id: "step", in: marker)
             }
           }
