@@ -35,7 +35,7 @@ struct PanelCard<Content: View>: View {
           .font(.caption.weight(.semibold))
           .foregroundStyle(theme.ink(for: tone))
           .frame(width: 22, height: 22)
-          .background(Circle().fill(tone.accentWash))
+          .background(Circle().fill(theme.wash(for: tone)))
         Text(title)
           .font(TypeScale.cardTitle)
         Spacer(minLength: 0)
@@ -140,6 +140,47 @@ extension View {
   ) -> some View {
     modifier(CardSurface(accent: accent, radius: radius, isRaised: isRaised))
   }
+
+  /// The plate the OSD and the identify overlay are drawn on.
+  ///
+  /// One modifier for both because the two had the same three lines in them,
+  /// and because a style that has no material needs a *different modifier*
+  /// rather than a different parameter — `.glassEffect` and `.background` are
+  /// not interchangeable. That branch belongs in one place.
+  func heroSurface() -> some View {
+    modifier(HeroSurface())
+  }
+}
+
+/// The overlay plate, with or without material.
+///
+/// These two surfaces are the exception the card rule is stated against: they
+/// float over the desktop, so there is something behind them worth refracting
+/// and glass earns its keep. Under a style that has no material there is no
+/// such thing to sample, and the plate becomes an opaque one — which is the
+/// same answer cards arrived at, for the same reason.
+///
+/// The rim matters more here than anywhere else in the app. `OverlayPanel`
+/// draws no shadow and its window is clear, so on the flat plate the edge is
+/// the *only* thing between the HUD and a busy wallpaper.
+private struct HeroSurface: ViewModifier {
+  @Environment(\.theme) private var theme
+
+  func body(content: Content) -> some View {
+    if theme.usesMaterial {
+      // Tinted rather than plain glass. This is the surface the app is seen on
+      // most often, and an untinted one is the app's own colour missing from
+      // the only place it appears without being asked for.
+      content.glassEffect(
+        .regular.tint(theme.overlayTint), in: .rect(cornerRadius: Layout.radiusHero)
+      )
+    } else {
+      let shape = RoundedRectangle(cornerRadius: Layout.radiusHero, style: .continuous)
+      content
+        .background { shape.fill(theme.surface) }
+        .overlay { shape.strokeBorder(theme.rim(for: theme.tone), lineWidth: 1) }
+    }
+  }
 }
 
 /// The card background.
@@ -154,7 +195,10 @@ extension View {
 ///
 /// So a card is now a solid surface from the theme, with the display's accent
 /// washed over it. Glass is kept for the two overlays, which float over the
-/// desktop and do have something to refract.
+/// desktop and do have something to refract — and only under the styles that
+/// draw material at all. Flat has none anywhere, and `HeroSurface` gives the
+/// overlays an opaque plate for the same reason cards stopped drawing glass:
+/// material with nothing to sample is not material, it is a milky wash.
 ///
 /// Both depths keep the accent hairline, which is not decoration: it is how a
 /// window showing two monitors stays legible at a glance rather than after
@@ -176,13 +220,13 @@ private struct CardSurface: ViewModifier {
     content
       .background { surface }
       .overlay {
-        shape.strokeBorder(accent.accentRim.opacity(isRaised ? 1.6 : 1), lineWidth: 1)
+        shape.strokeBorder(theme.rim(for: accent).opacity(isRaised ? 1.6 : 1), lineWidth: 1)
       }
       // An effect, so it must not overshoot — a rim that rings reads as a
       // flicker rather than as the card noticing the pointer.
       .animation(motion.effectFast, value: isRaised)
       .shadow(
-        color: accent.accentGlow(isRaised).opacity(0.55),
+        color: theme.glow(for: accent, active: isRaised).opacity(0.55),
         radius: isRaised ? 14 : 0,
         y: isRaised ? 4 : 0
       )
@@ -200,7 +244,7 @@ private struct CardSurface: ViewModifier {
       // The theme says what the app is; the wash says which display this card
       // belongs to. Two layers rather than one blended colour, so the accent
       // stays the same strength whichever theme is underneath it.
-      .overlay { shape.fill(accent.accentWash) }
+      .overlay { shape.fill(theme.wash(for: accent)) }
       .animation(motion.effectFast, value: isRaised)
   }
 }
@@ -340,13 +384,14 @@ struct AccentDot: View {
   var size: CGFloat = 8
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
 
   var body: some View {
     Circle()
-      .fill(accent.accentFill)
+      .fill(theme.fill(for: accent))
       .frame(width: size, height: size)
       .overlay { ring }
-      .shadow(color: accent.accentGlow(isReady), radius: 4)
+      .shadow(color: theme.glow(for: accent, active: isReady), radius: 4)
       .opacity(isReady ? 1 : 0.55)
       .animation(motion.effectDefault, value: isReady)
   }
@@ -396,6 +441,7 @@ struct AccentSwatchPicker: View {
   var accessibilityLabel: String
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
   @Namespace private var ring
   @State private var hovered: Int?
 
@@ -415,7 +461,7 @@ struct AccentSwatchPicker: View {
     let isSelected = selection == index
 
     return Circle()
-      .fill(tone.accentFill)
+      .fill(theme.fill(for: tone))
       .frame(width: 18, height: 18)
       .overlay {
         // One ring for the whole row, so choosing a colour makes it travel
@@ -494,12 +540,12 @@ struct SoftButtonStyle: ButtonStyle {
 
     private var fill: AnyShapeStyle {
       if isProminent {
-        return AnyShapeStyle(tone.accentFill)
+        return AnyShapeStyle(theme.fill(for: tone))
       }
       if configuration.isPressed {
         return AnyShapeStyle(tone.opacity(0.26))
       }
-      return AnyShapeStyle(isHovered ? tone.accentWash : Color.primary.opacity(0.06))
+      return AnyShapeStyle(isHovered ? theme.wash(for: tone) : Color.primary.opacity(0.06))
     }
   }
 }
@@ -548,6 +594,7 @@ private struct AccentWave: ViewModifier {
   let accent: Color
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
 
   @ViewBuilder
   func body(content: Content) -> some View {
@@ -556,7 +603,7 @@ private struct AccentWave: ViewModifier {
     } else {
       content.phaseAnimator([0, 1, 2], trigger: trigger) { view, phase in
         view
-          .shadow(color: accent.accentGlow(phase == 1), radius: phase == 1 ? 18 : 0)
+          .shadow(color: theme.glow(for: accent, active: phase == 1), radius: phase == 1 ? 18 : 0)
           .brightness(phase == 1 ? 0.045 : 0)
       } animation: { phase in
         switch phase {

@@ -42,6 +42,7 @@ struct ExpressiveSlider: View {
   var onCommit: (Double) -> Void = { _ in }
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
   @Environment(\.isEnabled) private var isEnabled
 
   @State private var isDragging = false
@@ -119,7 +120,7 @@ struct ExpressiveSlider: View {
       detentMarks(width: width)
 
       MorphingRoundedRectangle(cornerRadius: metrics.trackHeight / 2)
-        .fill(trackStyle ?? AnyShapeStyle(accent.accentFill))
+        .fill(trackStyle ?? AnyShapeStyle(theme.fill(for: accent)))
         .frame(width: max(metrics.trackHeight, knobX))
 
       if let icon {

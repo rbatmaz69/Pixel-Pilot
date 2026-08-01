@@ -61,7 +61,7 @@ struct OSDView: View {
         bloom
         Image(systemName: kind.symbol(for: value))
           .font(.system(size: 34, weight: .medium))
-          .foregroundStyle(isMuted ? AnyShapeStyle(.secondary) : AnyShapeStyle(accent.accentFill))
+          .foregroundStyle(isMuted ? AnyShapeStyle(.secondary) : AnyShapeStyle(theme.fill(for: accent)))
           // The symbol swaps as the level crosses a threshold; a replace
           // transition makes that read as one icon changing rather than two
           // icons flickering. The bounce is what makes crossing a threshold
@@ -89,12 +89,7 @@ struct OSDView: View {
     .padding(.horizontal, Layout.loose)
     .padding(.vertical, Layout.loose)
     .frame(width: 210)
-    // Tinted rather than plain glass. This is the surface the app is seen on
-    // most often, and an untinted one is the app's own colour missing from the
-    // only place it appears without being asked for.
-    .glassEffect(
-      .regular.tint(theme.surface.opacity(0.55)), in: .rect(cornerRadius: Layout.radiusHero)
-    )
+    .heroSurface()
     // Arrival: a spring in from slightly small and slightly soft. The blur is
     // on the finished glass rather than on anything being animated per frame.
     .scaleEffect(hasArrived ? 1 : 0.90)
@@ -139,9 +134,9 @@ struct OSDView: View {
           .fill(.quaternary)
 
         Capsule(style: .continuous)
-          .fill(isMuted ? AnyShapeStyle(.tertiary) : AnyShapeStyle(accent.accentFill))
+          .fill(isMuted ? AnyShapeStyle(.tertiary) : AnyShapeStyle(theme.fill(for: accent)))
           .frame(width: filled)
-          .shadow(color: accent.accentGlow(!isMuted), radius: 6, y: 1)
+          .shadow(color: theme.glow(for: accent, active: !isMuted), radius: 6, y: 1)
           // A spatial spring: the fill is a thing moving, so a little overshoot
           // is what makes repeated key presses feel responsive instead of
           // mechanical.

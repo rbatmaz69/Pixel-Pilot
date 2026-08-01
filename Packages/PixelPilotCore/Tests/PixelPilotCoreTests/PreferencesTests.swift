@@ -173,6 +173,33 @@ struct PreferencesTests {
     #expect(!GlobalSettings().hasCompletedOnboarding, "but a fresh install does see it")
   }
 
+  /// The newest key, and the one most recently at risk of the bug above.
+  @Test("The theme style survives a round trip")
+  func themeStyleRoundTrips() {
+    let defaults = makeDefaults()
+    let preferences = Preferences(defaults: defaults)
+    preferences.updateGlobal { $0.themeStyle = .vivid }
+
+    #expect(Preferences(defaults: defaults).global.themeStyle == .vivid)
+  }
+
+  /// What a build predating the style wrote. Everything it *did* write has to
+  /// come through, and the style has to land on the look that build had.
+  @Test("A blob written before the style keeps its settings")
+  func themeStyleAbsentKeepsTheRest() {
+    let defaults = makeDefaults()
+    defaults.set(
+      Data(#"{"themeToneIndex":5,"themeMode":"dark","hapticsEnabled":false}"#.utf8),
+      forKey: "global"
+    )
+
+    let restored = Preferences(defaults: defaults).global
+    #expect(restored.themeToneIndex == 5)
+    #expect(restored.themeMode == .dark)
+    #expect(!restored.hapticsEnabled)
+    #expect(restored.themeStyle == .glass, "which is what that build looked like")
+  }
+
   /// The other half of the promise: a blob written by a *newer* build must not
   /// take the settings down with it either.
   @Test("Unknown keys from a newer build are ignored")

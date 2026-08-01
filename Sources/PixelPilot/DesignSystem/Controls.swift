@@ -84,10 +84,10 @@ struct MorphToggleStyle: ToggleStyle {
     private var switchBody: some View {
       ZStack(alignment: .leading) {
         MorphingRoundedRectangle(cornerRadius: Self.trackHeight / 2)
-          .fill(configuration.isOn ? AnyShapeStyle(tone.accentFill) : AnyShapeStyle(.quaternary))
+          .fill(configuration.isOn ? AnyShapeStyle(theme.fill(for: tone)) : AnyShapeStyle(.quaternary))
           .overlay {
             MorphingRoundedRectangle(cornerRadius: Self.trackHeight / 2)
-              .strokeBorder(configuration.isOn ? tone.accentRim : .clear, lineWidth: 1)
+              .strokeBorder(configuration.isOn ? theme.rim(for: tone) : .clear, lineWidth: 1)
           }
           // Colour is an effect and must not overshoot. A hue that rings reads
           // as a flicker rather than as a state change.
@@ -190,10 +190,10 @@ struct SegmentedMorphPicker<Value: Hashable>: View {
       .background {
         if isSelected {
           MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-            .fill(tone.accentWash)
+            .fill(theme.wash(for: tone))
             .overlay {
               MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-                .strokeBorder(tone.accentRim, lineWidth: 1)
+                .strokeBorder(theme.rim(for: tone), lineWidth: 1)
             }
             .matchedGeometryEffect(id: "segment", in: highlight)
         }
@@ -281,7 +281,7 @@ struct SymbolChipPicker: View {
             // pick instead of blinking out of one and into another.
             if isSelected {
               MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-                .fill(tone.accentWash)
+                .fill(theme.wash(for: tone))
                 .matchedGeometryEffect(id: "symbolChip", in: chip)
             }
           }

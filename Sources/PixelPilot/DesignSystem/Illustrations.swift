@@ -58,10 +58,10 @@ struct BreathingMonitor: View {
   private var monitor: some View {
     VStack(spacing: 0) {
       MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-        .fill(tone.accentWash)
+        .fill(theme.wash(for: tone))
         .overlay {
           MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-            .strokeBorder(tone.accentRim, lineWidth: 1.5)
+            .strokeBorder(theme.rim(for: tone), lineWidth: 1.5)
         }
         .overlay {
           // The glow the panel would be putting out. Blurred once, on a static
@@ -76,10 +76,10 @@ struct BreathingMonitor: View {
       // Stand and foot, at the widths that read as a monitor rather than as a
       // rectangle with a stick under it.
       Rectangle()
-        .fill(tone.accentRim)
+        .fill(theme.rim(for: tone))
         .frame(width: size * 0.12, height: size * 0.1)
       MorphingRoundedRectangle(cornerRadius: 2)
-        .fill(tone.accentRim)
+        .fill(theme.rim(for: tone))
         .frame(width: size * 0.36, height: 3)
     }
   }
@@ -108,9 +108,9 @@ struct SearchingRadar: View {
       }
 
       Circle()
-        .fill(tone.accentFill)
+        .fill(theme.fill(for: tone))
         .frame(width: 9, height: 9)
-        .shadow(color: tone.accentGlow(true), radius: 5)
+        .shadow(color: theme.glow(for: tone, active: true), radius: 5)
     }
     .frame(width: size, height: size)
     .accessibilityHidden(true)

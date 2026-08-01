@@ -47,30 +47,16 @@ enum AccentPalette {
 /// as a glow, and each of those wants a different weight. Deriving them from the
 /// one curated tone keeps the palette at eight entries instead of thirty-two,
 /// and means a user's accent override reaches every surface at once.
+///
+/// **Most of those roles no longer live here.** `wash`, `rim`, `glow`, `fill`
+/// and the lift are methods on `AppTheme`, because how loudly an accent speaks
+/// is a property of the chosen style and a `Color` extension cannot see one. A
+/// role left here would keep working, look right under Glass, and quietly
+/// ignore every other style — which is the failure this file was already
+/// written to avoid at the palette level.
+///
+/// What stays is the one role that is not a style decision.
 extension Color {
-  /// The lighter end of a fill gradient. `mix(with:by:)` rather than a second
-  /// hand-tuned palette — eight colours are enough to keep honest.
-  var accentLift: Color { mix(with: .white, by: 0.30) }
-
-  /// Surface tint for cards. Deliberately faint: on Liquid Glass every tint
-  /// adds to whatever is showing through, and a wash tuned against a plain
-  /// background turns muddy over a busy desktop.
-  var accentWash: Color { opacity(0.12) }
-
-  /// Hairline around a tinted surface. Enough to give the card an edge when the
-  /// wash alone disappears against a light wallpaper.
-  var accentRim: Color { opacity(0.30) }
-
-  /// The fill for tracks and progress. Top-lit, the way a physical control
-  /// would be — a flat fill next to a morphing handle looks unfinished.
-  var accentFill: LinearGradient {
-    LinearGradient(colors: [accentLift, self], startPoint: .top, endPoint: .bottom)
-  }
-
-  /// The glow under an active control. Used at zero opacity when inactive, so
-  /// the shadow can be animated rather than inserted.
-  func accentGlow(_ active: Bool) -> Color { opacity(active ? 0.45 : 0) }
-
   /// The accent as type.
   ///
   /// The palette is tuned for fills, and a fill colour is not a text colour:

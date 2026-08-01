@@ -128,6 +128,49 @@ public enum ThemeMode: String, Codable, Sendable, CaseIterable {
   }
 }
 
+/// How much of the chosen colour a surface carries, and what it is made of.
+///
+/// The second axis of the theme, and deliberately orthogonal to the first. The
+/// two tones answer *which* colour the app is; this answers *how much of it you
+/// see*. They are separate because someone who wants a teal app does not
+/// thereby want a quiet one, and the two questions had been welded together by
+/// a handful of blend amounts nobody could reach.
+///
+/// The boundary is worth stating because it is the thing that will be tested by
+/// the next feature: a style governs **colour and material only**. It never
+/// changes a corner radius and never changes a spring. `Layout` stays a set of
+/// plain statics and `Motion` is untouched, so a style can be chosen without
+/// asking whether it also moved the furniture.
+public enum ThemeStyle: String, Codable, Sendable, CaseIterable {
+  /// The look the app shipped with: surfaces mostly drained toward white or
+  /// black, real material where there is something behind it to refract.
+  case glass
+  /// The same eight tones, mixed far less. Every surface carries the colour,
+  /// rims and fills are at strength, and the material stays.
+  case vivid
+  /// No material, no gradients, no drift. The field is one flat colour and a
+  /// card is told apart by its edge rather than by its depth.
+  case flat
+
+  public var displayName: String {
+    switch self {
+    case .glass: "Glass"
+    case .vivid: "Vivid"
+    case .flat: "Flat"
+    }
+  }
+
+  /// One line under the picker, because three words on a segment cannot say
+  /// what changes and the difference is worth a sentence.
+  public var summary: String {
+    switch self {
+    case .glass: "Translucent, soft-edged, the colour kept quiet."
+    case .vivid: "Every surface carries the colour at strength."
+    case .flat: "No material and no gradients — colour and clear edges."
+    }
+  }
+}
+
 /// Preferences that are not per-display.
 public struct GlobalSettings: Codable, Sendable, Equatable {
   public var mediaKeysEnabled: Bool = true
@@ -197,6 +240,13 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   /// decides.
   public var themeMode: ThemeMode = .system
 
+  /// How much of those colours reaches the surface, and out of what.
+  ///
+  /// `.glass` by default, and that is not a taste call: it is what the app
+  /// looked like before there was anything to choose, so an existing
+  /// installation comes through an update unchanged.
+  public var themeStyle: ThemeStyle = .glass
+
   public init() {}
 
   /// Decoded by hand, and this is not boilerplate worth deleting.
@@ -229,6 +279,8 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
       Int.self, forKey: .themeBackdropToneIndex
     )
     themeMode = try container.decodeIfPresent(ThemeMode.self, forKey: .themeMode) ?? fallback.themeMode
+    themeStyle = try container.decodeIfPresent(ThemeStyle.self, forKey: .themeStyle)
+      ?? fallback.themeStyle
     // `try?` for the composite, same reasoning as `DisplaySettings.timing`.
     schedule = (try? container.decodeIfPresent(DaySchedule.self, forKey: .schedule)) ?? fallback.schedule
     latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)

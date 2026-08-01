@@ -75,12 +75,12 @@ struct DayArc: View {
 
     return VStack(spacing: 2) {
       Circle()
-        .fill(tint(for: stop).accentFill)
+        .fill(theme.fill(for: tint(for: stop)))
         .frame(width: isDragging ? 16 : (isSelected ? 14 : 11))
         .overlay {
           Circle().strokeBorder(.background, lineWidth: 2)
         }
-        .shadow(color: tint(for: stop).accentGlow(isSelected || isDragging), radius: 6)
+        .shadow(color: theme.glow(for: tint(for: stop), active: isSelected || isDragging), radius: 6)
     }
     .position(position)
     // The knob's size springs; its position does not, for the same reason the

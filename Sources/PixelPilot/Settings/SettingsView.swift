@@ -114,6 +114,22 @@ private struct GeneralSettings: View {
         }
         .animation(motion.effectDefault, value: theme.backdropToneIndex)
 
+        // Above Depth rather than below it, so the card reads as two questions
+        // rather than four rows: which colour, then how it is drawn. The two
+        // swatch rows answer the first and these two segmented pickers answer
+        // the second.
+        VStack(alignment: .leading, spacing: Layout.tight) {
+          Text("Style").font(TypeScale.rowTitle)
+          SegmentedMorphPicker(
+            selection: Binding(get: { theme.style }, set: { theme.style = $0 }),
+            options: ThemeStyle.allCases.map { ($0, $0.displayName) }
+          )
+          Text(theme.style.summary)
+            .font(TypeScale.detail)
+            .foregroundStyle(.secondary)
+        }
+        .animation(motion.effectDefault, value: theme.style)
+
         VStack(alignment: .leading, spacing: Layout.tight) {
           Text("Depth").font(TypeScale.rowTitle)
           SegmentedMorphPicker(
@@ -122,9 +138,12 @@ private struct GeneralSettings: View {
           )
         }
 
-        CardFooter("Neither end is grey: light is a pale wash of the background colour and "
-          + "dark is a deep one. Automatic follows the system. Each display also keeps its "
-          + "own accent for telling monitors apart — that one is in the Displays window.")
+        CardFooter("Glass keeps the translucent look the app shipped with, Vivid puts far "
+          + "more of the colour into every surface, and Flat drops the material and the "
+          + "gradients for colour and clear edges. Neither end of Depth is grey: light is a "
+          + "pale wash of the background colour and dark is a deep one. Automatic follows "
+          + "the system. Each display also keeps its own accent for telling monitors apart "
+          + "— that one is in the Displays window.")
       }
     }
   }

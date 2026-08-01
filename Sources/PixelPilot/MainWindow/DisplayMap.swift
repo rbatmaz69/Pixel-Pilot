@@ -21,6 +21,7 @@ struct DisplayMap: View {
   let layoutTick: Int
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
   @Namespace private var ring
   @State private var hovered: DisplayViewModel.ID?
 
@@ -45,10 +46,10 @@ struct DisplayMap: View {
     let isHovered = hovered == display.id
 
     return MorphingRoundedRectangle(cornerRadius: 5)
-      .fill(display.accent.accentWash)
+      .fill(theme.wash(for: display.accent))
       .overlay {
         MorphingRoundedRectangle(cornerRadius: 5)
-          .strokeBorder(display.accent.accentRim, lineWidth: 1)
+          .strokeBorder(theme.rim(for: display.accent), lineWidth: 1)
       }
       .overlay {
         if isSelected {

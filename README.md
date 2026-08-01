@@ -24,8 +24,8 @@ Requires macOS 26 (Tahoe) on Apple Silicon.
 - **Identify**, putting a number on each screen, plus a map of how they are
   arranged.
 - **A colour theme** for the whole interface — window, menu bar panel, HUD and
-  all — chosen from the same palette the displays use. See
-  [The theme](#the-theme).
+  all — chosen from the same palette the displays use, in one of three styles:
+  translucent, vivid, or flat. See [The theme](#the-theme).
 
 ## Design goals
 
@@ -40,7 +40,9 @@ Two things are allowed to be scheduled, and both are bounded. The accent washes
 behind the panels drift, but only while a panel is actually on screen: the
 animation lives in the view hierarchy, and closing a panel destroys the
 hierarchy, so there is nothing to stop and nothing to clean up. A window left
-open behind other windows stops moving too.
+open behind other windows stops moving too, and the flat style has no wash at
+all — taken out of the hierarchy rather than faded to nothing, because an
+invisible animation still asks for a frame.
 
 And the day schedule sleeps until its next stop — one task, re-armed after it
 fires, four to six wake-ups a day with nothing at all in between. That is not a
@@ -65,7 +67,23 @@ less movement with the least feedback of anyone.
 
 ### The theme
 
-Two colours, chosen in Settings → General. The **accent** is what a control is
+Two colours and a style, chosen in Settings → General.
+
+**Glass** is the look above: surfaces mostly drained toward white or black, real
+material where there is something behind it to refract. **Vivid** is the same
+eight tones mixed far less — every surface carries the colour, rims and fills
+are at strength, and the material stays. **Flat** has no material, no gradients
+and no drift: one flat field, and a card told apart by its edge rather than by
+its depth.
+
+A style governs **colour and material, and nothing else**. It never changes a
+corner radius and never changes a spring — `Layout` stays a set of plain statics
+and `Motion` is untouched — so choosing one cannot quietly move the furniture.
+That boundary is kept by the type rather than by discipline: the record a style
+is made of holds no `CGFloat` and no `Animation`, so there is nothing in it to
+reach a radius with.
+
+The **accent** is what a control is
 at full strength — a filled track, a switch that is on, a card's edge. The
 **background** is what the window field, the cards, the menu bar panel, the HUD
 and the identify overlay are made of; leave it unset and it follows the accent,
@@ -79,14 +97,32 @@ Each display keeps its own accent on top of all this, because that is what tells
 two monitors apart.
 
 Surface colours are derived arithmetically from the two tones rather than picked
-by hand, so they can be *checked*: `ThemeTests` holds all 8 × 8 combinations in
-both modes to WCAG contrast ratios — 7∶1 for body text on a card, 4.5∶1 on the
-window field, 4.5∶1 for any accent set as type on any background — and renders a
-real card to confirm the pixels come out as the colour the theme claims. That test exists because of a real bug: cards used to draw
-Liquid Glass in windows, where there is nothing behind them to refract, and it
-rendered as an even milky plate with unreadable labels on it. Glass is now kept
-to the two overlays, which float over the desktop and do have something to
-work with.
+by hand, so they can be *checked*: `ThemeTests` holds all 8 × 8 combinations, in
+both modes, in all three styles — 384 themes — to WCAG contrast ratios: 7∶1 for
+body text on a card, 4.5∶1 on the window field, on a card under the pointer and
+on a card in the menu bar panel, and 4.5∶1 for any accent set as type on any
+background. It then renders a real card in each style to confirm the pixels come
+out as the colour the theme claims. That test exists because of a real bug:
+cards used to draw Liquid Glass in windows, where there is nothing behind them
+to refract, and it rendered as an even milky plate with unreadable labels on it.
+Glass is now kept to the two overlays, which float over the desktop and do have
+something to work with — and only under the styles that draw material at all.
+Flat gives those overlays an opaque plate instead, for exactly the same reason
+cards stopped drawing glass.
+
+One number governs how far Vivid can go, and it is the least obvious fact in the
+feature. WCAG's ratio is `(L₁+0.05)/(L₂+0.05)`, so a surface of luminance `L`
+can offer at most `max(1.05/(L+0.05), (L+0.05)/0.05)` — and reaching 7∶1 needs
+`L ≤ 0.10` or `L ≥ 0.30`. **Between those two figures 7∶1 is arithmetically
+unreachable**, whatever colour the text is. Glass never came near that band;
+putting more colour into a surface walks straight toward it. So the amounts a
+style asks for are targets rather than results: each one is walked back toward
+white or black until the surface is out of the band. The palette's tones do not
+all have the same luminance, so Vivid comes out a shade quieter in amber than it
+does in blue. That is what "the same eight tones, mixed less" has to mean once
+the contrast is not negotiable, and it is done by arithmetic rather than by a
+hand-tuned cap per tone — eight numbers nobody would maintain, which would break
+silently the first time a tone was retuned.
 
 One rule runs through the whole interface: **nothing that contains a slider is
 ever scaled.** A `scaleEffect` changes the coordinate space a drag is mapped

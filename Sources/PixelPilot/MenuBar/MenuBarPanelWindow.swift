@@ -63,10 +63,17 @@ final class MenuBarPanelWindow: NSObject {
 
     let theme = ThemeStore.shared.theme
 
+    // The visual effect view stays whatever the style is. It owns the corner
+    // radius, the masking and the anchors for both subviews, so swapping it for
+    // a plain view under a style with no material would mean re-plumbing all of
+    // that to achieve something the tint below already does. Its material is
+    // switched off instead — `.inactive` stops it sampling the desktop at all,
+    // which is a pass saved on a window that opens on every click of the menu
+    // bar icon.
     let background = NSVisualEffectView()
     background.material = .popover
     background.blendingMode = .behindWindow
-    background.state = .active
+    background.state = theme.usesMaterial ? .active : .inactive
     // Without this the material resolves against the system's light/dark
     // setting while everything drawn on top of it follows the theme — which
     // shows up as a pale popover under dark cards, or the reverse.
@@ -76,16 +83,20 @@ final class MenuBarPanelWindow: NSObject {
     background.layer?.cornerCurve = .continuous
     background.layer?.masksToBounds = true
 
-    // The material stays — the desktop blurring through it is real depth, and
-    // this is the one surface in the app that has something behind it worth
-    // sampling. What it does not have is a colour, so the theme's field goes
-    // over it at most of the way to opaque: enough to read as the app's own
-    // colour rather than as a grey system popover, and not so much that the
-    // blur underneath stops showing through at the edges.
+    // Where the material survives, the desktop blurring through it is real
+    // depth, and this is the one surface in the app that has something behind
+    // it worth sampling. What it does not have is a colour, so the theme's
+    // field goes over it at most of the way to opaque: enough to read as the
+    // app's own colour rather than as a grey system popover, and not so much
+    // that the blur underneath stops showing through at the edges.
+    //
+    // How much of "most of the way" is the style's to say, and at 1 the answer
+    // is that nothing of the desktop survives — which is how a flat panel is
+    // had without touching a line of the structure above.
     let tint = NSView()
     tint.wantsLayer = true
     tint.layer?.backgroundColor = NSColor(theme.backdropTop)
-      .withAlphaComponent(0.82).cgColor
+      .withAlphaComponent(theme.panelTintOpacity).cgColor
 
     for subview in [tint, hosting] {
       subview.translatesAutoresizingMaskIntoConstraints = false

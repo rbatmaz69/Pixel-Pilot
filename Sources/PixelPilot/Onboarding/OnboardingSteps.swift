@@ -253,7 +253,7 @@ private struct OnboardingProgress: View {
       ForEach(OnboardingFlow.Step.allCases, id: \.rawValue) { step in
         let isPassed = step.rawValue <= current.rawValue
         MorphingRoundedRectangle(cornerRadius: Metrics.height / 2)
-          .fill(isPassed ? AnyShapeStyle(theme.tone.accentFill) : AnyShapeStyle(.quaternary))
+          .fill(isPassed ? AnyShapeStyle(theme.fill(for: theme.tone)) : AnyShapeStyle(.quaternary))
           .frame(
             width: isPassed ? Metrics.pill : Metrics.dot,
             height: Metrics.height

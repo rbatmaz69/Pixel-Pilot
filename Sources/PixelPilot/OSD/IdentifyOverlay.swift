@@ -18,8 +18,8 @@ struct IdentifyOverlay: View {
     VStack(spacing: Layout.tight) {
       Text("\(number)")
         .font(TypeScale.identityNumeral)
-        .foregroundStyle(accent.accentFill)
-        .shadow(color: accent.accentGlow(true), radius: 24)
+        .foregroundStyle(theme.fill(for: accent))
+        .shadow(color: theme.glow(for: accent, active: true), radius: 24)
 
       Text(name)
         .font(TypeScale.sheetTitle)
@@ -32,9 +32,7 @@ struct IdentifyOverlay: View {
     // the plate with the accent too would put the same hue at two strengths on
     // top of each other, and the numeral is the part meant to be read from
     // across a desk.
-    .glassEffect(
-      .regular.tint(theme.surface.opacity(0.55)), in: .rect(cornerRadius: Layout.radiusHero)
-    )
+    .heroSurface()
     // The HUD's arrival, in one line each: scale from slightly small, fade in,
     // and unblur. The blur is what makes it read as materialising rather than
     // as a window appearing.
