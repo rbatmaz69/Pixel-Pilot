@@ -17,6 +17,13 @@ import SwiftUI
 ///
 /// Nothing here needs tearing down. There is no timer and no task — closing the
 /// panel destroys the hierarchy, and the animation goes with it.
+///
+/// **It sizes itself to its blobs, not to what it is put behind.** All three
+/// call sites therefore say what they want: two ask for a height, and the one
+/// that clips asks for the whole offer first. Clipping this without a frame
+/// clips to a 170 pt square in the middle of the host rather than to the host,
+/// and because the blur carries colour to that edge the result is a hard band
+/// rather than a glow — which is a bug that shipped, not a hypothetical.
 struct AmbientBackdrop: View {
   let accent: Color
   /// How strongly to draw it. `nil` takes the theme's answer, which is what

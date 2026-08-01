@@ -291,8 +291,17 @@ private struct DisplayControlGroup: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     // The wash sits above the card's own tint and below its contents, clipped
     // to the card so the blur cannot bleed onto its neighbours.
+    //
+    // The frame is not decoration and must not be dropped. `AmbientBackdrop`
+    // sizes itself to its blobs, so without it the clip shape is a 170 pt
+    // rounded square floating in the middle of a card 70 pt tall — and since
+    // the blur carries colour all the way to that edge, it renders as a hard
+    // vertical band sticking out of the card top and bottom. Asking for the
+    // full offer first makes the clip the card's own shape, which is what this
+    // line was always meant to say.
     .background {
       AmbientBackdrop(accent: display.accent)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous))
     }
     .cardSurface(accent: display.accent)
