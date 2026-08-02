@@ -18,6 +18,8 @@ struct PresetSettings: View {
   /// enough to be deliberate.
   @State private var previewed: UUID?
   @State private var previewTask: Task<Void, Never>?
+  /// The preset whose name and symbol are being changed.
+  @State private var editing: Preset?
 
   /// A small set rather than a full symbol browser — enough to tell presets
   /// apart in the menu bar at a glance.
@@ -98,14 +100,26 @@ struct PresetSettings: View {
             .disabled(newPresetName.trimmingCharacters(in: .whitespaces).isEmpty)
           }
 
-          CardFooter("Stores the brightness and contrast of every connected display. "
-            + "Input source is left out on purpose — switching inputs needs a confirmation, "
-            + "which a preset cannot ask for.")
+          CardFooter("Stores the brightness, contrast and warmth of every connected "
+            + "display — including warmth that is switched off, so a daytime preset can "
+            + "undo a night one rather than only warm things differently. Input source is "
+            + "left out on purpose: switching inputs needs a confirmation, which a preset "
+            + "cannot ask for. To adjust a preset later, set the displays up and press its "
+            + "update button rather than making a new one.")
         }
       }
       .entrance(index: 1)
 
       appearanceCard.entrance(index: 2)
+    }
+    .sheet(item: $editing) { preset in
+      PresetEditSheet(preset: preset, symbols: symbols) { edited in
+        model.updatePreset(edited)
+        editing = nil
+      } onCancel: {
+        editing = nil
+      }
+      .withMotionTokens()
     }
   }
 
@@ -147,6 +161,24 @@ struct PresetSettings: View {
         HStack(spacing: Layout.tight) {
           Button("Apply") { model.apply(preset) }
             .buttonStyle(.soft)
+
+          // Re-capture rather than edit-the-numbers, for the reason at the top
+          // of this file: the way anyone arrives at a preset is by setting the
+          // displays up until they look right. Adjusting one afterwards works
+          // the same way — put the screens where you want them, then press this.
+          Button {
+            _ = model.recapture(preset)
+          } label: {
+            Image(systemName: "arrow.clockwise")
+          }
+          .buttonStyle(.soft)
+          .help("Update this preset from how the displays are set right now")
+
+          Button { editing = preset } label: {
+            Image(systemName: "pencil")
+          }
+          .buttonStyle(.soft)
+          .help("Rename, or change the symbol")
 
           Button {
             model.deletePreset(id: preset.id)
@@ -209,6 +241,14 @@ struct PresetSettings: View {
             if let contrast = entry.contrast {
               miniTrack(contrast, symbol: "circle.lefthalf.filled")
             }
+            if let color = entry.color {
+              // A track would be wrong here: warmth is not a fraction of
+              // anything, and "off" is a state rather than a zero.
+              miniLabel(
+                color.kelvinValue.map { "\(Int($0.rounded())) K" } ?? "neutral",
+                symbol: "thermometer.sun"
+              )
+            }
             Spacer(minLength: 0)
           }
         }
@@ -232,8 +272,27 @@ struct PresetSettings: View {
     }
   }
 
+  private func miniLabel(_ text: String, symbol: String) -> some View {
+    HStack(spacing: 3) {
+      Image(systemName: symbol)
+        .font(.system(size: 8))
+        .foregroundStyle(.tertiary)
+      Text(text)
+        .font(TypeScale.detail.monospacedDigit())
+        .foregroundStyle(.secondary)
+    }
+  }
+
   /// Names the displays a preset touches, so a preset captured with a monitor
   /// that is currently unplugged is recognisable rather than mysterious.
+  ///
+  /// Counted rather than listed past two, and that is a layout constraint as
+  /// much as a reading one. `listHeight` below assumes every row is exactly
+  /// `rowHeight` tall; a detail line long enough to wrap makes the row taller
+  /// than the arithmetic, and the list quietly clips its last preset. Three
+  /// monitors' worth of names next to four buttons is where that starts. The
+  /// names are a hover away in the preview, which is where they were always
+  /// most useful.
   private func summary(for preset: Preset) -> String {
     let keys = preset.affectedDisplays
     guard !keys.isEmpty else { return "affects nothing" }
@@ -242,6 +301,7 @@ struct PresetSettings: View {
     let names = keys.map { key in
       known[key]?.lastKnownName.isEmpty == false ? known[key]!.lastKnownName : "unknown display"
     }
+    guard names.count <= 2 else { return "\(names.count) displays" }
     return names.sorted().joined(separator: ", ")
   }
 

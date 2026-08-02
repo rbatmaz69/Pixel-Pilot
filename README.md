@@ -24,8 +24,11 @@ Requires macOS 26 (Tahoe) on Apple Silicon.
   level. See [Following](#following-the-built-in-panel).
 - **Scroll over the menu bar icon** to change brightness.
 - **One slider for every display**, keeping the differences between them.
-- **Presets**, applied by hand, by global shortcut, by system appearance, on a
-  schedule, or by which application is in front.
+- **Presets** carrying brightness, contrast and warmth — including warmth
+  switched off, so a daytime preset can undo a night one. Applied by hand, by
+  global shortcut, by system appearance, on a schedule, or by which application
+  is in front. Captured by setting the displays up rather than by typing
+  numbers, and adjusted the same way: set the screens, press update.
 - **A schedule** following the clock or the sun.
 - **Identify**, putting a number on each screen, plus a map of how they are
   arranged.

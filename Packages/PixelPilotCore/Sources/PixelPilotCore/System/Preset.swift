@@ -1,6 +1,38 @@
 import Foundation
 import os
 
+/// What a preset asks of a display's white point.
+///
+/// Three states rather than two, and the third is the one that is easy to leave
+/// out. A `Double?` would give "leave the colour alone" and "set it to N", and
+/// then a preset called "Day" could not undo a preset called "Night" — it would
+/// have no way to say *turn the warmth off* as opposed to *do not touch it*.
+/// The screen would simply stay warm, which is the sort of fault people work
+/// around for months rather than report.
+///
+/// Neutral is not 6500 K. `DisplayViewModel.colorTemperatureKelvin` spells out
+/// why: at neutral there is no table of ours on the display at all, so its own
+/// colour profile does exactly what it was going to do. `ScheduleStop` conflates
+/// the two by treating 6500 as "off" — that is not copied here, and not changed
+/// there, because the stored schedules of existing installations mean it.
+public enum PresetColor: Codable, Sendable, Hashable {
+  /// Take our white point off this display entirely.
+  case neutral
+  case kelvin(Double)
+
+  /// In the shape `DisplayViewModel.setColorTemperature` takes, where `nil`
+  /// means neutral.
+  public var kelvinValue: Double? {
+    if case let .kelvin(value) = self { value } else { nil }
+  }
+
+  /// Builds one from that same shape, so the round trip through a view model is
+  /// written once rather than at each call site.
+  public init(kelvinValue: Double?) {
+    self = kelvinValue.map { Self.kelvin($0) } ?? .neutral
+  }
+}
+
 /// What a preset asks of one display.
 ///
 /// Every field is optional, and that is the design rather than laziness. A
@@ -12,15 +44,30 @@ public struct PresetEntry: Codable, Sendable, Hashable {
   public var contrast: Double?
   /// A VCP 0x60 value. Only ever set from values the display declared.
   public var inputSource: UInt8?
+  /// The white point, or nil to leave the colour untouched.
+  ///
+  /// No hand-written `init(from:)` for this, unlike everything in
+  /// `Preferences`: the synthesised decoder uses `decodeIfPresent` for optional
+  /// properties, so a preset written before this field existed decodes with it
+  /// absent rather than throwing. That distinction is load-bearing —
+  /// `PresetStore.decode` swallows a throw with `try?` and would take *every*
+  /// preset with it — so it is pinned by a test rather than left to memory.
+  public var color: PresetColor?
 
-  public init(brightness: Double? = nil, contrast: Double? = nil, inputSource: UInt8? = nil) {
+  public init(
+    brightness: Double? = nil,
+    contrast: Double? = nil,
+    inputSource: UInt8? = nil,
+    color: PresetColor? = nil
+  ) {
     self.brightness = brightness
     self.contrast = contrast
     self.inputSource = inputSource
+    self.color = color
   }
 
   public var isEmpty: Bool {
-    brightness == nil && contrast == nil && inputSource == nil
+    brightness == nil && contrast == nil && inputSource == nil && color == nil
   }
 }
 
@@ -54,6 +101,25 @@ public struct Preset: Codable, Sendable, Identifiable, Hashable {
   /// Displays this preset actually says something about.
   public var affectedDisplays: [DisplayKey] {
     entries.filter { !$0.value.isEmpty }.map(\.key)
+  }
+
+  /// Re-captures this preset from `fresh`, keeping what `fresh` says nothing
+  /// about.
+  ///
+  /// The whole point of the merge is the display that is not plugged in right
+  /// now. Someone nudging their "Evening" preset at the office must not thereby
+  /// wipe what it says about the monitor at home — and if the entries were
+  /// simply replaced, that is exactly what would happen, silently, to be
+  /// discovered weeks later with no way back.
+  ///
+  /// Identity, name and symbol are untouched, so every hotkey, app rule and
+  /// appearance binding pointing at this preset keeps pointing at it.
+  public func updating(entries fresh: [DisplayKey: PresetEntry]) -> Preset {
+    var updated = self
+    for (key, entry) in fresh {
+      updated.entries[key] = entry
+    }
+    return updated
   }
 }
 

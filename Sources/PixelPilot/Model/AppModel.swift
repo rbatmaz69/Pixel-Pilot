@@ -879,6 +879,14 @@ final class AppModel {
         if let contrast = entry.contrast, display.supportsContrast {
           display.setContrast(contrast)
         }
+        // Colour goes through the gamma table rather than the bus, so it costs
+        // no round trip and needs no place in the sequencing below. `nil` here
+        // is `PresetColor.neutral`, which takes our white point off the display
+        // altogether — that is what makes a "Day" preset able to undo a "Night"
+        // one rather than only being able to warm things differently.
+        if let color = entry.color {
+          display.setColorTemperature(color.kelvinValue)
+        }
         // Input switching is deliberately not applied from presets. It is the
         // one action that can leave the Mac with no picture, and a preset is
         // exactly the wrong place for something that needs a confirmation.
@@ -888,19 +896,51 @@ final class AppModel {
     }
   }
 
-  /// Captures what every display is set to right now.
-  func captureCurrentState(name: String, symbolName: String) -> Preset {
+  /// What every connected display is set to right now.
+  ///
+  /// One source for both capturing and re-capturing. They had no business
+  /// drifting apart — a preset made today and the same preset refreshed
+  /// tomorrow have to mean the same thing.
+  func currentEntries() -> [DisplayKey: PresetEntry] {
     var entries: [DisplayKey: PresetEntry] = [:]
     for display in displays {
       entries[display.key] = PresetEntry(
         brightness: display.brightness,
-        contrast: display.supportsContrast ? display.contrast : nil
+        contrast: display.supportsContrast ? display.contrast : nil,
+        color: PresetColor(kelvinValue: display.colorTemperatureKelvin)
       )
     }
-    let preset = Preset(name: name, symbolName: symbolName, entries: entries)
+    return entries
+  }
+
+  /// Captures what every display is set to right now.
+  func captureCurrentState(name: String, symbolName: String) -> Preset {
+    let preset = Preset(name: name, symbolName: symbolName, entries: currentEntries())
     presets.save(preset)
     syncPresets()
     return preset
+  }
+
+  /// Refreshes an existing preset from the current state, in place.
+  ///
+  /// The alternative people were left with was delete-and-recapture, which
+  /// changes the preset's identity — and takes its hotkey, its app rules and
+  /// its appearance binding with it. Everything about the preset except the
+  /// numbers survives this.
+  func recapture(_ preset: Preset) -> Preset {
+    let updated = preset.updating(entries: currentEntries())
+    presets.save(updated)
+    syncPresets()
+    Haptics.confirm()
+    log.record(.info("Re-captured preset '\(updated.name)'"))
+    return updated
+  }
+
+  /// Saves an edited preset — name and symbol, which are the two things about a
+  /// preset that cannot be captured by setting the displays up.
+  func updatePreset(_ preset: Preset) {
+    presets.save(preset)
+    syncPresets()
   }
 
   func deletePreset(id: UUID) {

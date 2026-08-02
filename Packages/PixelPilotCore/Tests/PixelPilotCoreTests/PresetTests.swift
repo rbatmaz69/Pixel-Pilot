@@ -152,4 +152,99 @@ struct PresetTests {
 
     #expect(store.presets.map(\.name) == ["First (edited)", "Second"])
   }
+
+  // MARK: - Colour
+
+  /// The distinction the whole enum exists for. Collapsing these two would make
+  /// a "Day" preset unable to undo a "Night" one.
+  @Test("Neutral is not 6500 K")
+  func neutralIsNotSixThousandFiveHundred() {
+    #expect(PresetColor.neutral != PresetColor.kelvin(6500))
+    #expect(PresetColor.neutral.kelvinValue == nil)
+    #expect(PresetColor.kelvin(3200).kelvinValue == 3200)
+    // And the trip back through the shape a view model deals in.
+    #expect(PresetColor(kelvinValue: nil) == .neutral)
+    #expect(PresetColor(kelvinValue: 3200) == .kelvin(3200))
+  }
+
+  @Test("Both colour states survive storage")
+  func colorRoundTrips() {
+    let (store, defaults) = makeStore()
+    store.save(Preset(name: "Night", entries: [displayA: PresetEntry(color: .kelvin(3200))]))
+    store.save(Preset(name: "Day", entries: [displayA: PresetEntry(color: .neutral)]))
+
+    let restored = PresetStore(defaults: defaults).presets
+    #expect(restored.first { $0.name == "Night" }?.entries[displayA]?.color == .kelvin(3200))
+    #expect(restored.first { $0.name == "Day" }?.entries[displayA]?.color == .neutral)
+  }
+
+  /// Without this, `entry(for:)` would discard a colour-only entry as empty and
+  /// the preset would apply nothing at all.
+  @Test("An entry carrying only a colour is still an instruction")
+  func colorOnlyEntryIsNotEmpty() {
+    let entry = PresetEntry(color: .neutral)
+    #expect(!entry.isEmpty)
+
+    let preset = Preset(name: "Day", entries: [displayA: entry])
+    #expect(preset.entry(for: displayA) != nil)
+    #expect(preset.affectedDisplays == [displayA])
+  }
+
+  /// `PresetStore.decode` swallows a throw with `try?`, so a decoding failure
+  /// here does not lose one field — it loses every preset the user has.
+  @Test("A preset written before colour existed still decodes, and keeps its values")
+  func oldPresetsDecodeWithoutColour() throws {
+    let stored = """
+    [{"id":"\(UUID().uuidString)","name":"Evening","symbolName":"moon.fill",
+      "entries":{"4485219c2d511fb4":{"brightness":0.3,"contrast":0.5}}}]
+    """
+    let presets = try JSONDecoder().decode([Preset].self, from: Data(stored.utf8))
+
+    #expect(presets.count == 1)
+    let entry = try #require(presets.first?.entries[displayA])
+    #expect(entry.brightness == 0.3)
+    #expect(entry.contrast == 0.5)
+    #expect(entry.color == nil, "absent must mean 'leave the colour alone'")
+  }
+
+  // MARK: - Re-capturing
+
+  /// The reason the merge exists rather than a straight replacement: nudging a
+  /// preset at the office must not wipe what it says about the monitor at home.
+  @Test("Re-capturing leaves displays that are not present alone")
+  func recaptureKeepsAbsentDisplays() {
+    let preset = Preset(
+      name: "Evening",
+      entries: [
+        displayA: PresetEntry(brightness: 0.3),
+        displayB: PresetEntry(brightness: 0.6, color: .kelvin(4500)),
+      ]
+    )
+
+    // Only displayA is plugged in now.
+    let updated = preset.updating(entries: [displayA: PresetEntry(brightness: 0.45)])
+
+    #expect(updated.entries[displayA]?.brightness == 0.45)
+    #expect(updated.entries[displayB]?.brightness == 0.6)
+    #expect(updated.entries[displayB]?.color == .kelvin(4500))
+  }
+
+  @Test("Re-capturing keeps identity, name and symbol so bindings survive")
+  func recaptureKeepsIdentity() {
+    let preset = Preset(name: "Evening", symbolName: "moon.fill")
+    let updated = preset.updating(entries: [displayA: PresetEntry(brightness: 0.4)])
+
+    #expect(updated.id == preset.id)
+    #expect(updated.name == "Evening")
+    #expect(updated.symbolName == "moon.fill")
+  }
+
+  @Test("A display seen for the first time is added by re-capturing")
+  func recaptureAddsNewDisplays() {
+    let preset = Preset(name: "Evening", entries: [displayA: PresetEntry(brightness: 0.3)])
+    let updated = preset.updating(entries: [displayB: PresetEntry(brightness: 0.7)])
+
+    #expect(updated.entries[displayA]?.brightness == 0.3)
+    #expect(updated.entries[displayB]?.brightness == 0.7)
+  }
 }
