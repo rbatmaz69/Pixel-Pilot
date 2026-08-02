@@ -133,6 +133,9 @@ final class AppModel {
       // the app silently fighting something it cannot see.
       self?.displays.forEach { $0.noteColorSettingsChanged() }
     }
+    events.onAccessibilityTrustChanged = { [weak self] in
+      self?.refreshPermissions()
+    }
     events.onAppearanceChanged = { [weak self] isDark in
       // The theme follows the system only when it has been asked to, but the
       // store needs the fact either way — this is the app's one observer of it.

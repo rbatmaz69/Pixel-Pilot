@@ -29,6 +29,9 @@ final class DisplayEvents {
   /// Fires when the system switches between light and dark. Drives preset
   /// automation, which is why that automation costs nothing while idle.
   var onAppearanceChanged: ((_ isDark: Bool) -> Void)?
+  /// Fires when the Accessibility permission list changes — someone ticking or
+  /// unticking a box in System Settings.
+  var onAccessibilityTrustChanged: (() -> Void)?
 
   private var appearanceObservation: NSKeyValueObservation?
 
@@ -57,6 +60,23 @@ final class DisplayEvents {
       object: nil, queue: .main
     ) { [weak self] _ in
       MainActor.assumeIsolated { self?.onColorSettingsChanged?() }
+    })
+
+    // Posted when the Accessibility list is changed in System Settings.
+    //
+    // Without this, noticing a grant depended on the app being activated
+    // afterwards — and this app has no Dock icon, so "switch back to Pixel
+    // Pilot" is not a thing that reliably happens. Someone would tick the box,
+    // look at the settings window still saying the permission was missing, and
+    // reasonably conclude it had not worked.
+    //
+    // Event-driven, so the rule at the top of this file still holds: nothing
+    // here polls, and this costs nothing until somebody opens System Settings.
+    observers.append(DistributedNotificationCenter.default().addObserver(
+      forName: Notification.Name("com.apple.accessibility.api"),
+      object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.accessibilityTrustChanged() }
     })
 
     // Observing the effective appearance rather than the "AppleInterfaceThemeChanged"
@@ -92,6 +112,22 @@ final class DisplayEvents {
 
     let debouncer = reconfiguration
     Task { await debouncer.cancel() }
+  }
+
+  /// Asks twice, and that is not superstition.
+  ///
+  /// The notification is posted when the *list* changes, which is a moment
+  /// before `AXIsProcessTrusted()` starts agreeing: the answer is resolved
+  /// against a TCC database that is still being written. Checking only on
+  /// arrival reads the old value and leaves the warning on screen — which is the
+  /// exact fault this observer was added to fix. So it asks now, for the case
+  /// where the database was already settled, and once more shortly after.
+  private func accessibilityTrustChanged() {
+    onAccessibilityTrustChanged?()
+    Task { [weak self] in
+      try? await Task.sleep(for: .milliseconds(600))
+      self?.onAccessibilityTrustChanged?()
+    }
   }
 
   /// Hands the burst to the trailing-edge debouncer. Nothing stays scheduled
