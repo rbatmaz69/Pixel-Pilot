@@ -289,21 +289,24 @@ private struct DisplayControlGroup: View {
     }
     .padding(Layout.normal)
     .frame(maxWidth: .infinity, alignment: .leading)
-    // The wash sits above the card's own tint and below its contents, clipped
-    // to the card so the blur cannot bleed onto its neighbours.
+    // No ambient wash on this card, and that is a decision rather than an
+    // omission — it used to carry one.
     //
-    // The frame is not decoration and must not be dropped. `AmbientBackdrop`
-    // sizes itself to its blobs, so without it the clip shape is a 170 pt
-    // rounded square floating in the middle of a card 70 pt tall — and since
-    // the blur carries colour all the way to that edge, it renders as a hard
-    // vertical band sticking out of the card top and bottom. Asking for the
-    // full offer first makes the clip the card's own shape, which is what this
-    // line was always meant to say.
-    .background {
-      AmbientBackdrop(accent: display.accent)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous))
-    }
+    // The wash is two blurred blobs of the display's accent, and the larger one
+    // sits 52 pt to the left of centre. On the tall column in the Displays
+    // window that reads as depth behind a lot of content. On a 70 pt card it is
+    // most of the card, so it stopped reading as light and started reading as a
+    // stain under the brightness slider — a shadow nobody could account for,
+    // which is worse than a flat surface.
+    //
+    // `cardSurface` still tints and rims the card in the display's colour, so
+    // the card is no less that display's. It has simply stopped being lit from
+    // one side.
+    //
+    // Worth noting what else went with it: `AmbientBackdrop` is the one thing
+    // in this app that moves on its own, and this was the copy of it that ran
+    // whenever the panel was open — which is the surface opened dozens of times
+    // a day. The Displays window keeps its own.
     .cardSurface(accent: display.accent)
   }
 
