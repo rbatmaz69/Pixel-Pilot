@@ -42,13 +42,47 @@ struct MotionTokens: Sendable, Equatable {
   /// True when the tokens have been flattened for reduced motion.
   let isReduced: Bool
 
+  /// The expressive spring as a `Spring` rather than an `Animation`.
+  ///
+  /// An `Animation` is opaque: the duration and bounce that went into it cannot
+  /// be read back out. That is fine while everything animating is SwiftUI, and
+  /// stops being fine the moment AppKit has to move in step with it — the menu
+  /// bar panel's window frame cannot be handed a SwiftUI `Animation`, so it
+  /// would otherwise need a second set of spring constants meaning the same
+  /// thing. Two such sets drift; someone retunes one and the window and the
+  /// cards inside it stop agreeing.
+  ///
+  /// `Spring` is the same maths in a form both sides can use: SwiftUI takes it
+  /// through `.spring(_:)` below, and AppKit evaluates it per frame with
+  /// `value(target:time:)`. One set of numbers, agreeing by construction.
+  static let expressiveSpring = Spring(duration: 0.52, bounce: 0.40)
+
+  /// The menu bar panel unrolling. Springier than the effect curves and
+  /// noticeably gentler than `expressiveSpring`, which is not timidity.
+  ///
+  /// A bounce that flatters a 40 pt card is a wobble on a 400 pt panel — the
+  /// overshoot is a fraction of the thing that carries it, so the same number
+  /// buys ten times the travel.
+  ///
+  /// The overshoot is where the pop lives, and it is only affordable because
+  /// `PanelPresentation.contentStretch` gives it somewhere to go: the contents
+  /// stretch to meet an over-tall window instead of leaving a band of empty
+  /// tint under the last row. Without that this number has to stay timid.
+  static let unfoldSpring = Spring(duration: 0.40, bounce: 0.34)
+
+  /// The collapse. Deliberately not the spring above played backwards: an
+  /// entrance may overshoot because arriving is the event, but leaving is not
+  /// an event and a panel that bounced on its way out would be asking for
+  /// attention it no longer deserves. Shorter, and with no bounce at all.
+  static let collapseSpring = Spring(duration: 0.28, bounce: 0)
+
   static let standard = MotionTokens(
     spatialFast: .spring(duration: 0.28, bounce: 0.28),
     spatialDefault: .spring(duration: 0.42, bounce: 0.22),
     spatialSlow: .spring(duration: 0.60, bounce: 0.20),
     effectFast: .spring(duration: 0.18, bounce: 0.0),
     effectDefault: .spring(duration: 0.25, bounce: 0.0),
-    expressive: .spring(duration: 0.52, bounce: 0.40),
+    expressive: .spring(expressiveSpring),
     stagger: 0.045,
     ambientPeriod: 9,
     isReduced: false
