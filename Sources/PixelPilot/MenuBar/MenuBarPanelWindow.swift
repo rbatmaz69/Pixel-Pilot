@@ -79,6 +79,20 @@ final class MenuBarPanelWindow: NSObject {
     // shows up as a pale popover under dark cards, or the reverse.
     background.appearance = theme.appearance
     background.wantsLayer = true
+    // Two roundings, because they cut two different things and neither one does
+    // the other's job.
+    //
+    // `maskImage` is what shapes the **material**. A view blending behind the
+    // window does not take its extent from its layer — the blur is done by the
+    // window server against the region this mask describes, and with no mask
+    // that region is the window's square bounds. On a dark desktop nobody sees
+    // it. Over a white window it is a flat pale rectangle with hard edges
+    // standing out past every corner, which is what this looked like.
+    background.maskImage = Self.roundedMask(radius: Layout.radiusPanel)
+    // And the layer radius is what clips the **subviews** — the tint and the
+    // hosting view are ordinary children and the mask above does not touch
+    // them. Dropping this would put square corners of solid colour back inside
+    // a correctly rounded material.
     background.layer?.cornerRadius = Layout.radiusPanel
     background.layer?.cornerCurve = .continuous
     background.layer?.masksToBounds = true
@@ -157,6 +171,29 @@ final class MenuBarPanelWindow: NSObject {
       x = min(max(visible.minX + 8, x), visible.maxX - size.width - 8)
     }
     panel.setFrameOrigin(CGPoint(x: x, y: anchorFrame.minY - size.height - 6))
+    // The panel is built at `.zero` and sized here, so the shape the shadow was
+    // derived from is not the shape on screen. AppKit does not re-derive it on
+    // its own, and the result is a shadow cast by the wrong rectangle — the
+    // same class of fault as the square material above, and just as invisible
+    // until there is something pale behind it.
+    panel.invalidateShadow()
+  }
+
+  /// A rounded rectangle to shape the behind-window blur with.
+  ///
+  /// Stretchable rather than drawn at the panel's size: the cap insets pin the
+  /// four corners and let the middle repeat, so one small image fits a panel of
+  /// any height — and the height here changes with the number of displays.
+  private static func roundedMask(radius: CGFloat) -> NSImage {
+    let edge = radius * 2 + 1
+    let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+      NSColor.black.set()
+      NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+      return true
+    }
+    image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
+    image.resizingMode = .stretch
+    return image
   }
 }
 
