@@ -1043,16 +1043,58 @@ final class AppModel {
     present(.brightness, value: value, on: display)
   }
 
-  /// The display the menu bar or a key press should act on: whichever one holds
-  /// the mouse, falling back to the main display.
-  var focusedDisplay: DisplayViewModel? {
-    let mouseLocation = NSEvent.mouseLocation
-    if let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }),
-       let displayID = screen.displayID,
-       let match = displays.first(where: { $0.displayID == displayID }) {
-      return match
+  // MARK: - Which screen a key press means
+
+  /// The last answer from Accessibility, and when it was given.
+  ///
+  /// Asking is an inter-process round trip and this is read from inside the
+  /// event tap, so it must not happen once per key repeat — a held brightness
+  /// key fires roughly every 30 ms and would otherwise spend thirty round trips
+  /// a second establishing something that has not changed. Deliberate presses
+  /// are far enough apart to ask again, which is what keeps the answer current
+  /// when the focus moves between two windows of the same application: there is
+  /// no notification for that, so a value cached until the next app switch
+  /// would go quietly stale.
+  ///
+  /// The same reasoning, and very nearly the same number, as
+  /// `DisplayViewModel.brightnessResyncQuietPeriod`.
+  @ObservationIgnored private var cachedFocusedWindowDisplay: (id: CGDirectDisplayID?, at: ContinuousClock.Instant)?
+  private static let focusedWindowQuietPeriod: Duration = .milliseconds(400)
+
+  private var focusedWindowDisplayID: CGDirectDisplayID? {
+    if let cached = cachedFocusedWindowDisplay,
+       ContinuousClock.now - cached.at < Self.focusedWindowQuietPeriod {
+      return cached.id
     }
-    return displays.first(where: { !$0.isBuiltin }) ?? displays.first
+    let resolved = FocusedWindowScreen.current()
+    cachedFocusedWindowDisplay = (resolved, .now)
+    return resolved
+  }
+
+  private var pointerDisplayID: CGDirectDisplayID? {
+    let mouseLocation = NSEvent.mouseLocation
+    return NSScreen.screens.first { $0.frame.contains(mouseLocation) }?.displayID
+  }
+
+  /// The display a key press or the menu bar should act on.
+  ///
+  /// Used to be the pointer and nothing else, which on a laptop with a monitor
+  /// plugged in is regularly the wrong screen: the pointer sits wherever it was
+  /// last put down, and that is very often not where the window being typed in
+  /// is. Since the app took over the built-in panel's keys as well, being wrong
+  /// there means dimming a screen nobody was looking at.
+  ///
+  /// The rule itself is in `KeyTargetPolicy`, with the fallbacks written out and
+  /// tested.
+  var focusedDisplay: DisplayViewModel? {
+    let target = KeyTargetPolicy.target(
+      mode: preferences.global.keyTarget,
+      focusedWindow: focusedWindowDisplayID,
+      pointer: pointerDisplayID,
+      connected: displays.map(\.displayID),
+      isBuiltin: { id in displays.first { $0.displayID == id }?.isBuiltin ?? false }
+    )
+    return displays.first { $0.displayID == target }
   }
 }
 

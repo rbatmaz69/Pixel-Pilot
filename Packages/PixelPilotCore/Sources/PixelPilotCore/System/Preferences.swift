@@ -191,6 +191,35 @@ public enum ThemeStyle: String, Codable, Sendable, CaseIterable {
   }
 }
 
+/// Which screen a brightness or volume key is aimed at.
+///
+/// Two defensible answers, and they are not the same question phrased twice.
+/// One says *the screen I am pointing at*, the other *the screen I am working
+/// on*, and they part company constantly: the pointer spends most of its life
+/// parked wherever it was last put down, which is very often not where the
+/// window being typed into is.
+public enum KeyTarget: String, Codable, Sendable, CaseIterable {
+  /// The screen holding the frontmost application's focused window.
+  case focusedWindow
+  /// The screen the pointer is over. What the app did before there was a
+  /// choice, and a deliberate way to aim: point at a monitor, then press.
+  case pointer
+
+  public var displayName: String {
+    switch self {
+    case .focusedWindow: "Where you're working"
+    case .pointer: "Under the pointer"
+    }
+  }
+
+  public var summary: String {
+    switch self {
+    case .focusedWindow: "The screen with the window you're typing in."
+    case .pointer: "The screen the pointer happens to be on."
+    }
+  }
+}
+
 /// Preferences that are not per-display.
 public struct GlobalSettings: Codable, Sendable, Equatable {
   public var mediaKeysEnabled: Bool = true
@@ -205,6 +234,16 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   /// it off and get that back.
   public var hidMediaKeysEnabled: Bool = true
   public var showsOSD: Bool = true
+
+  /// Which screen the keys act on.
+  ///
+  /// Defaults to the focused window rather than the pointer, which is a change
+  /// of behaviour and deliberate: the old answer sent a brightness key to
+  /// whichever screen the mouse had been left on, which on a laptop with an
+  /// external monitor plugged in is regularly the wrong one — and since the app
+  /// took over the built-in panel's keys too, being wrong there means dimming a
+  /// screen nobody was looking at.
+  public var keyTarget: KeyTarget = .focusedWindow
   /// Step size for one press of a brightness or volume key, as a fraction.
   public var keyStep: Double = 1.0 / 16.0
   /// Finer steps while Shift+Option is held, matching macOS convention.
@@ -289,6 +328,8 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
     hidMediaKeysEnabled = try container.decodeIfPresent(Bool.self, forKey: .hidMediaKeysEnabled)
       ?? fallback.hidMediaKeysEnabled
     showsOSD = try container.decodeIfPresent(Bool.self, forKey: .showsOSD) ?? fallback.showsOSD
+    keyTarget = try container.decodeIfPresent(KeyTarget.self, forKey: .keyTarget)
+      ?? fallback.keyTarget
     keyStep = try container.decodeIfPresent(Double.self, forKey: .keyStep) ?? fallback.keyStep
     fineKeyStep = try container.decodeIfPresent(Double.self, forKey: .fineKeyStep) ?? fallback.fineKeyStep
     launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? fallback.launchAtLogin

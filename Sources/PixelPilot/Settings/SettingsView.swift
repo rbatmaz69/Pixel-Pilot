@@ -155,6 +155,19 @@ private struct GeneralSettings: View {
           .onChange(of: global.mediaKeysEnabled) { _, _ in apply() }
 
         VStack(alignment: .leading, spacing: Layout.tight) {
+          Text("Keys act on").font(TypeScale.rowTitle)
+          SegmentedMorphPicker(
+            selection: $global.keyTarget,
+            options: KeyTarget.allCases.map { ($0, $0.displayName) }
+          )
+          .onChange(of: global.keyTarget) { _, _ in apply() }
+          Text(global.keyTarget.summary)
+            .font(TypeScale.detail)
+            .foregroundStyle(.secondary)
+        }
+        .animation(motion.effectDefault, value: global.keyTarget)
+
+        VStack(alignment: .leading, spacing: Layout.tight) {
           Text("Per key press").font(TypeScale.rowTitle)
           SegmentedMorphPicker(
             selection: $global.keyStep,
@@ -181,7 +194,9 @@ private struct GeneralSettings: View {
           + "pressing for finer steps. The trackpad taps only on hardware that can — macOS "
           + "decides that, and its own setting in Trackpad preferences wins over this one. "
           + "An external display can be set to follow the built-in panel in the Displays "
-          + "window, which is how the light in the room reaches it.")
+          + "window, which is how the light in the room reaches it. Aiming at the window "
+          + "you're working in needs the Accessibility permission below — the same one the "
+          + "keys already need — and falls back to the pointer whenever it cannot tell.")
       }
     }
   }
