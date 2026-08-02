@@ -191,12 +191,18 @@ cd Packages/PixelPilotCore && swift build && ./.build/debug/ppctl probe
 which features a panel really implements, and `ppctl audio` explains which audio
 route a display resolves to.
 
-`ppctl watch-brightness` prints every change to the built-in panel's brightness,
-and exists to answer the one question the follow feature rests on: whether the
-ambient light sensor's own adjustments are observable, or only a person's.
-`--poll` asks on a one-second timer instead, as the control group — if the poll
-sees a change the notification did not, the notification is not enough. It needs
-the built-in display awake, so on a laptop the lid has to be open.
+`ppctl watch-brightness` prints every change to the built-in panel's brightness.
+It exists because one question could not be answered by reading code: whether
+`DisplayServicesRegisterForBrightnessChangeNotifications` fires for the ambient
+light sensor's own adjustments, or only for a person pressing a key. `--poll`
+asks on a one-second timer instead, as the control group. It needs the built-in
+display awake, so on a laptop the lid has to be open.
+
+**It fires for both.** Verified on an M4 MacBook Air under macOS 26: covering
+the sensor and waiting produces notifications with no key touched. So following
+is genuinely event-driven, and the five-second timer in
+`BuiltinBrightnessSource` stays what it was built as — the fallback for a
+system where those symbols have gone, not the working path.
 
 **Quit BetterDisplay, MonitorControl or Lunar before testing.** They drive the
 same I2C bus, and concurrent traffic produces failures that look like hardware
@@ -354,9 +360,15 @@ Presets and the schedule still win the moment they are applied, and hold until
 the room next changes. They teach nothing, because a preset is a statement about
 now rather than about the light.
 
-Nothing runs until a display is actually set to follow, and there is no
-on-screen indicator when one moves: a HUD that flashed every time a cloud passed
-the window would be the most irritating thing this app could do.
+Nothing runs until a display is actually set to follow, and nothing polls once
+one does — the private notification turns out to fire for the sensor's own
+adjustments as well as for key presses, which is what makes this cost nothing
+between changes. See `ppctl watch-brightness`, which was written to establish
+exactly that.
+
+There is no on-screen indicator when a following display moves: a HUD that
+flashed every time a cloud passed the window would be the most irritating thing
+this app could do.
 
 ## Warmth, and what it costs
 
