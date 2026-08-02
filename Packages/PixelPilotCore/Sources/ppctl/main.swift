@@ -31,6 +31,10 @@ USAGE
                                       parks the process so recovery can be tested.
   ppctl gamma-check                   Read the display's gamma table back
   ppctl probe-edid [options]          Experimental IOAVServiceCopyEDID dump
+  ppctl watch-brightness [--poll]     Print every native brightness change on the
+                                      built-in panel. Answers whether the ambient
+                                      light sensor is observable; --poll asks on a
+                                      one-second timer instead, as the control.
 
 OPTIONS
   -d, --display <n>   Index from `ppctl list` (default: first DDC-capable one)
@@ -70,6 +74,28 @@ func takeOption(_ names: [String]) -> String? {
 func fail(_ message: String) -> Never {
   FileHandle.standardError.write(Data(("error: " + message + "\n").utf8))
   exit(1)
+}
+
+/// One value shared with a timer handler.
+///
+/// `Mutex` would say this better, but the package's deployment target is lower
+/// than the app's and a tool that measures hardware is the wrong place to raise
+/// it.
+final class Box: @unchecked Sendable {
+  private let lock = NSLock()
+  private var value: Double
+
+  init(_ value: Double) { self.value = value }
+
+  /// Stores `newValue` and reports whether it was actually different, so the
+  /// caller only prints real movement.
+  func exchangeIfChanged(to newValue: Double) -> Bool {
+    lock.withLock {
+      guard abs(value - newValue) > 0.0001 else { return false }
+      value = newValue
+      return true
+    }
+  }
 }
 
 let verbose = takeFlag(["-v", "--verbose"])
@@ -490,6 +516,69 @@ case "gamma-check":
   let peak = Double(red[Int(count) - 1])
   print("\(display.name): \(count) entries, peak \(String(format: "%.4f", peak))")
   print(peak >= 0.999 ? "  identity — no dimming applied" : "  DIMMED to \(Int(peak * 100))%")
+
+case "watch-brightness":
+  // The question this answers cannot be answered by reading code, or by reading
+  // Apple's headers, because there are none: does
+  // `DisplayServicesRegisterForBrightnessChangeNotifications` fire when the
+  // *ambient light sensor* moves the panel, or only when a person does?
+  //
+  // Everything built on top of it — a display following the built-in one —
+  // depends on the answer, so it gets a command of its own before it gets a
+  // toggle in a window. `--poll` asks on a timer instead, as the control group:
+  // if the poll sees a change the callback did not, the callback is not enough.
+  let usePoll = takeFlag(["--poll"])
+
+  let target: DiscoveredDisplay
+  if let index = displayIndexArgument {
+    guard displays.indices.contains(index) else {
+      fail("no display at index \(index); run `ppctl list`")
+    }
+    target = displays[index]
+  } else if let builtin = displays.first(where: \.isBuiltin) {
+    target = builtin
+  } else {
+    fail("no built-in display found; pass -d <index> to watch another one")
+  }
+
+  print("Watching \(target.name) (display \(target.displayID))")
+  print("  native brightness available: \(NativeBrightness.isAvailable)")
+  print("  drivable natively:           \(NativeBrightness.isSupported(target.displayID))")
+  print("  notifications available:     \(NativeBrightness.canObserve)")
+  guard let start = NativeBrightness.get(target.displayID) else {
+    fail("could not read brightness for \(target.name)")
+  }
+  print(String(format: "  starting at:                 %.4f", start))
+  print("")
+  print("Press the brightness keys, then cover the light sensor and wait.")
+  print("Ctrl-C to stop.")
+  print("")
+
+  let began = Date()
+  @Sendable func report(_ source: String, _ value: Double) {
+    print(String(format: "%8.2fs  %@  %.4f  (%3d%%)",
+                 Date().timeIntervalSince(began), source, value, Int((value * 100).rounded())))
+  }
+
+  if usePoll {
+    // One second, and only in this command. Nothing in the app polls at this
+    // rate; this is a measuring instrument, not a design.
+    let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+    timer.schedule(deadline: .now() + 1, repeating: 1)
+    let lastPolled = Box(start)
+    timer.setEventHandler {
+      guard let value = NativeBrightness.get(target.displayID) else { return }
+      guard lastPolled.exchangeIfChanged(to: value) else { return }
+      report("poll  ", value)
+    }
+    timer.resume()
+    dispatchMain()
+  }
+
+  guard NativeBrightness.observe(target.displayID, handler: { report("notify", $0) }) else {
+    fail("could not register for brightness notifications; try --poll")
+  }
+  dispatchMain()
 
 case "-h", "--help", "help":
   print(usage)

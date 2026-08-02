@@ -16,6 +16,12 @@ Requires macOS 26 (Tahoe) on Apple Silicon.
   with its own indicator — macOS 26 no longer renders third-party values in
   the system one. The built-in panel included: while the app runs its keys are
   the app's, which also means macOS stops dimming it for the room.
+- **Following the built-in panel**, so an external display tracks the light in
+  the room. macOS already turns the ambient light sensor into a brightness on
+  the Mac's own screen; reading that is a better signal than any curve this app
+  could keep. The relationship is taught rather than configured — adjust the
+  display by hand while it is following and it remembers that for that light
+  level. See [Following](#following-the-built-in-panel).
 - **Scroll over the menu bar icon** to change brightness.
 - **One slider for every display**, keeping the differences between them.
 - **Presets**, applied by hand, by global shortcut, by system appearance, on a
@@ -182,6 +188,13 @@ cd Packages/PixelPilotCore && swift build && ./.build/debug/ppctl probe
 which features a panel really implements, and `ppctl audio` explains which audio
 route a display resolves to.
 
+`ppctl watch-brightness` prints every change to the built-in panel's brightness,
+and exists to answer the one question the follow feature rests on: whether the
+ambient light sensor's own adjustments are observable, or only a person's.
+`--poll` asks on a one-second timer instead, as the control group — if the poll
+sees a change the notification did not, the notification is not enough. It needs
+the built-in display awake, so on a laptop the lid has to be open.
+
 **Quit BetterDisplay, MonitorControl or Lunar before testing.** They drive the
 same I2C bus, and concurrent traffic produces failures that look like hardware
 faults.
@@ -235,6 +248,16 @@ so in the diagnostics log, instead of failing to launch.
 reachable only from `ppctl probe-edid`. Display identification uses the
 IORegistry's `DisplayAttributes` instead, which is both documented enough and
 more reliable.
+
+`DisplayServicesRegisterForBrightnessChangeNotifications` is what lets a display
+follow the built-in panel without polling for it. Its signature is undocumented,
+so the handler installed on it takes five pointer-sized parameters and **reads
+none of them** — on arm64 those are register slots, and an argument that is never
+read cannot be misread. All the notification is used for is "something changed";
+the value itself comes back through `DisplayServicesGetBrightness`, which the app
+already depends on. If the symbols are missing, `BuiltinBrightnessSource` falls
+back to a five-second timer that runs only while a display is actually following,
+and the Displays window says so.
 
 The system on-screen indicator is not used. macOS 26 reworked the private OSD
 interface and third-party values no longer render there; established apps show
@@ -298,6 +321,39 @@ Its speakers and headphone jack can only be driven from its own on-screen menu.
 The menu bar's volume row therefore controls the system output and offers a
 device picker, which is the one thing that helps when audio is going somewhere
 with a fixed level.
+
+## Following the built-in panel
+
+Taking over the brightness keys costs something, and the settings window has
+always admitted it: while Pixel Pilot runs, macOS stops dimming the built-in
+panel for the room. External displays never had that behaviour to lose — no Mac
+has ever adjusted one to the ambient light.
+
+The signal is the built-in panel, not the sensor. Going after the ambient light
+sensor directly would mean a second private framework and a raw lux figure with
+no mapping to a backlight; macOS already does that conversion, calibrated to the
+machine and to the person's own corrections, and `DisplayServicesGetBrightness`
+reads the answer.
+
+**The mapping is taught, not configured.** An offset is wrong in a way that only
+shows up in a dark room: the two panels share no backlight range, and the bottom
+of the built-in one means "almost no light in here", not "turn the monitor off".
+So `FollowCurve` holds two anchors and a straight line between them, and holds
+rather than extrapolates outside them. Moving a following display's slider is
+not treated as a conflict to correct — it is the only reliable statement of
+intent the app ever gets, made while the person can see both the room and the
+screen, so it becomes an anchor. Dim it once in a dark room and once in a bright
+one and the curve is complete. A minimum separation of a tenth of the range
+keeps the line from going vertical, where a flicker of the sensor would swing
+the monitor end to end.
+
+Presets and the schedule still win the moment they are applied, and hold until
+the room next changes. They teach nothing, because a preset is a statement about
+now rather than about the light.
+
+Nothing runs until a display is actually set to follow, and there is no
+on-screen indicator when one moves: a HUD that flashed every time a cloud passed
+the window would be the most irritating thing this app could do.
 
 ## Warmth, and what it costs
 

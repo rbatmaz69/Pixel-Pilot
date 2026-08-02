@@ -92,6 +92,46 @@ bool PPNativeBrightnessGet(uint32_t displayID, float *value);
 /// Writes brightness as 0.0...1.0. Returns false if unavailable.
 bool PPNativeBrightnessSet(uint32_t displayID, float value);
 
+#pragma mark - Watching native brightness (experimental)
+
+//
+//  `DisplayServicesRegisterForBrightnessChangeNotifications` is the only way to
+//  learn that the built-in panel moved without asking on a timer — which is what
+//  lets a display follow it at no idle cost. Its signature is undocumented and
+//  guessed, so this is built to be wrong safely:
+//
+//  * The handler we install declares five pointer-sized parameters and reads
+//    **none** of them. On arm64 those are register slots; extra ones we ignore
+//    cost nothing, and there is no argument we could misread. All the
+//    notification is used for is "something changed".
+//
+//  * The new value is then read back through `DisplayServicesGetBrightness`,
+//    which is a symbol this file already relies on. So no guessed struct, no
+//    guessed dictionary key, and nothing that a changed signature can corrupt.
+//
+//  Same posture as everywhere else here: if the symbols are missing, this
+//  reports false and the caller polls instead.
+//
+
+/// Called after a watched display's brightness changed. **Arrives on an
+/// arbitrary thread** — hop before touching anything.
+typedef void (*PPNativeBrightnessObserver)(uint32_t displayID, float value);
+
+/// True if the notification symbols resolved, i.e. whether watching is possible
+/// at all. False means the caller has to poll.
+bool PPNativeBrightnessCanObserve(void);
+
+/// Starts watching one display. `observer` is global rather than per display —
+/// it is handed the display ID, and installing two different ones would be a
+/// distinction no caller here needs.
+///
+/// Returns false if the symbols are missing, the table is full, or the
+/// registration was refused.
+bool PPNativeBrightnessObserve(uint32_t displayID, PPNativeBrightnessObserver observer);
+
+/// Stops watching one display. Safe for a display that was never watched.
+void PPNativeBrightnessStopObserving(uint32_t displayID);
+
 CF_ASSUME_NONNULL_END
 
 #endif /* CDDCPRIVATE_H */

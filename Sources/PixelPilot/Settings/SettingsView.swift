@@ -179,7 +179,9 @@ private struct GeneralSettings: View {
           + "That trade is the point: one indicator and one step size on every screen. "
           + "Turning this off hands every key straight back. Hold Shift and Option while "
           + "pressing for finer steps. The trackpad taps only on hardware that can — macOS "
-          + "decides that, and its own setting in Trackpad preferences wins over this one.")
+          + "decides that, and its own setting in Trackpad preferences wins over this one. "
+          + "An external display can be set to follow the built-in panel in the Displays "
+          + "window, which is how the light in the room reaches it.")
       }
     }
   }

@@ -43,6 +43,17 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
   /// Whether the brightness keys act on this display.
   public var respondsToMediaKeys: Bool = true
 
+  /// Whether this display tracks the built-in panel's brightness.
+  ///
+  /// Off by default, and for the same reason the schedule is: an app that
+  /// started moving the brightness on its own without being asked would be a
+  /// fault. Never meaningful for the built-in panel itself.
+  public var followsBuiltinBrightness: Bool = false
+
+  /// The relationship it tracks by. Taught rather than configured — see
+  /// `FollowCurve`.
+  public var followCurve: FollowCurve = .identity
+
   /// Manual override of the derived accent colour, as an index into the palette.
   public var accentOverride: Int?
 
@@ -89,6 +100,15 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
       ?? fallback.extraDimmingEnabled
     respondsToMediaKeys = try container.decodeIfPresent(Bool.self, forKey: .respondsToMediaKeys)
       ?? fallback.respondsToMediaKeys
+    followsBuiltinBrightness = try container.decodeIfPresent(
+      Bool.self, forKey: .followsBuiltinBrightness
+    ) ?? fallback.followsBuiltinBrightness
+    // `FollowCurve` degrades key by key on its own, so `decodeIfPresent` is
+    // enough here — but it is still wrapped, because a curve written by a build
+    // whose anchors had a different shape would otherwise take this display's
+    // whole configuration with it.
+    followCurve = (try? container.decodeIfPresent(FollowCurve.self, forKey: .followCurve))
+      ?? fallback.followCurve
     accentOverride = try container.decodeIfPresent(Int.self, forKey: .accentOverride)
     capabilityString = try container.decodeIfPresent(String.self, forKey: .capabilityString)
     colorTemperatureKelvin = try container.decodeIfPresent(Double.self, forKey: .colorTemperatureKelvin)

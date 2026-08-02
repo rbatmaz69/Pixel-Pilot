@@ -266,7 +266,12 @@ final class DisplayViewModel: Identifiable {
   }
 
   /// End of a drag — let the queue drain so the final value is definitely out.
+  ///
+  /// Also the end of a deliberate adjustment, which is why the lesson is taken
+  /// here rather than in `setBrightness`: the values passing through a drag are
+  /// on the way to somewhere, and only the one it stops at was chosen.
   func commitBrightness() {
+    scheduleFollowLesson()
     Task { await brightnessController.settle() }
   }
 
@@ -275,6 +280,68 @@ final class DisplayViewModel: Identifiable {
   func commitBrightnessAndWait() async {
     await brightnessController.settle()
     await queue?.flush()
+  }
+
+  // MARK: - Following the built-in panel
+
+  /// Whether this display tracks the built-in panel — which macOS is already
+  /// adjusting to the light in the room.
+  var followsBuiltinBrightness: Bool { settings.followsBuiltinBrightness }
+
+  /// The relationship it tracks by. Read by the settings card so it can say
+  /// what the mapping currently is rather than only that there is one.
+  var followCurve: FollowCurve { settings.followCurve }
+
+  /// Where the source panel is right now.
+  ///
+  /// Injected by `AppModel` rather than reached for, because the source is one
+  /// object shared by every follower and a view model has no business knowing
+  /// how it is watched — only what it currently says.
+  @ObservationIgnored var sourceBrightness: (@MainActor () -> Double?)?
+
+  /// Switches following on or off, keeping whatever has been taught.
+  ///
+  /// Deliberately *not* a reset. Turning this off to check something and back on
+  /// again is a normal thing to do, and throwing away a relationship that took
+  /// two deliberate adjustments to establish would make it one nobody risks
+  /// switching off. Retraining is a slider move away.
+  func setFollowsBuiltinBrightness(_ isOn: Bool) {
+    updateSettings { $0.followsBuiltinBrightness = isOn }
+  }
+
+  /// Moves to wherever the curve says this source value belongs.
+  ///
+  /// Teaches nothing, on purpose: this *is* the curve talking, and a curve that
+  /// learned from its own output would walk away from where it was put.
+  func applyFollowedBrightness(forSource source: Double) {
+    setBrightness(followCurve.target(forSource: source))
+  }
+
+  /// Takes the current pair — where the source is, where this display was just
+  /// put — as a lesson.
+  ///
+  /// Trailing, because the callers are a key held down and a slider being
+  /// dragged. Every intermediate value is a value on the way somewhere, and
+  /// writing a lesson for each of them would spend a preferences encode per key
+  /// repeat to record positions nobody chose.
+  @ObservationIgnored private var lessonTask: Task<Void, Never>?
+
+  private func scheduleFollowLesson() {
+    guard settings.followsBuiltinBrightness else { return }
+    lessonTask?.cancel()
+    lessonTask = Task { [weak self] in
+      try? await Task.sleep(for: .milliseconds(400))
+      guard !Task.isCancelled, let self else { return }
+      guard let source = self.sourceBrightness?() else { return }
+      // `brightness` read here rather than captured: the point of waiting is to
+      // record where it came to rest.
+      let target = self.brightness
+      self.updateSettings { $0.followCurve.learn(source: source, target: target) }
+      self.log.record(.info(
+        "\(self.name): following \(Int((source * 100).rounded()))% "
+          + "→ \(Int((target * 100).rounded()))%"
+      ))
+    }
   }
 
   // MARK: - Colour temperature
@@ -506,6 +573,10 @@ final class DisplayViewModel: Identifiable {
     let target = min(1, max(0, resyncNativeBrightness() + step))
     brightness = target
     lastBrightnessWrite = .now
+    // Every caller of this — the keys, a hotkey, the scroll wheel — is a person
+    // deciding. Presets and the schedule go through `setBrightness` instead, and
+    // deliberately teach nothing.
+    scheduleFollowLesson()
     Task { await brightnessController.setBrightness(target) }
     return target
   }

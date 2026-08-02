@@ -57,7 +57,8 @@ struct MainWindow: View {
       .navigationSplitViewColumnWidth(min: 200, ideal: 220)
     } detail: {
       if let display = model.displays.first(where: { $0.id == selection }) {
-        DisplayDetail(display: display, log: model.log, groupChangeTick: model.groupChangeTick)
+        DisplayDetail(model: model, display: display, log: model.log,
+                      groupChangeTick: model.groupChangeTick)
       } else if model.displays.isEmpty {
         // Two empty states, not one. "Nothing is plugged in" and "nothing is
         // selected" are different problems with different next steps, and
@@ -98,6 +99,7 @@ private struct DisplayDetail: View {
   /// drifting away behind three other windows is pure cost.
   @Environment(\.controlActiveState) private var controlActive
 
+  let model: AppModel
   @Bindable var display: DisplayViewModel
   let log: DiagnosticsLog
   /// Bumped whenever something outside this card changed the values in it.
@@ -239,6 +241,12 @@ private struct DisplayDetail: View {
 
         Toggle("Brightness keys act on this display", isOn: mediaKeysBinding)
 
+        if !display.isBuiltin {
+          Divider()
+          following
+          Divider()
+        }
+
         VStack(alignment: .leading, spacing: Layout.tight) {
           Text("Timing").font(TypeScale.rowTitle)
           SegmentedMorphPicker(
@@ -277,6 +285,88 @@ private struct DisplayDetail: View {
         }
       }
     }
+  }
+
+  /// Letting the room drive this display.
+  ///
+  /// The built-in panel is the source rather than the light sensor, because
+  /// macOS has already turned that sensor into a brightness — one calibrated to
+  /// this Mac and to the habits of the person using it. Reading the result is a
+  /// better signal than any curve this app could keep.
+  @ViewBuilder
+  private var following: some View {
+    VStack(alignment: .leading, spacing: Layout.snug) {
+      Toggle("Follow the built-in display's brightness", isOn: Binding(
+        get: { display.followsBuiltinBrightness },
+        set: { model.setFollowsBuiltinBrightness($0, for: display) }
+      ))
+      .disabled(model.builtinDisplay == nil)
+
+      if model.builtinDisplay == nil {
+        // Explained rather than quietly hidden, for the reason spelled out on
+        // `volumeUnavailableReason`: "cannot" and "forgot" look identical from
+        // out here, and here the fix is often just opening the lid.
+        StatusRow(
+          symbol: "laptopcomputer.slash",
+          title: "No built-in display right now",
+          detail: "This follows the Mac's own screen, because that is the one macOS "
+            + "adjusts to the light in the room. On a laptop, opening the lid is "
+            + "enough; a Mac with no display of its own has nothing to follow."
+        )
+      } else if display.followsBuiltinBrightness {
+        mapping
+      }
+    }
+    .animation(motion.spatialDefault, value: display.followsBuiltinBrightness)
+  }
+
+  private var mapping: some View {
+    VStack(alignment: .leading, spacing: Layout.snug) {
+      if let source = model.builtinSource.current {
+        HStack(alignment: .firstTextBaseline, spacing: Layout.snug) {
+          // The mapping as a sentence rather than a graph. Two anchors and a
+          // line between them is not worth a chart, and what someone wants to
+          // know standing here is only "what is it doing right now".
+          Text("Built-in \(percent(source)) → this display "
+            + "\(percent(display.followCurve.target(forSource: source)))")
+            .font(TypeScale.detail)
+            .foregroundStyle(.secondary)
+            .contentTransition(.numericText())
+
+          Spacer(minLength: 0)
+
+          Button("Match now") { model.matchFollowNow(display) }
+            .buttonStyle(.soft(display.accent))
+            .font(TypeScale.detail.weight(.medium))
+            .help("Remember this display's current brightness for whenever the "
+              + "built-in one is back at \(percent(source))")
+        }
+        .animation(motion.effectFast, value: source)
+      }
+
+      if model.builtinSource.mode == .polling {
+        // The one recurring timer in this application. It runs only while this
+        // is switched on, and saying so is the same bargain the HID switch in
+        // Settings makes.
+        StatusRow(
+          symbol: "timer",
+          tint: Status.info,
+          title: "Asking every five seconds",
+          detail: "This system does not announce brightness changes, so they have to "
+            + "be checked for. Turning this off stops that entirely."
+        )
+      }
+
+      CardFooter("Just move the slider above whenever this is wrong, and it is "
+        + "remembered for that light level — dim it once in a dark room and once "
+        + "in a bright one and it has what it needs. Presets and the schedule "
+        + "still win the moment they are applied, until the room next changes.")
+    }
+    .transition(.blurReplace)
+  }
+
+  private func percent(_ value: Double) -> String {
+    "\(Int((value * 100).rounded()))%"
   }
 
   private var accentPicker: some View {

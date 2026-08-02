@@ -120,6 +120,10 @@ final class AppModel {
       // were out. Both need handling, in that order.
       self?.gamma.reassertAll()
       self?.refresh()
+      // Silently: the built-in panel may be somewhere else than when we went to
+      // sleep, and that is a new baseline rather than an ambient change to
+      // chase down the I2C bus in the first second after a wake.
+      self?.builtinSource.resync()
     }
     events.onColorSettingsChanged = { [weak self] in
       // Night Shift or a profile change just reset the gamma table.
@@ -212,6 +216,7 @@ final class AppModel {
 
   func stop() {
     scheduleRunner.stop()
+    builtinSource.stop()
     events.stop()
     mediaKeys.stop()
     hotkeyCenter.stop()
@@ -245,6 +250,10 @@ final class AppModel {
     displays = discovered.map {
       DisplayViewModel(display: $0, preferences: preferences, log: log)
     }
+    for display in displays {
+      display.sourceBrightness = { [weak self] in self?.builtinSource.current }
+    }
+    refreshFollowing()
 
     activationTask?.cancel()
     activationTask = Task { [displays] in
@@ -639,6 +648,91 @@ final class AppModel {
             abs(kelvin - ColorTemperature.neutralKelvin) < 1 ? nil : kelvin
           )
         }
+        await display.commitBrightnessAndWait()
+      }
+    }
+  }
+
+  // MARK: - Following the built-in panel
+
+  /// The one watcher of the built-in panel, shared by every display that
+  /// follows it.
+  ///
+  /// Not `private`, because the settings card reports which of the two ways it
+  /// is getting its values — those cost different amounts and the app says so.
+  @ObservationIgnored lazy var builtinSource = BuiltinBrightnessSource { [weak self] value in
+    self?.applyFollowedBrightness(source: value)
+  }
+
+  /// The panel macOS is adjusting to the room. Absent on a Mac with no display
+  /// of its own, and on a laptop whose lid is shut.
+  var builtinDisplay: DisplayViewModel? { displays.first(where: \.isBuiltin) }
+
+  var followingDisplays: [DisplayViewModel] {
+    displays.filter { !$0.isBuiltin && $0.followsBuiltinBrightness }
+  }
+
+  /// Starts or stops the watcher to match what is actually plugged in and what
+  /// has actually been asked for.
+  ///
+  /// Called after every display reconfiguration and after the toggle, both of
+  /// which fire more often than the answer changes — hence `start(watching:)`
+  /// being idempotent rather than this being careful.
+  func refreshFollowing() {
+    guard !followingDisplays.isEmpty, let builtin = builtinDisplay else {
+      builtinSource.stop()
+      return
+    }
+    builtinSource.start(watching: builtin.displayID)
+  }
+
+  /// Switches following on or off for one display, and makes it visible at once.
+  ///
+  /// Applying immediately matters more here than it looks: the next ambient
+  /// change might be an hour away, and a switch that appears to do nothing for
+  /// an hour is a switch nobody trusts again.
+  func setFollowsBuiltinBrightness(_ isOn: Bool, for display: DisplayViewModel) {
+    display.setFollowsBuiltinBrightness(isOn)
+    refreshFollowing()
+    guard isOn, let source = builtinSource.current else { return }
+    applyFollowedBrightness(source: source)
+  }
+
+  /// Records the current pair as the relationship to keep, for the "Match now"
+  /// button — the same lesson a manual adjustment teaches, asked for outright.
+  func matchFollowNow(_ display: DisplayViewModel) {
+    guard let source = builtinSource.current else { return }
+    display.updateSettings {
+      $0.followCurve.learn(source: source, target: display.brightness)
+    }
+    Haptics.confirm()
+  }
+
+  /// Moves every following display to where its curve says it belongs.
+  ///
+  /// No `groupChangeTick` and no OSD, unlike every other bulk change in this
+  /// type. Those exist to say "you did that, and it landed"; this one nobody
+  /// did. A HUD that flashed every time the light in the room shifted would be
+  /// the single most irritating thing this app could do.
+  private func applyFollowedBrightness(source: Double) {
+    // The master slider is the transient, hand-driven mode, and while it is on
+    // it owns every display's brightness. Two things writing the same value
+    // would just be a fight nobody can see the sides of.
+    guard !isSyncingBrightness else { return }
+
+    let followers = followingDisplays
+    guard !followers.isEmpty else { return }
+
+    // Deliberately the same task slot as presets, the schedule and the master.
+    // These all write brightness to several displays over one I2C bus, and the
+    // only coherent rule when two of them overlap is that the later one wins —
+    // which is also what makes "a preset holds until the room next changes"
+    // true rather than aspirational.
+    presetTask?.cancel()
+    presetTask = Task { [followers] in
+      for display in followers {
+        guard !Task.isCancelled else { return }
+        display.applyFollowedBrightness(forSource: source)
         await display.commitBrightnessAndWait()
       }
     }

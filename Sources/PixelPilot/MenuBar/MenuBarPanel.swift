@@ -315,6 +315,16 @@ private struct DisplayControlGroup: View {
         .font(TypeScale.cardTitle)
         .lineLimit(1)
 
+      // A slider that moves on its own is unsettling until you know why. This
+      // is the whole explanation, and it costs one glyph.
+      if display.followsBuiltinBrightness {
+        Image(systemName: "a.circle")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .help("Following the built-in display")
+          .transition(.blurReplace)
+      }
+
       Spacer()
 
       Text("\(Int((display.brightness * 100).rounded()))%")

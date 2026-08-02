@@ -61,6 +61,57 @@ public enum NativeBrightness {
   public static func set(_ displayID: CGDirectDisplayID, to fraction: Double) -> Bool {
     PPNativeBrightnessSet(displayID, Float(fraction))
   }
+
+  // MARK: - Watching
+
+  /// Whether a display can be watched for changes, as opposed to asked on a
+  /// timer. See the header note in `CDDCPrivate.h` for how little of the
+  /// undocumented signature this actually depends on.
+  public static var canObserve: Bool { PPNativeBrightnessCanObserve() }
+
+  /// Where an observation is delivered.
+  ///
+  /// A global rather than a stored closure, because a C function pointer cannot
+  /// capture: the trampoline handed to DisplayServices has to be a plain
+  /// function, so the only way back to Swift state is a value it can reach
+  /// without a context. There is one watcher in this app, and this is it.
+  private static let sink = ObservationSink()
+
+  private final class ObservationSink: @unchecked Sendable {
+    private let lock = NSLock()
+    private var handlers: [CGDirectDisplayID: @Sendable (Double) -> Void] = [:]
+
+    func set(_ handler: (@Sendable (Double) -> Void)?, for displayID: CGDirectDisplayID) {
+      lock.withLock { handlers[displayID] = handler }
+    }
+
+    func deliver(_ displayID: CGDirectDisplayID, _ value: Double) {
+      guard let handler = lock.withLock({ handlers[displayID] }) else { return }
+      handler(value)
+    }
+  }
+
+  /// Starts watching one display. The handler **arrives on an arbitrary
+  /// thread** — whatever thread DisplayServices happens to notify on.
+  ///
+  /// Returns false when watching is not possible at all, which is the caller's
+  /// signal to fall back to asking on a timer.
+  public static func observe(
+    _ displayID: CGDirectDisplayID,
+    handler: @escaping @Sendable (Double) -> Void
+  ) -> Bool {
+    sink.set(handler, for: displayID)
+    let started = PPNativeBrightnessObserve(displayID) { displayID, value in
+      NativeBrightness.sink.deliver(displayID, Double(value))
+    }
+    if !started { sink.set(nil, for: displayID) }
+    return started
+  }
+
+  public static func stopObserving(_ displayID: CGDirectDisplayID) {
+    PPNativeBrightnessStopObserving(displayID)
+    sink.set(nil, for: displayID)
+  }
 }
 
 /// Drives brightness for one display, choosing how to get there.
