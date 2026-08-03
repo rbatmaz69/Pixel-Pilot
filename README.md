@@ -28,10 +28,17 @@ Requires macOS 26 (Tahoe) on Apple Silicon.
   switched off, so a daytime preset can undo a night one. Applied by hand, by
   global shortcut, by system appearance, on a schedule, or by which application
   is in front. Captured by setting the displays up rather than by typing
-  numbers, and adjusted the same way: set the screens, press update.
-- **A schedule** following the clock or the sun.
+  numbers, and adjusted the same way: set the screens, press update. Rest the
+  pointer on one and every slider shows where it would go, before it goes
+  there. See [Asking before doing](#asking-before-doing).
+- **A schedule** following the clock or the sun, with the day drawn as an arc
+  you can point along to see what it will do at nine in the evening.
 - **Identify**, putting a number on each screen, plus a map of how they are
-  arranged.
+  arranged — which fills with each screen's own level, and can be dragged.
+- **Typing an exact figure**, for the times a slider is the wrong instrument.
+- **Dropping an application on the menu bar icon** to give it a preset.
+- **A heads-up display you can grab**: the indicator a brightness key puts on
+  screen is a slider, and pointing at it stops it counting down.
 - **A colour theme** for the whole interface — window, menu bar panel, HUD and
   all — chosen from the same palette the displays use, in one of three styles:
   translucent, vivid, or flat. See [The theme](#the-theme).
@@ -132,6 +139,137 @@ does in blue. That is what "the same eight tones, mixed less" has to mean once
 the contrast is not negotiable, and it is done by arithmetic rather than by a
 hand-tuned cap per tone — eight numbers nobody would maintain, which would break
 silently the first time a tone was retuned.
+
+### Asking before doing
+
+Two controls in this app used to do more than the surface showed. A preset was
+a button you pressed to find out what it did, and a schedule was a list of
+times you had to read like a timetable to know what your evening would look
+like. Both are now answerable by pointing.
+
+**Resting on a preset draws where it would go.** Every slider grows a hollow
+handle at the value that preset holds for that display, with a bar spanning the
+distance it would travel, and the warmth it asks for as a dot in the colour the
+screen would be. Nothing is written — the preview reads the preset and draws,
+so hovering the row costs no DDC traffic at all. The live figure stays where it
+is and keeps telling the truth about the screen; the arrow beside it is the
+only thing making a claim about the future. A display the preset says nothing
+about steps back rather than announcing itself, because "not mentioned" is the
+ordinary case and deserves the quietest signal there is.
+
+The master row deliberately gets no ghost. A preset holds a value per display
+and no master value, so any handle drawn there would be a number this app
+invented and then did not set.
+
+**Pointing along the day arc says what is in force at that hour.** It resolves
+against the arc's own placement rather than through `DaySchedule.currentStop` —
+a sunset stop is drawn at a nominal half past seven and may really fall at ten
+past nine, and asking the schedule would answer about a moment other than the
+one being pointed at, so the picture and the caption under it would disagree.
+Pointing at a picture is a question about the picture. It wraps through
+midnight, because the early hours are exactly the stretch an evening setting is
+most likely to still be governing and the stretch nobody scrubs while checking
+their work. `DayArcTests` pins that.
+
+It is a hover rather than a drag, and that is what makes it read as looking
+rather than as editing. A drag would have to be told apart from dragging a
+stop, and would fight the scroll view the card sits in; hovering has neither
+problem, and asking a question by pointing at something is a lighter act than
+asking by grabbing it.
+
+### Reaching for the thing you are already looking at
+
+**The arrangement map is also a set of levels.** Each screen fills from the
+bottom with its own brightness and can be dragged. Both came out of the same
+observation: the map is the only place in the app that shows the displays next
+to each other in the shape they actually have, which makes it the only place
+"that one is darker than the other" is something you can see rather than two
+numbers you have to compare.
+
+The drag is **relative** — a fixed 120 points of pointer travel spans the range,
+whatever size the tile is. A tile is around forty points tall, so mapping the
+range onto its height would make every pixel two and a half per cent and put
+fine adjustment out of reach. It also means two differently sized tiles respond
+identically, which is what stops the map from feeling like several controls that
+happen to look alike. Four points of movement before it counts as a drag, so a
+tap still selects.
+
+**The heads-up display can be grabbed.** The indicator a brightness key puts on
+screen carries a real slider, and pointing at it stops the countdown so there is
+time to use it.
+
+The slider is there from the first frame rather than appearing on hover, and
+that is a correction. Revealing it on hover made the whole feature hostage to
+hover detection — in a panel belonging to an app that is never active, which is
+the hardest place to get hover right — and it hid the affordance: a control you
+can only find by pointing at something that looks like a progress bar is a
+control most people never find. Hover now does one thing, which is to hold the
+HUD open.
+
+Two AppKit facts had to be met, both following from this app never being the
+active one. A tracking area is live only while its application is active unless
+it asks for `.activeAlways`, and SwiftUI's `.onHover` does not ask — so the
+hover it reported was a hover that never happened. And a click into a window of
+an inactive app is normally spent activating it; this panel activates nothing,
+so that click went nowhere and the handle moved only on the second attempt.
+`OverlayPanelTests` pins both, along with the mistake underneath the first
+attempt: a tracking area installed on a subview that still had a zero frame,
+because the panel is not sized until later. `OSDInteractionTests` then sends
+real mouse events to a real panel, because every other test here checks wiring
+and none of them would notice the whole thing being assembled correctly and
+still doing nothing when dragged.
+
+Neither caught the actual fault, which is the more interesting one. What a drag
+on the HUD means is a closure passed in by whoever asked for the indicator, and
+that parameter had a default of `nil`. The media keys — the path that puts this
+HUD on screen more often than every other caller together — quietly took the
+default and produced an indicator with no handle on it, while every test passed
+because each one supplied the closure the app did not. The parameter has no
+default now. That is the compiler asking the question at each call site, which
+is the only place that can answer it.
+
+This is the one overlay that takes mouse events, and the cost is real and worth
+stating. For the second or so the HUD is up, a click on those 210 points goes to
+it rather than through it. That is the price of being able to grab the thing you
+are already looking at, and it is bounded by the panel being small, short-lived
+and always in the same place. The identify overlay keeps refusing mouse events
+outright, because it covers whole screens — accepting them there would make
+identifying the displays mean not being able to click on any of them.
+
+**A figure can be typed.** Click a percentage anywhere in the app and it becomes
+a field, prefilled and fully selected, so the first digit replaces the figure
+rather than making it ten times bigger. Return writes, Escape and clicking away
+both cancel — a figure half typed and then abandoned is not a decision anyone
+made. Three digits of width are reserved in both states, measured in the actual
+type scale rather than in points, so the row never twitches on the way in or out.
+
+It is a real `NSTextField` behind that, and the thing it replaced is worth
+writing down: a focusable label collecting `onKeyPress`, which looked right and
+was not. The label took focus, drew a system focus ring nobody asked for in a
+corner radius this interface uses nowhere, and then swallowed every digit. A
+text field is what macOS gives a caret, a selection and a field editor to, and
+none of those are worth reimplementing badly.
+
+The other tempting shape was letting digits typed anywhere in the panel land on
+whichever card the pointer happened to be over. That needs an event monitor
+rather than focus, has no visible affordance, and leaves "which card did that go
+to?" a question the interface cannot answer.
+
+**An application dropped on the menu bar icon gets a rule.** A preset chosen
+from the chips that unroll, and that is the whole flow. It used to be: open
+Settings, find the tab, work an open panel, hunt through `/Applications`, then
+choose a preset — with the application usually sitting in the Dock the whole
+time.
+
+The drop target is a view over the status item's button that forwards mouse
+events rather than refusing them. Refusing them through `hitTest` would read
+more tidily and would put the drop target at the mercy of how AppKit happens to
+search for a dragging destination; the feature is worth less than the click it
+would be gambling with. Anything that is not an application bundle is refused in
+`draggingEntered`, so a folder never shows the plus sign that promises something
+will happen. With no presets yet, the sheet says so and offers Settings —
+`AppRuleStore.pruneMissingPresets` exists to clear up rules pointing at nothing,
+and it must not be possible to make one here.
 
 One rule runs through the whole interface: **nothing that contains a slider is
 ever scaled.** A `scaleEffect` changes the coordinate space a drag is mapped
@@ -270,7 +408,10 @@ and the Displays window says so.
 
 The system on-screen indicator is not used. macOS 26 reworked the private OSD
 interface and third-party values no longer render there; established apps show
-an empty indicator on Tahoe. Pixel Pilot draws its own.
+an empty indicator on Tahoe. Pixel Pilot draws its own — which is also what
+makes it something you can reach into rather than only read. See
+[Reaching for the thing you are already looking
+at](#reaching-for-the-thing-you-are-already-looking-at).
 
 ## Software dimming survives a crash
 
