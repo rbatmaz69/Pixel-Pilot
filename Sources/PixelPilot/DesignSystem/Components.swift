@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // The pieces every surface was rebuilding by hand: a titled card, a status
@@ -349,6 +350,12 @@ struct LabeledReadout<Content: View>: View {
   let value: Double
   var font: Font = TypeScale.readout
   var accent: Color?
+  /// Set to let the figure be typed into as well as read.
+  ///
+  /// Optional rather than always on, because not every readout has anywhere to
+  /// put a new value. The ones that do get a caret; the ones that do not stay
+  /// a label, instead of inviting an edit that would go nowhere.
+  var onCommit: ((Double) -> Void)?
   @ViewBuilder var content: Content
 
   @Environment(\.motion) private var motion
@@ -361,11 +368,16 @@ struct LabeledReadout<Content: View>: View {
           .font(TypeScale.rowTitle)
           .foregroundStyle(.secondary)
         Spacer()
-        Text("\(Int((value * 100).rounded()))%")
-          .font(font)
-          .foregroundStyle(theme.ink(for: accent ?? theme.tone))
-          .contentTransition(.numericText(value: value))
-          .animation(motion.effectFast, value: value)
+        if let onCommit {
+          EditableReadout(value: value, font: font, accent: accent, onCommit: onCommit)
+            .foregroundStyle(theme.ink(for: accent ?? theme.tone))
+        } else {
+          Text("\(Int((value * 100).rounded()))%")
+            .font(font)
+            .foregroundStyle(theme.ink(for: accent ?? theme.tone))
+            .contentTransition(.numericText(value: value))
+            .animation(motion.effectFast, value: value)
+        }
       }
       content
     }
@@ -420,6 +432,52 @@ struct AccentDot: View {
         }
       }
     }
+  }
+}
+
+/// An application's icon, found by bundle identifier.
+///
+/// Springs in on appearance rather than simply being there. A row that arrives
+/// with its icon already placed reads as a table; one where the icon lands a
+/// beat later reads as the app having been found.
+///
+/// Lives here rather than beside the app-rule list because dropping an app on
+/// the menu bar icon needs the same picture, and an icon that arrives one way
+/// in the settings and another way in the panel is two components pretending to
+/// be one.
+struct AppIcon: View {
+  let bundleIdentifier: String
+  var size: CGFloat = 26
+
+  @Environment(\.motion) private var motion
+  @State private var hasArrived = false
+
+  var body: some View {
+    Group {
+      if let image = Self.icon(for: bundleIdentifier) {
+        Image(nsImage: image)
+          .resizable()
+          .frame(width: size, height: size)
+      } else {
+        // The app has been moved or uninstalled. The rule is still valid — it
+        // matches on the identifier — so this says "not found here" rather than
+        // leaving a hole.
+        Image(systemName: "questionmark.app.dashed")
+          .font(.system(size: size * 0.7))
+          .foregroundStyle(.secondary)
+          .frame(width: size, height: size)
+      }
+    }
+    .scaleEffect(hasArrived ? 1 : 0.6)
+    .opacity(hasArrived ? 1 : 0)
+    .animation(motion.expressive, value: hasArrived)
+    .onAppear { hasArrived = true }
+  }
+
+  private static func icon(for bundleIdentifier: String) -> NSImage? {
+    guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
+    else { return nil }
+    return NSWorkspace.shared.icon(forFile: url.path)
   }
 }
 

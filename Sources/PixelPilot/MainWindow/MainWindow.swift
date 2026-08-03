@@ -168,7 +168,14 @@ private struct DisplayDetail: View {
           title: "Brightness",
           value: display.brightness,
           font: TypeScale.heroReadout,
-          accent: display.accent
+          accent: display.accent,
+          // Typed figures take the same path a released handle does: set, then
+          // settle. Anything else would make "40 by hand" and "40 by keyboard"
+          // two different writes to the same register.
+          onCommit: { value in
+            display.setBrightness(value)
+            display.commitBrightness()
+          }
         ) {
           ExpressiveSlider(
             value: Binding(
@@ -183,7 +190,12 @@ private struct DisplayDetail: View {
         }
 
         if display.supportsContrast {
-          LabeledReadout(title: "Contrast", value: display.contrast, accent: display.accent) {
+          LabeledReadout(
+            title: "Contrast",
+            value: display.contrast,
+            accent: display.accent,
+            onCommit: { display.setContrast($0) }
+          ) {
             ExpressiveSlider(
               value: Binding(
                 get: { display.contrast },
@@ -197,7 +209,12 @@ private struct DisplayDetail: View {
         }
 
         if display.supportsVolume {
-          LabeledReadout(title: "Volume", value: display.volume, accent: display.accent) {
+          LabeledReadout(
+            title: "Volume",
+            value: display.volume,
+            accent: display.accent,
+            onCommit: { display.setVolume($0) }
+          ) {
             ExpressiveSlider(
               value: Binding(
                 get: { display.volume },
