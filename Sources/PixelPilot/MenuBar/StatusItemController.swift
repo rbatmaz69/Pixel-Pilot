@@ -55,6 +55,7 @@ final class StatusItemController: NSObject {
     statusItem = item
 
     installScrollHandling(on: item)
+    installDropHandling(on: item)
   }
 
   // MARK: - The panel
@@ -137,6 +138,51 @@ final class StatusItemController: NSObject {
     guard let display = displayUnderStatusItem, display.isReady else { return }
     let value = display.adjustBrightness(by: direction * step)
     model.presentScrolledBrightness(value, on: display)
+  }
+
+  // MARK: - Dropping an application on the icon
+
+  /// Makes the icon a place to drop an application, for a rule about it.
+  ///
+  /// The view is pinned to the button rather than given a frame, because the
+  /// status item's length is variable and the button resizes with the menu bar.
+  private func installDropHandling(on item: NSStatusItem) {
+    guard let button = item.button else { return }
+
+    let target = ApplicationDropView(frame: button.bounds)
+    target.autoresizingMask = [.width, .height]
+    target.onHighlight = { [weak button] isEntered in
+      // The button's own highlight, so the target for a drop is shown the same
+      // way as the target for a click. Deliberately *not* opening the panel on
+      // hover: a panel that unrolls because something was dragged across it is
+      // a panel in the way of wherever that drag was actually going.
+      button?.highlight(isEntered)
+    }
+    target.onDrop = { [weak self] application in
+      self?.presentRuleSheet(for: application)
+    }
+    button.addSubview(target)
+  }
+
+  private func presentRuleSheet(for application: DroppedApplication) {
+    guard let button = statusItem?.button else { return }
+    panel.show(
+      anchoredTo: button,
+      content: AppRuleDropSheet(
+        application: application,
+        model: model,
+        onDone: { [weak self] in
+          self?.panel.close()
+          self?.updateHighlight()
+        },
+        onOpenSettings: { [weak self] in
+          self?.panel.close()
+          self?.updateHighlight()
+          self?.windows.showSettings()
+        }
+      )
+    )
+    updateHighlight()
   }
 
   private var displayUnderStatusItem: DisplayViewModel? {
