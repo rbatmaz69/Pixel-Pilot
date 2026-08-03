@@ -28,6 +28,15 @@ struct ExpressiveSlider: View {
   /// handle is the colour the screen is about to be. Defaulted to nil, so no
   /// existing call site changes.
   var trackStyle: AnyShapeStyle?
+  /// Where something else would put this control, in the same units as `value`.
+  ///
+  /// Drawn as a hollow handle with a bar spanning the distance it would travel,
+  /// and that is all it ever does: it never touches `value`, never takes part in
+  /// the drag, and never fires a callback. Presets are the caller — resting the
+  /// pointer on one shows where it would leave every display, which is the
+  /// difference between pressing a button and finding out afterwards what it
+  /// did.
+  var ghost: Double?
   /// Marks that tug back, as 0...1 fractions of the track. Felt and drawn,
   /// never enforced — see `SliderDetents`.
   ///
@@ -65,10 +74,22 @@ struct ExpressiveSlider: View {
   /// at drag time so a wide slider does not get wide detents.
   private static let detentReach: Double = 4
 
-  private var fraction: Double {
+  private var fraction: Double { fraction(of: value) }
+
+  private func fraction(of value: Double) -> Double {
     let span = range.upperBound - range.lowerBound
     guard span > 0 else { return 0 }
     return min(1, max(0, (value - range.lowerBound) / span))
+  }
+
+  /// Where the centre of the handle sits for a fraction of the track.
+  ///
+  /// One formula, three callers: the handle, the detent marks and the ghost.
+  /// `detentMarks` already gives the reason for sharing it — `metrics.width`
+  /// grows when the handle is grabbed, so anything computed another way drifts
+  /// out from under a handle that is standing still.
+  private func knobX(for fraction: Double, width: CGFloat) -> CGFloat {
+    max(1, width - metrics.width) * fraction + metrics.width / 2
   }
 
   private var metrics: KnobGeometry.Metrics {
@@ -78,16 +99,29 @@ struct ExpressiveSlider: View {
   var body: some View {
     GeometryReader { geometry in
       let width = geometry.size.width
-      let knobTravel = max(1, width - metrics.width)
-      let knobX = knobTravel * fraction + metrics.width / 2
+      let handleX = knobX(for: fraction, width: width)
 
       ZStack(alignment: .leading) {
-        track(width: width, filledTo: knobX)
-        knob(centeredAt: knobX, height: geometry.size.height)
+        track(width: width, filledTo: handleX)
+
+        if let ghost, !isDragging {
+          ghostMarker(
+            at: knobX(for: fraction(of: ghost), width: width),
+            from: handleX,
+            width: width,
+            height: geometry.size.height
+          )
+        }
+
+        knob(centeredAt: handleX, height: geometry.size.height)
       }
       .frame(height: geometry.size.height)
       .contentShape(.rect)
       .gesture(dragGesture(width: width))
+      // Keyed to `ghost` alone. The handle pins `.animation(nil, value: x)` on
+      // its own position precisely so a transaction opened up here cannot reach
+      // it — and nothing about the ghost appearing moves the handle anyway.
+      .animation(motion.effectDefault, value: ghost)
     }
     .frame(height: KnobGeometry.dragging.trackHeight + 12)
     .onHover { hovering in
@@ -161,7 +195,7 @@ struct ExpressiveSlider: View {
             // matters more than it looks: `metrics.width` grows when the handle
             // is grabbed, and a mark computed any other way would drift out
             // from under a handle that is sitting still on it.
-            .offset(x: (width - metrics.width) * detent + metrics.width / 2 - 0.5)
+            .offset(x: knobX(for: detent, width: width) - 0.5)
         }
       }
       .frame(width: width, alignment: .leading)
@@ -170,6 +204,36 @@ struct ExpressiveSlider: View {
       .opacity(isDragging || isHovered ? 0.9 : 0.5)
       .animation(motion.effectFast, value: isDragging || isHovered)
     }
+  }
+
+  /// The hollow handle, and the distance between it and the real one.
+  ///
+  /// Hollow rather than filled, and never on its own: the bar is what turns
+  /// "there" into "this far, in this direction". Both are hidden the moment the
+  /// real handle is grabbed, because two handles on one track — one of them
+  /// under the pointer — is a control with two answers to where it is.
+  ///
+  /// Hit testing off, so a preview can never become an adjustment by accident.
+  private func ghostMarker(
+    at x: CGFloat, from handleX: CGFloat, width: CGFloat, height: CGFloat
+  ) -> some View {
+    ZStack {
+      Capsule(style: .continuous)
+        .fill(accent.opacity(0.4))
+        .frame(width: max(2, abs(x - handleX)), height: 2)
+        .position(x: (x + handleX) / 2, y: height / 2)
+
+      MorphingKnob(
+        width: KnobGeometry.hovered.width,
+        cornerRadius: KnobGeometry.hovered.cornerRadius
+      )
+      .stroke(theme.fill(for: accent), lineWidth: 2)
+      .frame(width: KnobGeometry.hovered.width, height: metrics.trackHeight + 8)
+      .position(x: x, y: height / 2)
+    }
+    .frame(width: width, height: height)
+    .allowsHitTesting(false)
+    .transition(.opacity)
   }
 
   private func knob(centeredAt x: CGFloat, height: CGFloat) -> some View {

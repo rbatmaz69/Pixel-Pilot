@@ -25,6 +25,10 @@ struct MenuBarPanel: View {
   var onOpenDisplays: () -> Void = {}
   var onOpenSettings: () -> Void = {}
 
+  /// The preset the pointer has been resting on long enough to mean it.
+  @State private var previewed: Preset?
+  @State private var previewTask: Task<Void, Never>?
+
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
       if model.displays.isEmpty {
@@ -38,7 +42,7 @@ struct MenuBarPanel: View {
         ForEach(Array(model.displays.enumerated()), id: \.element.id) { index, display in
           // Cards separate themselves; the dividers that used to sit between
           // these groups were doing a job the card edges now do better.
-          DisplayControlGroup(display: display)
+          DisplayControlGroup(display: display, preview: previewed)
             .accentWave(
               index: index,
               trigger: model.groupChangeTick,
@@ -81,6 +85,31 @@ struct MenuBarPanel: View {
     // Opening the panel is a cheap, natural moment to notice a grant that
     // happened while the app was in the background.
     .onAppear { model.refreshPermissions() }
+    .onDisappear { previewTask?.cancel() }
+  }
+
+  /// Arms or cancels the preset preview.
+  ///
+  /// The wait is the whole reason this is a method rather than an assignment in
+  /// `onHover`. A pointer crossing the preset row on its way to the footer
+  /// passes over every button in it, and without the delay each one would flash
+  /// a full set of ghosts on its way past — the panel would strobe.
+  ///
+  /// Cancelled and replaced rather than scheduled repeatedly: the same shape as
+  /// `OSDController.dismissTask`, and for the same reason. Once the pointer
+  /// settles there is nothing left running, and closing the panel takes the
+  /// state with it.
+  private func preview(_ preset: Preset?) {
+    previewTask?.cancel()
+    guard let preset else {
+      previewed = nil
+      return
+    }
+    previewTask = Task {
+      try? await Task.sleep(for: .milliseconds(180))
+      guard !Task.isCancelled else { return }
+      previewed = preset
+    }
   }
 
   /// Where the cascade has got to by the time the per-display cards are done.
@@ -105,11 +134,11 @@ struct MenuBarPanel: View {
           .font(TypeScale.rowTitle)
         Spacer(minLength: 0)
         if model.isSyncingBrightness {
-          Text("\(Int((model.masterBrightness * 100).rounded()))%")
-            .font(TypeScale.readout)
-            .foregroundStyle(.secondary)
-            .contentTransition(.numericText(value: model.masterBrightness))
-            .animation(motion.effectFast, value: model.masterBrightness)
+          EditableReadout(value: model.masterBrightness) { value in
+            model.setMasterBrightness(value)
+            model.commitMasterBrightness()
+          }
+          .foregroundStyle(.secondary)
         }
         Toggle("", isOn: Binding(
           get: { model.isSyncingBrightness },
@@ -170,6 +199,17 @@ struct MenuBarPanel: View {
   ///
   /// They are the one thing here you press and forget, so they get the least
   /// vertical space — the sliders are what the panel is for.
+  ///
+  /// Resting on one previews it: every slider above grows a hollow handle where
+  /// this preset would leave it. That is the one thing the panel could not say
+  /// before — a preset was the only control here that did more than the surface
+  /// showed, and the only way to find out what it did was to let it do it.
+  ///
+  /// **Nothing is written.** The preview reads `preset.entry(for:)` and draws;
+  /// it never calls `setBrightness`, so hovering the row costs no DDC traffic
+  /// at all. The master row deliberately gets no ghost: a preset holds a value
+  /// per display and no master value, so any handle drawn there would be a
+  /// number this app invented and then did not set.
   private var presetRow: some View {
     HStack(spacing: Layout.tight) {
       ForEach(model.presetList) { preset in
@@ -182,6 +222,7 @@ struct MenuBarPanel: View {
         }
         .buttonStyle(.soft)
         .help("Apply \(preset.name)")
+        .onHover { preview($0 ? preset : nil) }
       }
       Spacer(minLength: 0)
     }
@@ -246,6 +287,17 @@ private struct DisplayControlGroup: View {
   @Environment(\.theme) private var theme
 
   @Bindable var display: DisplayViewModel
+  /// The preset the pointer is resting on, if any. Read only, and read here
+  /// rather than resolved by the panel, so a card answers "what would this do
+  /// to *me*" without anything above it having to know.
+  var preview: Preset?
+
+  private var previewEntry: PresetEntry? {
+    preview?.entry(for: display.key)
+  }
+
+  /// A preset is being considered, and it says nothing about this display.
+  private var isUnaffected: Bool { preview != nil && previewEntry == nil }
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
@@ -258,6 +310,7 @@ private struct DisplayControlGroup: View {
         ),
         accent: display.accent,
         icon: "sun.max.fill",
+        ghost: previewEntry?.brightness,
         onCommit: { _ in display.commitBrightness() }
       )
       .disabled(!display.isReady)
@@ -308,6 +361,12 @@ private struct DisplayControlGroup: View {
     // whenever the panel was open — which is the surface opened dozens of times
     // a day. The Displays window keeps its own.
     .cardSurface(accent: display.accent)
+    // A preset that says nothing about this display steps back rather than
+    // announcing itself. "Not mentioned" is the ordinary case — a preset for
+    // the desk monitors is not a warning about the laptop — so it gets the
+    // quietest signal there is, and an opacity rather than anything that moves.
+    .opacity(isUnaffected ? 0.5 : 1)
+    .animation(motion.effectDefault, value: isUnaffected)
   }
 
   private var header: some View {
@@ -328,13 +387,57 @@ private struct DisplayControlGroup: View {
           .transition(.blurReplace)
       }
 
+      warmthSwatch
+
       Spacer()
 
-      Text("\(Int((display.brightness * 100).rounded()))%")
-        .font(TypeScale.readout)
-        .foregroundStyle(theme.ink(for: display.accent))
-        .contentTransition(.numericText(value: display.brightness))
-        .animation(motion.effectFast, value: display.brightness)
+      EditableReadout(value: display.brightness, accent: display.accent) { value in
+        display.setBrightness(value)
+        display.commitBrightness()
+      }
+      .foregroundStyle(theme.ink(for: display.accent))
+      .disabled(!display.isReady)
+
+      // The live figure stays put and keeps telling the truth about the screen.
+      // The arrow is the only thing making a claim about the future, which is
+      // why it is a second label rather than a replacement for the first.
+      if let target = previewEntry?.brightness {
+        Text("→ \(Int((target * 100).rounded()))%")
+          .font(TypeScale.readout)
+          .foregroundStyle(.secondary)
+          .transition(.blurReplace)
+      }
+    }
+    .animation(motion.effectDefault, value: previewEntry)
+  }
+
+  /// What the previewed preset would do to this display's white point.
+  ///
+  /// Three states, because `PresetColor` has three and the middle one is the
+  /// interesting one: a preset can say *take the warmth off*, and a preview
+  /// that only ever showed a colour would make a "Day" preset look like it does
+  /// less than it does.
+  @ViewBuilder
+  private var warmthSwatch: some View {
+    switch previewEntry?.color {
+    case .none:
+      EmptyView()
+    case .neutral:
+      Image(systemName: "circle.slash")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .help("Warmth off")
+        .transition(.blurReplace)
+    case let .kelvin(kelvin):
+      // The same function that drives the hardware, so the dot is the colour
+      // the screen is about to be rather than an illustration of it.
+      let point = ColorTemperature.whitePoint(kelvin: kelvin)
+      Circle()
+        .fill(Color(red: point.red, green: point.green, blue: point.blue))
+        .frame(width: 9, height: 9)
+        .overlay { Circle().strokeBorder(.primary.opacity(0.25), lineWidth: 0.5) }
+        .help("\(Int(kelvin)) K")
+        .transition(.blurReplace)
     }
   }
 }
