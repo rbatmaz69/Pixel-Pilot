@@ -25,35 +25,76 @@ final class OSDController {
 
   private var currentDisplayID: CGDirectDisplayID?
 
+  /// True while the pointer is inside the HUD.
+  ///
+  /// The one thing that stops the countdown. Everything else about the HUD is
+  /// fire-and-forget; this is the case where the person is plainly still
+  /// dealing with it, and taking it away mid-drag would be the interface
+  /// walking off in the middle of a sentence.
+  private var isHeld = false
+
+  /// Everything the current HUD is made of.
+  ///
+  /// Kept because the pointer arriving has to redraw it, and the pointer is not
+  /// a value anyone passed in. Without this, holding the HUD open would mean
+  /// holding a stale copy of it open.
+  private struct Presentation {
+    let kind: OSDKind
+    let value: Double
+    let accent: Color
+    let displayName: String
+    let adjust: ((Double) -> Void)?
+    let commit: (() -> Void)?
+  }
+
+  private var current: Presentation?
+
+  /// - Parameters:
+  ///   - adjust: What a drag on the HUD's track means, or nil for a HUD with
+  ///     nothing to drag. The controller stays ignorant of displays and audio
+  ///     routes: whoever asked for the indicator already knows which of those
+  ///     this one is about.
+  ///   - commit: Called once when that drag ends — the verified write, kept out
+  ///     of the drag for the same reason `ExpressiveSlider` keeps it out.
   func show(
     kind: OSDKind,
     value: Double,
     accent: Color,
     displayName: String,
-    on displayID: CGDirectDisplayID
+    on displayID: CGDirectDisplayID,
+    adjust: ((Double) -> Void)? = nil,
+    commit: (() -> Void)? = nil
   ) {
     guard let screen = NSScreen.screens.first(where: { $0.displayID == displayID })
       ?? NSScreen.main
     else { return }
 
-    let content = AnyView(
-      OSDView(kind: kind, value: value, accent: accent, displayName: displayName)
-        .withMotionTokens()
-        .withAppTheme(paintsWindow: false)
-    )
-
-    if panel == nil || currentDisplayID != displayID {
+    let isMoving = panel == nil || currentDisplayID != displayID
+    if isMoving {
       // Moving to a different display: rebuild rather than reposition, so the
       // entrance animation plays on the screen the user is actually looking at.
+      // Before the new presentation is recorded, because tearing down clears it.
       teardown()
-      makePanel(content: content, on: screen)
+    }
+
+    current = Presentation(
+      kind: kind,
+      value: value,
+      accent: accent,
+      displayName: displayName,
+      adjust: adjust,
+      commit: commit
+    )
+
+    if isMoving {
+      makePanel(content: content(), on: screen)
       currentDisplayID = displayID
     } else {
       // Swapping the root view rather than rebuilding preserves SwiftUI's view
       // identity, and with it the HUD's `@State`. That is load-bearing: it is
       // what stops the entrance animation from replaying on every repeat of a
       // held-down key.
-      hostingView?.rootView = content
+      hostingView?.rootView = content()
     }
 
     guard let panel else { return }
@@ -72,15 +113,66 @@ final class OSDController {
   func hide() {
     dismissTask?.cancel()
     dismissTask = nil
+    isHeld = false
     fadeOutAndTeardown()
+  }
+
+  /// Holds the HUD open while the pointer is in it, and restarts the countdown
+  /// when it leaves.
+  ///
+  /// Entering during the fade brings it back rather than letting it go: at that
+  /// point the pointer is unambiguously on its way to the control, and a HUD
+  /// that vanished from under it would have to be summoned again with a key.
+  private func setHeld(_ held: Bool) {
+    guard isHeld != held, current != nil else { return }
+    isHeld = held
+
+    guard held else {
+      scheduleDismiss()
+      return
+    }
+    dismissTask?.cancel()
+    dismissTask = nil
+
+    guard let panel, panel.alphaValue < 1 else { return }
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = fadeInDuration
+      panel.animator().alphaValue = 1
+    }
+  }
+
+  /// The HUD as it currently stands.
+  private func content() -> AnyView {
+    guard let current else { return AnyView(EmptyView()) }
+    return AnyView(
+      OSDView(
+        kind: current.kind,
+        value: current.value,
+        accent: current.accent,
+        displayName: current.displayName,
+        adjust: current.adjust,
+        commit: current.commit
+      )
+      .withMotionTokens()
+      .withAppTheme(paintsWindow: false)
+    )
   }
 
   // MARK: - Panel lifecycle
 
   private func makePanel(content: AnyView, on screen: NSScreen) {
-    let made = OverlayPanel.make(content: content)
+    // The one panel in the app that takes mouse events. `OverlayPanel` sets out
+    // what that costs and why this is the only overlay small enough to be worth
+    // it.
+    let made = OverlayPanel.make(content: content, acceptsMouse: true)
     self.panel = made.panel
     self.hostingView = made.hosting
+
+    // Hover comes from AppKit rather than from SwiftUI, because this app is
+    // never the active one — `OverlayPanel.InteractiveHostingView` explains
+    // what that costs `.onHover`.
+    (made.hosting as? OverlayPanel.InteractiveHostingView<AnyView>)?
+      .onHoverChanged = { [weak self] isInside in self?.setHeld(isInside) }
   }
 
   private func position(_ panel: NSPanel, on screen: NSScreen) {
@@ -113,8 +205,9 @@ final class OSDController {
       panel.animator().alphaValue = 0
     } completionHandler: { [weak self] in
       MainActor.assumeIsolated {
-        // Only tear down if nothing asked for the HUD again mid-fade.
-        guard let self, self.dismissTask == nil else { return }
+        // Only tear down if nothing asked for the HUD again mid-fade — and the
+        // pointer arriving in it counts as asking.
+        guard let self, self.dismissTask == nil, !self.isHeld else { return }
         self.teardown()
       }
     }
@@ -126,6 +219,8 @@ final class OSDController {
     panel = nil
     hostingView = nil
     currentDisplayID = nil
+    current = nil
+    isHeld = false
   }
 
   deinit {

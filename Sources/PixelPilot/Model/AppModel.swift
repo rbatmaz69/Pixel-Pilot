@@ -495,7 +495,7 @@ final class AppModel {
         canTakeOverFromSystem: canTakeOverFromSystem
       ) else { return false }
       let value = display.adjustBrightness(by: event.key == .brightnessUp ? step : -step)
-      present(.brightness, value: value, on: display)
+      presentBrightness(value, on: display)
       return true
 
     case .volumeUp, .volumeDown:
@@ -503,7 +503,7 @@ final class AppModel {
       // output, which is what the keys would have reached anyway.
       if display.hasDisplayAudio {
         let value = display.adjustVolume(by: event.key == .volumeUp ? step : -step)
-        present(display.isMuted ? .muted : .volume, value: value, on: display)
+        presentDisplayVolume(value, on: display)
         return true
       }
       guard MediaKeyPolicy.handlesSystemVolume(
@@ -511,13 +511,13 @@ final class AppModel {
         canTakeOverFromSystem: canTakeOverFromSystem
       ) else { return false }
       let value = systemAudio.adjustVolume(by: event.key == .volumeUp ? step : -step)
-      present(systemAudio.isMuted ? .muted : .volume, value: value, on: display)
+      presentSystemVolume(value, on: display)
       return true
 
     case .mute:
       if display.hasDisplayAudio {
         display.toggleMute()
-        present(display.isMuted ? .muted : .volume, value: display.volume, on: display)
+        presentDisplayVolume(display.volume, on: display)
         return true
       }
       guard MediaKeyPolicy.handlesSystemVolume(
@@ -525,7 +525,7 @@ final class AppModel {
         canTakeOverFromSystem: canTakeOverFromSystem
       ) else { return false }
       systemAudio.toggleMute()
-      present(systemAudio.isMuted ? .muted : .volume, value: systemAudio.volume, on: display)
+      presentSystemVolume(systemAudio.volume, on: display)
       return true
     }
   }
@@ -1003,44 +1003,104 @@ final class AppModel {
       switch builtin {
       case .brightnessUp, .brightnessDown:
         let value = display.adjustBrightness(by: builtin == .brightnessUp ? step : -step)
-        present(.brightness, value: value, on: display)
+        presentBrightness(value, on: display)
 
       case .volumeUp, .volumeDown:
         if display.hasDisplayAudio {
           let value = display.adjustVolume(by: builtin == .volumeUp ? step : -step)
-          present(display.isMuted ? .muted : .volume, value: value, on: display)
+          presentDisplayVolume(value, on: display)
         } else if systemAudio.isControllable {
           let value = systemAudio.adjustVolume(by: builtin == .volumeUp ? step : -step)
-          present(systemAudio.isMuted ? .muted : .volume, value: value, on: display)
+          presentSystemVolume(value, on: display)
         }
 
       case .toggleMute:
         if display.hasDisplayAudio {
           display.toggleMute()
-          present(display.isMuted ? .muted : .volume, value: display.volume, on: display)
+          presentDisplayVolume(display.volume, on: display)
         } else if systemAudio.isControllable {
           systemAudio.toggleMute()
-          present(systemAudio.isMuted ? .muted : .volume, value: systemAudio.volume, on: display)
+          presentSystemVolume(systemAudio.volume, on: display)
         }
       }
     }
   }
 
-  private func present(_ kind: OSDKind, value: Double, on display: DisplayViewModel) {
+  /// - Parameters:
+  ///   - adjust: What dragging the indicator's track means, or nil for one with
+  ///     nothing to drag. Built here rather than resolved by `OSDController`,
+  ///     because which thing a HUD is about is knowledge this object already
+  ///     has and that one has stayed free of: the same volume indicator is a
+  ///     display's speakers on one machine and the system output on the next.
+  ///
+  ///     **No default value, deliberately.** It had one, and the media keys —
+  ///     the path that puts this HUD on screen more than every other caller put
+  ///     together — quietly took it and shipped an indicator with no handle on
+  ///     it. Every test passed, because each one supplied the closure the app
+  ///     did not. A parameter with no default is the compiler asking the
+  ///     question at each call site, which is the only place that can answer it.
+  private func present(
+    _ kind: OSDKind,
+    value: Double,
+    on display: DisplayViewModel,
+    adjust: ((Double) -> Void)?,
+    commit: (() -> Void)?
+  ) {
     guard preferences.global.showsOSD else { return }
     osd.show(
       kind: kind,
       value: value,
       accent: display.accent,
       displayName: display.name,
-      on: display.displayID
+      on: display.displayID,
+      adjust: adjust,
+      commit: commit
+    )
+  }
+
+  /// The indicator for a display's brightness, draggable.
+  ///
+  /// Weakly captured: the closures outlive this call by as long as the HUD is
+  /// up, and a display unplugged in the meantime should be let go rather than
+  /// held alive by an indicator about it.
+  private func presentBrightness(_ value: Double, on display: DisplayViewModel) {
+    present(
+      .brightness,
+      value: value,
+      on: display,
+      adjust: { [weak display] in display?.setBrightness($0) },
+      commit: { [weak display] in display?.commitBrightness() }
+    )
+  }
+
+  /// A display's own speakers. No commit: `setVolume` writes straight through,
+  /// with no verified second step for a drag to save up for.
+  private func presentDisplayVolume(_ value: Double, on display: DisplayViewModel) {
+    present(
+      display.isMuted ? .muted : .volume,
+      value: value,
+      on: display,
+      // A muted indicator says what happened; it is not a place to set a level.
+      adjust: display.isMuted ? nil : { [weak display] in display?.setVolume($0) },
+      commit: nil
+    )
+  }
+
+  /// The system output. `display` is only where to draw it and what colour.
+  private func presentSystemVolume(_ value: Double, on display: DisplayViewModel) {
+    present(
+      systemAudio.isMuted ? .muted : .volume,
+      value: value,
+      on: display,
+      adjust: systemAudio.isMuted ? nil : { [weak self] in self?.systemAudio.setVolume($0) },
+      commit: nil
     )
   }
 
   /// The scroll wheel over the menu bar icon, which wants exactly what a
   /// brightness key press wants: the on-screen indicator.
   func presentScrolledBrightness(_ value: Double, on display: DisplayViewModel) {
-    present(.brightness, value: value, on: display)
+    presentBrightness(value, on: display)
   }
 
   // MARK: - Which screen a key press means

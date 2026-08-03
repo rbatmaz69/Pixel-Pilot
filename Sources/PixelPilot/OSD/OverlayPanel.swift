@@ -20,8 +20,24 @@ enum OverlayPanel {
     NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
   }
 
-  static func make(content: AnyView) -> (panel: NSPanel, hosting: NSHostingView<AnyView>) {
-    let hosting = NSHostingView(rootView: content)
+  /// - Parameter acceptsMouse: Whether the panel takes mouse events at all.
+  ///
+  ///   Off for the identify overlay, and that is not a preference: it covers a
+  ///   whole screen, so accepting events would make identifying the displays
+  ///   mean not being able to click on any of them.
+  ///
+  ///   On for the HUD, which is the size of its own plate. The cost is stated
+  ///   plainly because it is real: for the second or so the HUD is up, a click
+  ///   on those 210 points goes to it rather than through it. That is the price
+  ///   of being able to grab the thing you are already looking at, and it is
+  ///   bounded by the panel being small, short-lived and always in the same
+  ///   place.
+  static func make(
+    content: AnyView, acceptsMouse: Bool = false
+  ) -> (panel: NSPanel, hosting: NSHostingView<AnyView>) {
+    let hosting: NSHostingView<AnyView> = acceptsMouse
+      ? InteractiveHostingView(rootView: content)
+      : NSHostingView(rootView: content)
     hosting.sizingOptions = [.intrinsicContentSize]
 
     let panel = NSPanel(
@@ -40,7 +56,11 @@ enum OverlayPanel {
     panel.backgroundColor = .clear
     panel.hasShadow = false
     panel.isMovable = false
-    panel.ignoresMouseEvents = true
+    panel.ignoresMouseEvents = !acceptsMouse
+    // Tracking areas below are what report the pointer, but a panel that never
+    // asked for moved events is a panel AppKit has no reason to follow the
+    // pointer over.
+    panel.acceptsMouseMovedEvents = acceptsMouse
     panel.hidesOnDeactivate = false
     panel.level = .screenSaver
     panel.collectionBehavior = [
@@ -62,6 +82,74 @@ enum OverlayPanel {
     let size = panel.contentView?.fittingSize ?? CGSize(width: 200, height: 150)
     panel.setContentSize(size)
     panel.setFrameOrigin(place(screen.frame, size))
+  }
+
+  /// A hosting view that can be pointed at and clicked by a background app.
+  ///
+  /// Two AppKit facts, both of which come from the same root: this app is never
+  /// the active one. It has no Dock icon, and both overlays are
+  /// `.nonactivatingPanel` precisely so that showing something never takes
+  /// focus from what is being worked in.
+  ///
+  /// **Hover.** A tracking area is live only while its application is active
+  /// unless it asks for `.activeAlways`, and SwiftUI's `.onHover` does not ask.
+  /// So the hover it reports is a hover that never happens here. The option has
+  /// no SwiftUI spelling, which is why this is a subclass rather than a
+  /// modifier.
+  ///
+  /// **The first click.** A click into a window of an inactive app is normally
+  /// spent activating it. This panel activates nothing, so that click would
+  /// vanish into a change of state that does not exist, and the handle would
+  /// only move on the second attempt.
+  ///
+  /// It is the content view itself rather than an overlay on top of it, and
+  /// that is the fix for the first attempt at this: a subview added at build
+  /// time has a zero frame, the panel is not sized until later, and a tracking
+  /// area over nothing tracks nothing.
+  final class InteractiveHostingView<Content: View>: NSHostingView<Content> {
+    var onHoverChanged: ((Bool) -> Void)?
+
+    /// Tags the one tracking area that belongs to this class.
+    ///
+    /// `NSHostingView` puts up its own for SwiftUI's sake, and they may well be
+    /// owned by this same object. Removing them by owner would take SwiftUI's
+    /// with them, and answering their crossings would report the pointer
+    /// entering the HUD every time it passed over a button inside it.
+    static var hoverTag: String { "dev.rb.pixelpilot.hover" }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func updateTrackingAreas() {
+      super.updateTrackingAreas()
+      for area in trackingAreas where isOurs(area) {
+        removeTrackingArea(area)
+      }
+      addTrackingArea(NSTrackingArea(
+        // Ignored, because `.inVisibleRect` keeps the area on the view's own
+        // extent as it changes. That is the fix for the first attempt at this,
+        // where a fixed rect was measured before the panel had a size.
+        rect: .zero,
+        options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+        owner: self,
+        userInfo: ["tag": Self.hoverTag]
+      ))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+      super.mouseEntered(with: event)
+      guard event.trackingArea.map(isOurs) == true else { return }
+      onHoverChanged?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+      super.mouseExited(with: event)
+      guard event.trackingArea.map(isOurs) == true else { return }
+      onHoverChanged?(false)
+    }
+
+    private func isOurs(_ area: NSTrackingArea) -> Bool {
+      area.userInfo?["tag"] as? String == Self.hoverTag
+    }
   }
 
   static func fadeIn(_ panel: NSPanel, duration: TimeInterval) {

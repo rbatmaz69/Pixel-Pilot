@@ -42,6 +42,11 @@ struct OSDView: View {
   let value: Double
   let accent: Color
   let displayName: String
+  /// What a drag on the track means, or nil for an indicator with nothing to
+  /// drag — a mute state, or a route this app cannot move.
+  var adjust: ((Double) -> Void)?
+  /// The verified write, once, when the drag ends.
+  var commit: (() -> Void)?
 
   @Environment(\.motion) private var motion
   @Environment(\.theme) private var theme
@@ -52,14 +57,27 @@ struct OSDView: View {
   @State private var hasArrived = false
   /// Bumped when the level lands on an end, to nudge the whole card.
   @State private var endStop = 0
+  /// Where a drag has put the level, until the next value arrives from outside.
+  ///
+  /// The HUD is handed a value rather than observing one, so without this the
+  /// handle would spring back to whatever the last key press said the moment it
+  /// was let go.
+  @State private var scrubbed: Double?
 
   private var isMuted: Bool { kind == .muted }
+
+  /// The level being shown: what was dragged if anything was, otherwise what
+  /// was handed in.
+  private var level: Double { scrubbed ?? value }
+
+  /// Whether the track can be grabbed at all.
+  private var isAdjustable: Bool { adjust != nil && !isMuted }
 
   var body: some View {
     VStack(spacing: Layout.snug) {
       ZStack {
         bloom
-        Image(systemName: kind.symbol(for: value))
+        Image(systemName: kind.symbol(for: level))
           .font(.system(size: 34, weight: .medium))
           .foregroundStyle(isMuted ? AnyShapeStyle(.secondary) : AnyShapeStyle(theme.fill(for: accent)))
           // The symbol swaps as the level crosses a threshold; a replace
@@ -67,19 +85,48 @@ struct OSDView: View {
           // icons flickering. The bounce is what makes crossing a threshold
           // feel like an event rather than a redraw.
           .contentTransition(.symbolEffect(.replace.downUp))
-          .symbolEffect(.bounce, value: kind.symbol(for: value))
+          .symbolEffect(.bounce, value: kind.symbol(for: level))
       }
       .frame(height: 44)
 
       if !isMuted {
-        Text("\(Int((value * 100).rounded()))%")
+        Text("\(Int((level * 100).rounded()))%")
           .font(TypeScale.heroReadout)
           .foregroundStyle(theme.ink(for: accent))
-          .contentTransition(.numericText(value: value))
-          .animation(motion.effectFast, value: value)
+          .contentTransition(.numericText(value: level))
+          .animation(motion.effectFast, value: level)
       }
 
-      track
+      // A slider from the first frame, not one that appears once the pointer
+      // arrives. Revealing it on hover was the first attempt, and it made the
+      // whole feature hostage to hover detection — in a panel belonging to an
+      // app that is never active, which is exactly where hover detection is
+      // hardest to get right. It also hid the affordance: a control you can
+      // only discover by pointing at something that looks like a progress bar
+      // is a control most people never find.
+      //
+      // A fixed height, so the plate is never resized under the pointer. The
+      // window is sized once, when the HUD is shown.
+      ZStack {
+        if isAdjustable {
+          ExpressiveSlider(
+            // An explicit closure rather than passing `scrub` by reference:
+            // handing a main-actor method straight to `Binding` crashes the
+            // 6.3.3 compiler in IRGen, on the thunk it builds to strip the
+            // isolation off.
+            value: Binding(get: { level }, set: { scrub($0) }),
+            accent: accent,
+            // No marks. The HUD is a glance, and a quarter that tugs is a
+            // detail for a control you are settling into rather than one you
+            // reached for on the way past.
+            detents: [],
+            onCommit: { _ in commit?() }
+          )
+        } else {
+          track
+        }
+      }
+      .frame(height: KnobGeometry.dragging.trackHeight + 12)
 
       Text(displayName)
         .font(.caption2)
@@ -98,12 +145,28 @@ struct OSDView: View {
     .animation(motion.expressive, value: hasArrived)
     .modifier(EndStopNudge(trigger: endStop, isReduced: motion.isReduced, settle: motion.expressive))
     .onAppear { hasArrived = true }
-    .onChange(of: value) { _, updated in
+    .onChange(of: level) { _, updated in
       if updated <= 0.001 || updated >= 0.999 { endStop += 1 }
     }
+    // A key press is the outside world speaking, and it wins: whatever a drag
+    // left behind is dropped rather than left to argue with the new figure.
+    .onChange(of: value) { _, _ in scrubbed = nil }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(kind.accessibilityLabel)
-    .accessibilityValue(Text(value, format: .percent.precision(.fractionLength(0))))
+    .accessibilityValue(Text(level, format: .percent.precision(.fractionLength(0))))
+    .accessibilityAdjustableAction { direction in
+      guard isAdjustable else { return }
+      let step = 1.0 / 16.0
+      scrub(min(1, max(0, level + (direction == .increment ? step : -step))))
+      commit?()
+    }
+  }
+
+  /// Where a drag has put the level. Cheap work only — the write that has to be
+  /// verified happens in `commit`, once, when the drag ends.
+  private func scrub(_ updated: Double) {
+    scrubbed = updated
+    adjust?(updated)
   }
 
   /// A soft halo behind the glyph, blooming once as the HUD arrives.
@@ -127,7 +190,7 @@ struct OSDView: View {
   private var track: some View {
     GeometryReader { geometry in
       let width = geometry.size.width
-      let filled = max(8, width * min(1, max(0, value)))
+      let filled = max(8, width * min(1, max(0, level)))
 
       ZStack(alignment: .leading) {
         Capsule(style: .continuous)
