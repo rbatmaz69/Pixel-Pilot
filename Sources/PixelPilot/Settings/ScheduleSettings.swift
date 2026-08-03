@@ -11,6 +11,8 @@ struct ScheduleSettings: View {
 
   @State private var schedule = Preferences.shared.global.schedule
   @State private var selected: UUID?
+  /// Where on the arc the pointer is, while it is on the arc.
+  @State private var scrubbed: Double?
   @State private var locator = OneShotLocator()
   @State private var manualLatitude = ""
   @State private var manualLongitude = ""
@@ -52,7 +54,8 @@ struct ScheduleSettings: View {
             nowFraction: Self.nowFraction,
             selected: selected,
             onSelect: { selected = $0 },
-            onMove: move
+            onMove: move,
+            onScrub: { scrubbed = $0 }
           )
           .transition(.blurReplace)
 
@@ -63,6 +66,8 @@ struct ScheduleSettings: View {
             Spacer()
             Text("Midnight").font(TypeScale.detail).foregroundStyle(.secondary)
           }
+
+          scrubReadout
 
           if let next = model.nextScheduledChange {
             StatusRow(
@@ -83,6 +88,42 @@ struct ScheduleSettings: View {
           + "place, about 11 km.")
       }
     }
+  }
+
+  /// What the screens would be doing at the moment the pointer is over.
+  ///
+  /// A schedule is a list of times, and reading a list is how you find out what
+  /// it says at nine in the evening — which nobody does, so a stop that is
+  /// wrong stays wrong until an evening goes badly. Pointing at the picture
+  /// answers it instead.
+  ///
+  /// Kept to one row, in the space the card already had. This is a caption on
+  /// the arc, not a second view of the schedule.
+  @ViewBuilder
+  private var scrubReadout: some View {
+    if let scrubbed, let stop = DayArc.stop(at: scrubbed, stops: schedule.stops) {
+      StatusRow(
+        symbol: "eye",
+        tint: theme.tone,
+        title: "At \(DayArc.timeLabel(at: scrubbed)): \(Self.summary(of: stop))",
+        detail: "Set by \(DayArc.label(for: stop)). Looking changes nothing."
+      )
+      .transition(.blurReplace)
+    }
+  }
+
+  /// A stop in one line: what it does, in the order it does it.
+  private static func summary(of stop: ScheduleStop) -> String {
+    var parts: [String] = []
+    if let brightness = stop.brightness {
+      parts.append("\(Int((brightness * 100).rounded()))%")
+    }
+    if let kelvin = stop.kelvin {
+      parts.append("\(Int(kelvin.rounded())) K")
+    }
+    // A stop is allowed to carry neither — `ScheduleStop` makes both optional
+    // on purpose — and "nothing" is a better answer than an empty line.
+    return parts.isEmpty ? "no change" : parts.joined(separator: ", ")
   }
 
   // MARK: - Stops
