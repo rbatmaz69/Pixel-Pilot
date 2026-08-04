@@ -13,16 +13,15 @@ import SwiftUI
 /// built fresh on every open, the staggered arrival plays every single time the
 /// panel is used — and costs nothing at all in between.
 ///
-/// The two ways out are closures rather than `openWindow` and `SettingsLink`.
-/// Both of those are scene-graph facilities, and this view is hosted by AppKit
-/// now. Injecting them also means the panel no longer knows what a window is,
-/// which is the right amount for it to know.
+/// The way out is a closure rather than `openWindow` or `SettingsLink`. Both of
+/// those are scene-graph facilities, and this view is hosted by AppKit now.
+/// Injecting it also means the panel no longer knows what a window is, which is
+/// the right amount for it to know.
 struct MenuBarPanel: View {
   @Environment(\.motion) private var motion
   @Environment(\.theme) private var theme
 
   let model: AppModel
-  var onOpenDisplays: () -> Void = {}
   var onOpenSettings: () -> Void = {}
 
   /// The preset the pointer has been resting on long enough to mean it.
@@ -254,19 +253,21 @@ struct MenuBarPanel: View {
     .padding(.top, Layout.tight)
   }
 
+  /// One way in rather than two.
+  ///
+  /// There used to be a "Displays" button here as well, because the per-monitor
+  /// configuration lived in a window of its own. It does not any more — it is a
+  /// section of the settings window — and two buttons leading to one window is
+  /// a choice with no difference behind it.
   private var footer: some View {
     HStack(spacing: Layout.tight) {
-      Button(action: onOpenDisplays) {
-        Label("Displays", systemImage: "slider.horizontal.3")
+      Button(action: onOpenSettings) {
+        Label("Settings", systemImage: "gearshape")
           .labelStyle(.titleAndIcon)
       }
+      .help("Displays, presets, schedule and keys")
 
       Spacer()
-
-      Button(action: onOpenSettings) {
-        Image(systemName: "gearshape")
-      }
-      .help("Settings")
 
       Button {
         NSApplication.shared.terminate(nil)
@@ -359,7 +360,7 @@ private struct DisplayControlGroup: View {
     // Worth noting what else went with it: `AmbientBackdrop` is the one thing
     // in this app that moves on its own, and this was the copy of it that ran
     // whenever the panel was open — which is the surface opened dozens of times
-    // a day. The Displays window keeps its own.
+    // a day. A display's page in the settings window keeps its own.
     .cardSurface(accent: display.accent)
     // A preset that says nothing about this display steps back rather than
     // announcing itself. "Not mentioned" is the ordinary case — a preset for

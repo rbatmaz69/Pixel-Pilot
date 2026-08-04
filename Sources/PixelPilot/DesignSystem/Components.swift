@@ -18,7 +18,7 @@ struct PanelCard<Content: View>: View {
   let title: String
   let systemImage: String
   /// Left unset by everything that is not about one particular display, and
-  /// then it is the theme's — which is what makes a settings tab take the
+  /// then it is the theme's — which is what makes a settings page take the
   /// chosen colour without every card being told to.
   var accent: Color?
   @ViewBuilder var content: Content
@@ -31,16 +31,7 @@ struct PanelCard<Content: View>: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
-      HStack(spacing: Layout.tight) {
-        Image(systemName: systemImage)
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(theme.ink(for: tone))
-          .frame(width: 22, height: 22)
-          .background(Circle().fill(theme.wash(for: tone)))
-        Text(title)
-          .font(TypeScale.cardTitle)
-        Spacer(minLength: 0)
-      }
+      CardHeader(title: title, systemImage: systemImage, tone: tone)
 
       content
     }
@@ -63,7 +54,108 @@ struct PanelCard<Content: View>: View {
   }
 }
 
-/// A column of cards, for a settings tab or any other page made of sections.
+/// A card whose contents are folded away until they are asked for.
+///
+/// For the sections that answer "why is this not working" rather than "what do
+/// I want" — worth having on the page, not worth its height every time the page
+/// is opened. The whole heading is the control rather than the chevron alone: a
+/// glyph the size of a full stop is a poor target for something the rest of the
+/// row is already advertising.
+struct DisclosureCard<Content: View>: View {
+  let title: String
+  let systemImage: String
+  /// Same convention as `PanelCard`: unset means the theme's colour.
+  var accent: Color?
+  /// What is behind the fold, said while it is shut. Without this a closed card
+  /// is a title and an arrow, which is an invitation to open it just to find
+  /// out whether it was worth opening.
+  var summary: String?
+  @ViewBuilder var content: Content
+
+  @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
+  @State private var isExpanded = false
+  @State private var isHovered = false
+
+  private var tone: Color { accent ?? theme.tone }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: Layout.snug) {
+      Button {
+        isExpanded.toggle()
+      } label: {
+        CardHeader(title: title, systemImage: systemImage, tone: tone) {
+          Image(systemName: "chevron.right")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+        }
+        // The heading's own row, gaps included — otherwise the target is the
+        // text and the glyph, with dead space between them.
+        .contentShape(.rect)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(title)
+      .accessibilityHint(isExpanded ? "Hides the details" : "Shows the details")
+
+      if isExpanded {
+        content.transition(.blurReplace)
+      } else if let summary {
+        Text(summary)
+          .font(TypeScale.detail)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .transition(.blurReplace)
+      }
+    }
+    .padding(Layout.normal)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .cardSurface(accent: tone, isRaised: isHovered)
+    .offset(y: isHovered && !motion.isReduced ? -1 : 0)
+    .animation(motion.spatialFast, value: isHovered)
+    // Spatial rather than an effect curve: the card below this one has to
+    // travel, and that is a change of position however it was triggered.
+    .animation(motion.spatialDefault, value: isExpanded)
+    .onHover { isHovered = $0 }
+  }
+}
+
+/// The icon, the title, and whatever the card puts on the right of them.
+///
+/// Shared by `PanelCard` and `DisclosureCard` because the two must be the same
+/// heading — a card that folds should not announce itself in a different voice
+/// from the card above it.
+private struct CardHeader<Trailing: View>: View {
+  let title: String
+  let systemImage: String
+  let tone: Color
+  @ViewBuilder var trailing: Trailing
+
+  @Environment(\.theme) private var theme
+
+  var body: some View {
+    HStack(spacing: Layout.tight) {
+      Image(systemName: systemImage)
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(theme.ink(for: tone))
+        .frame(width: 22, height: 22)
+        .background(Circle().fill(theme.wash(for: tone)))
+      Text(title)
+        .font(TypeScale.cardTitle)
+        .foregroundStyle(.primary)
+      Spacer(minLength: 0)
+      trailing
+    }
+  }
+}
+
+extension CardHeader where Trailing == EmptyView {
+  init(title: String, systemImage: String, tone: Color) {
+    self.init(title: title, systemImage: systemImage, tone: tone, trailing: { EmptyView() })
+  }
+}
+
+/// A column of cards, for a settings page or any other page made of sections.
 ///
 /// The counterpart to `Form(.grouped)`, which was the last thing in the app
 /// still drawing system chrome: its sections come with their own radius and
@@ -83,7 +175,7 @@ struct CardStack<Content: View>: View {
       .padding(Layout.loose)
       .frame(maxWidth: .infinity, alignment: .leading)
       // Here rather than at each scene root. A card column is exactly the scope
-      // the switch style belongs to, so a new settings tab gets it by being a
+      // the switch style belongs to, so a new settings page gets it by being a
       // card column — one fewer thing to remember than the modifier `Layout`'s
       // documentation already complains about having to remember.
       .toggleStyle(.morph)

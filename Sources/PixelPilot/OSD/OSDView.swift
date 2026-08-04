@@ -12,7 +12,7 @@ enum OSDKind: Equatable {
   /// produce nothing, and the difference is the whole question somebody has
   /// when their volume keys stop working on a new monitor. The same reasoning
   /// as `DisplayViewModel.volumeUnavailableReason`, which spells the case out
-  /// in the Displays window instead of just omitting the slider.
+  /// on the display's settings page instead of just omitting the slider.
   case unavailable
 
   /// Icon that reflects the level, the way the system OSD does — a speaker with

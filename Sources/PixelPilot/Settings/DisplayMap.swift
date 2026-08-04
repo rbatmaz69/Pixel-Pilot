@@ -5,7 +5,7 @@ import SwiftUI
 /// The displays as they are actually arranged on the desk.
 ///
 /// Sits **above** the sidebar list rather than replacing it. The list was
-/// chosen deliberately — `MainWindow` documents that a custom stack with a
+/// chosen deliberately — `SettingsWindow` documents that a custom stack with a
 /// sliding pill would look better and would cost arrow-key navigation of the
 /// sidebar — and that trade has not changed. Clicking a rectangle writes the
 /// same selection the list does, so keyboard focus never leaves the list and

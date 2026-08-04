@@ -74,14 +74,10 @@ final class StatusItemController: NSObject {
         anchoredTo: button,
         content: MenuBarPanel(
           model: model,
-          onOpenDisplays: { [weak self] in
-            self?.panel.close()
-            self?.updateHighlight()
-            self?.windows.showDisplays()
-          },
           onOpenSettings: { [weak self] in
             self?.panel.close()
             self?.updateHighlight()
+            // No route: the gear reopens the window where it was left.
             self?.windows.showSettings()
           }
         )
@@ -178,7 +174,10 @@ final class StatusItemController: NSObject {
         onOpenSettings: { [weak self] in
           self?.panel.close()
           self?.updateHighlight()
-          self?.windows.showSettings()
+          // Straight to the page this sheet is about. The question being asked
+          // is "what should happen for this application", and the answer is not
+          // on whichever page the window was last left on.
+          self?.windows.showSettings(route: .app(.apps))
         }
       )
     )

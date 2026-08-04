@@ -1,99 +1,10 @@
 import PixelPilotCore
 import SwiftUI
 
-/// The full window: one display per sidebar row, with every control the panel
-/// supports plus the diagnostics needed to work out why one of them is missing.
-struct MainWindow: View {
-  let model: AppModel
-
-  @State private var selection: DisplayViewModel.ID?
-
-  var body: some View {
-    NavigationSplitView {
-      // Still a `List` with a system selection rather than a custom stack with
-      // a sliding pill. The pill would look better and would cost arrow-key
-      // navigation of the sidebar, which is not a trade worth making for a
-      // highlight.
-      VStack(spacing: 0) {
-        if model.displays.count > 1 {
-          // Only with more than one. A map of a single display is a rectangle
-          // saying what the row below it already says.
-          DisplayMap(
-            displays: model.displays,
-            selection: $selection,
-            layoutTick: model.screenLayoutTick
-          )
-          .padding(.horizontal, Layout.snug)
-          .padding(.top, Layout.snug)
-
-          Button {
-            model.identifyDisplays()
-          } label: {
-            Label("Identify", systemImage: "number.circle")
-              .font(TypeScale.detail.weight(.medium))
-          }
-          .buttonStyle(.soft)
-          .padding(.vertical, Layout.tight)
-        }
-
-        List(model.displays, selection: $selection) { display in
-          HStack(spacing: Layout.tight) {
-            AccentDot(accent: display.accent, isReady: display.isReady, size: 9)
-            VStack(alignment: .leading, spacing: 1) {
-              Text(display.name).font(TypeScale.rowTitle)
-              Text(display.isBuiltin ? "Built-in" : display.routeDescription)
-                .font(TypeScale.detail)
-                .foregroundStyle(.secondary)
-            }
-          }
-          .padding(.vertical, 3)
-          .tag(display.id)
-        }
-        // A `List` paints the system's sidebar material over whatever is behind
-        // it, which here is the theme's field. Hiding it is what keeps the
-        // sidebar the same colour as the rest of the window.
-        .scrollContentBackground(.hidden)
-      }
-      .navigationSplitViewColumnWidth(min: 200, ideal: 220)
-    } detail: {
-      if let display = model.displays.first(where: { $0.id == selection }) {
-        DisplayDetail(model: model, display: display, log: model.log,
-                      groupChangeTick: model.groupChangeTick)
-      } else if model.displays.isEmpty {
-        // Two empty states, not one. "Nothing is plugged in" and "nothing is
-        // selected" are different problems with different next steps, and
-        // `ContentUnavailableView` was telling both of them to pick from a
-        // list that might have nothing in it.
-        CharacterfulEmptyState(
-          title: "Looking for displays",
-          message: "Nothing is answering on the DDC bus yet. External monitors appear here "
-            + "as soon as they are connected."
-        ) {
-          SearchingRadar()
-        }
-      } else {
-        CharacterfulEmptyState(
-          title: "Pick a display",
-          message: "Choose one on the left to see its controls, what it really supports, "
-            + "and what it has been saying back."
-        ) {
-          BreathingMonitor()
-        }
-      }
-    }
-    .onAppear {
-      if selection == nil { selection = model.displays.first?.id }
-    }
-    .onChange(of: model.displays.map(\.id)) { _, ids in
-      // A display was unplugged or replaced; do not leave a dead selection.
-      if selection == nil || !ids.contains(selection!) {
-        selection = ids.first
-      }
-    }
-  }
-}
-
-private struct DisplayDetail: View {
+/// One display's page in the settings window: every control the menu bar panel
+/// offers, everything that can be configured about that particular monitor, and
+/// the diagnostics needed to work out why one of them is missing.
+struct DisplayPage: View {
   @Environment(\.motion) private var motion
   /// The ambient wash stops when the window is not the one being used. A glow
   /// drifting away behind three other windows is pure cost.
@@ -118,8 +29,7 @@ private struct DisplayDetail: View {
         }
         card(2) { ColorSection(display: display) }
         card(3) { configuration }
-        card(4) { capabilities }
-        card(5) { diagnostics }
+        card(4) { diagnostics }
       }
       .padding(Layout.loose)
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -436,28 +346,47 @@ private struct DisplayDetail: View {
     )
   }
 
-  /// The point of showing this is the failures. When a slider is missing, this
-  /// is where the reason is — "maximum is 0xFFFF" is a real answer, where a
-  /// silently absent control is not.
+  /// What the display said it can do, and what it has been saying since.
+  ///
+  /// Folded away, and the two halves are one card rather than two: both are
+  /// here for the same question — a control is missing or misbehaving, why —
+  /// and neither is worth its height on the way to moving a slider. The point
+  /// of showing them at all is the failures. "Maximum is 0xFFFF" is a real
+  /// answer where a silently absent control is not.
+  private var diagnostics: some View {
+    DisclosureCard(
+      title: "Diagnostics",
+      systemImage: "stethoscope",
+      accent: display.accent,
+      summary: "What this display reports it can do, and what it has been saying back."
+    ) {
+      VStack(alignment: .leading, spacing: Layout.normal) {
+        capabilities
+        Divider()
+        ddcLog
+      }
+    }
+  }
+
   private var capabilities: some View {
-    PanelCard(title: "Reported features", systemImage: "checklist", accent: display.accent) {
-      VStack(alignment: .leading, spacing: Layout.tight) {
-        if let probed = display.capabilities {
-          ForEach(VCPCode.probeSet, id: \.rawValue) { vcp in
-            StatusRow(
-              symbol: probed.isUsable(vcp) ? "checkmark.circle.fill" : "minus.circle",
-              tint: probed.isUsable(vcp) ? Status.ok : nil,
-              title: vcp.description,
-              titleWidth: 170
-            ) {
-              Text(detail(for: probed.support(for: vcp)))
-                .font(TypeScale.detail)
-                .foregroundStyle(.secondary)
-            }
+    VStack(alignment: .leading, spacing: Layout.tight) {
+      Text("Reported features").font(TypeScale.rowTitle)
+
+      if let probed = display.capabilities {
+        ForEach(VCPCode.probeSet, id: \.rawValue) { vcp in
+          StatusRow(
+            symbol: probed.isUsable(vcp) ? "checkmark.circle.fill" : "minus.circle",
+            tint: probed.isUsable(vcp) ? Status.ok : nil,
+            title: vcp.description,
+            titleWidth: 170
+          ) {
+            Text(detail(for: probed.support(for: vcp)))
+              .font(TypeScale.detail)
+              .foregroundStyle(.secondary)
           }
-        } else {
-          Text("Not probed yet.").font(.callout).foregroundStyle(.secondary)
         }
+      } else {
+        Text("Not probed yet.").font(.callout).foregroundStyle(.secondary)
       }
     }
   }
@@ -471,24 +400,26 @@ private struct DisplayDetail: View {
     }
   }
 
-  private var diagnostics: some View {
-    PanelCard(title: "DDC log", systemImage: "text.alignleft", accent: display.accent) {
-      // Newest first: when something just broke, it is the top line that
-      // matters.
-      let records = log.snapshot().suffix(40).reversed()
-      VStack(alignment: .leading, spacing: Layout.hair) {
-        if records.isEmpty {
-          Text("No activity recorded.").font(.callout).foregroundStyle(.secondary)
-        } else {
-          ForEach(Array(records), id: \.id) { record in
-            Text(record.entry.message)
-              .font(TypeScale.mono)
-              .foregroundStyle(.secondary)
-              .textSelection(.enabled)
-          }
+  private var ddcLog: some View {
+    // Newest first: when something just broke, it is the top line that
+    // matters.
+    let records = log.snapshot().suffix(40).reversed()
+    return VStack(alignment: .leading, spacing: Layout.hair) {
+      Text("DDC log")
+        .font(TypeScale.rowTitle)
+        .padding(.bottom, Layout.hair)
+
+      if records.isEmpty {
+        Text("No activity recorded.").font(.callout).foregroundStyle(.secondary)
+      } else {
+        ForEach(Array(records), id: \.id) { record in
+          Text(record.entry.message)
+            .font(TypeScale.mono)
+            .foregroundStyle(.secondary)
+            .textSelection(.enabled)
         }
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 }

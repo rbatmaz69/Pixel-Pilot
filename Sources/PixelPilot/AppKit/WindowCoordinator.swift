@@ -19,57 +19,52 @@ import SwiftUI
 ///
 /// What is gained is the same thing `OSDController` gains: deterministic
 /// teardown. Each window is built on demand and released in `windowWillClose`,
-/// which takes its SwiftUI hierarchy with it — including, for the Displays
-/// window, the `AmbientBackdrop` that would otherwise keep drifting behind a
-/// window nobody can see.
+/// which takes its SwiftUI hierarchy with it — including, on a display page,
+/// the `AmbientBackdrop` that would otherwise keep drifting behind a window
+/// nobody can see.
 @MainActor
 final class WindowCoordinator: NSObject {
   private let model: AppModel
 
-  private var displaysWindow: NSWindow?
   private var settingsWindow: NSWindow?
   private var onboardingWindow: NSWindow?
+
+  /// Outside the window on purpose — see `SettingsRouter`. The window's view
+  /// tree is thrown away when it closes, so anything held in it would forget
+  /// where it was, and a caller could not aim an already-open window at a page.
+  private let settingsRouter = SettingsRouter()
 
   init(model: AppModel) {
     self.model = model
   }
 
-  // MARK: - Displays
-
-  func showDisplays() {
-    if let displaysWindow {
-      present(displaysWindow)
-      return
-    }
-
-    let window = makeWindow(
-      title: "Displays",
-      autosaveName: "displays",
-      minSize: CGSize(width: 620, height: 420),
-      defaultSize: CGSize(width: 720, height: 480),
-      content: MainWindow(model: model)
-    )
-    displaysWindow = window
-    present(window)
-  }
-
   // MARK: - Settings
 
-  func showSettings() {
+  /// Opens the settings window, optionally on a particular page.
+  ///
+  /// With no route it reopens where it was left, which is the right answer for
+  /// the menu bar's gear: somebody who was in the middle of something and
+  /// closed the window is going back to it. A route is for the callers that
+  /// know better than the window does — dropping an application on the icon is
+  /// about per-app rules, and landing on General would be a page of colour
+  /// swatches in answer to a question about that app.
+  func showSettings(route: SettingsRoute? = nil) {
+    if let route { settingsRouter.route = route }
+
     if let settingsWindow {
       present(settingsWindow)
       return
     }
 
-    // Fixed size, as the `Settings` scene was: the cards scroll, so a tab with
-    // more in it does not have to resize the window to show it.
+    // Resizable, and roomier than either of the two windows this replaces: a
+    // sidebar and a column of cards need the width, and the DDC log inside the
+    // diagnostics fold needs somewhere to go when it is opened.
     let window = makeWindow(
       title: "Pixel Pilot Settings",
       autosaveName: "settings",
-      minSize: CGSize(width: 520, height: 580),
-      defaultSize: CGSize(width: 520, height: 580),
-      isResizable: false,
-      content: SettingsView(model: model)
+      minSize: CGSize(width: 700, height: 520),
+      defaultSize: CGSize(width: 820, height: 600),
+      content: SettingsWindow(model: model, router: settingsRouter)
     )
     settingsWindow = window
     present(window)
@@ -172,14 +167,13 @@ extension WindowCoordinator: NSWindowDelegate {
   ///
   /// Same argument as `OSDController.teardown()`: a window kept alive holds a
   /// backing store, a compositing layer and a live view tree for the rest of
-  /// the session. For the Displays window it also holds the `AmbientBackdrop`,
+  /// the session. On a display's page it also holds the `AmbientBackdrop`,
   /// which is a running animation — it had been parked via
   /// `controlActiveState`, which stops the drift but not the hierarchy. This
   /// stops both.
   func windowWillClose(_ notification: Notification) {
     guard let window = notification.object as? NSWindow else { return }
     window.contentView = nil
-    if window === displaysWindow { displaysWindow = nil }
     if window === settingsWindow { settingsWindow = nil }
     if window === onboardingWindow {
       // Closed by the window's own button rather than by finishing the flow.

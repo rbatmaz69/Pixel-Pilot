@@ -279,9 +279,28 @@ whichever card the pointer happened to be over. That needs an event monitor
 rather than focus, has no visible affordance, and leaves "which card did that go
 to?" a question the interface cannot answer.
 
+**Every setting is in one window.** There used to be two — a "Displays" window
+with the per-monitor controls and configuration, and a "Settings" window with
+everything else — and no line anybody could hold in their head between them. The
+brightness strategy and the DDC timing are settings by any reading; the accent
+colour existed in both places at once. The proof was in the prose: the theme card
+had to end a paragraph with "that one is in the Displays window", which is a
+footnote apologising for the navigation.
+
+Now the gear in the menu bar panel is the only way in, and the sidebar has two
+sections: the displays that are plugged in, then the app itself. Every row
+carries a line saying what is on the page — "Media keys, permissions, detection"
+under Keys — so finding a setting is reading rather than opening pages to check.
+A display's page keeps its sliders at the top and folds "Diagnostics", the
+reported features and the DDC log, away at the bottom: worth having, not worth
+its height on the way to moving a slider. The window reopens where it was left,
+except when a caller knows better — dropping an application on the icon and
+choosing "Open Settings…" lands on Apps, because that is the question being
+asked.
+
 **An application dropped on the menu bar icon gets a rule.** A preset chosen
 from the chips that unroll, and that is the whole flow. It used to be: open
-Settings, find the tab, work an open panel, hunt through `/Applications`, then
+Settings, find the page, work an open panel, hunt through `/Applications`, then
 choose a preset — with the application usually sitting in the Dock the whole
 time.
 
@@ -315,7 +334,8 @@ Packages/PixelPilotCore/   UI-free core, unit tested
 Sources/PixelPilot/        The app
   DesignSystem/            Tokens, motion, morphing shapes, theme, components
   AppKit/                  Window ownership; the app's shell is AppKit
-  MenuBar/ OSD/ MainWindow/ Settings/ Onboarding/ Input/ Model/
+  Settings/                The one settings window: sidebar, display pages, app pages
+  MenuBar/ OSD/ Onboarding/ Input/ Model/
 project.yml                Xcode project definition (the .xcodeproj is generated)
 ```
 
@@ -428,7 +448,7 @@ read cannot be misread. All the notification is used for is "something changed";
 the value itself comes back through `DisplayServicesGetBrightness`, which the app
 already depends on. If the symbols are missing, `BuiltinBrightnessSource` falls
 back to a five-second timer that runs only while a display is actually following,
-and the Displays window says so.
+and the display's page says so.
 
 The system on-screen indicator is not used. macOS 26 reworked the private OSD
 interface and third-party values no longer render there; established apps show
@@ -565,7 +585,7 @@ uninitialised memory.
 Taking those at face value produces sliders that move and do nothing. So every
 panel is probed once, the answers are sanity-checked, and controls that fail the
 check are not drawn at all. `ppctl probe` shows the verdict per feature, and the
-main window lists the reason a control is missing.
+display's Diagnostics fold lists the reason a control is missing.
 
 ## Acknowledgements
 

@@ -22,7 +22,7 @@ struct DroppedApplication: Equatable {
 
 /// The status item, as somewhere to drop an application.
 ///
-/// Making a rule used to cost: open Settings, find the tab, work an open panel,
+/// Making a rule used to cost: open Settings, find the page, work an open panel,
 /// hunt through `/Applications`, then choose a preset. The application is
 /// usually sitting in the Dock while all that happens. This is the same rule
 /// in one gesture.
