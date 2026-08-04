@@ -111,13 +111,29 @@ struct OSDInteractionTests {
     #expect((received.values.last ?? 0) > 0.5)
   }
 
-  /// A mute indicator has nothing to send anywhere, and must not pretend to.
-  @Test("An indicator with nowhere to send a value has no handle")
-  func mutedIsInert() {
+  /// An indicator for a state rather than a level has nothing to send anywhere,
+  /// and must not pretend to. The unavailable case matters most: it exists
+  /// precisely to say that nothing can be changed, so a handle on it would
+  /// contradict the only thing it is there to communicate.
+  @Test("Indicators with nowhere to send a value have no handle", arguments: [
+    OSDKind.muted, OSDKind.unavailable,
+  ])
+  func inertKinds(_ kind: OSDKind) {
     let received = Received()
-    let view = OSDView(kind: .muted, value: 0, accent: .blue, displayName: "Probe")
-      .withMotionTokens()
-      .withAppTheme(paintsWindow: false)
+    let view = OSDView(
+      kind: kind,
+      value: 0,
+      accent: .blue,
+      displayName: "Probe",
+      detail: kind == .unavailable ? "Probe has no DDC audio." : nil,
+      // Supplied on purpose, to prove the view refuses it rather than merely
+      // never being handed one.
+      adjust: { received.values.append($0) },
+      commit: { received.commits += 1 }
+    )
+    .withMotionTokens()
+    .withAppTheme(paintsWindow: false)
+
     let made = OverlayPanel.make(content: AnyView(view), acceptsMouse: true)
     OverlayPanel.position(made.panel, on: NSScreen.main ?? NSScreen.screens[0]) { frame, size in
       CGPoint(x: frame.midX - size.width / 2, y: frame.minY + frame.height * 0.12)
@@ -127,9 +143,43 @@ struct OSDInteractionTests {
     settle()
     defer { made.panel.orderOut(nil) }
 
-    send(.leftMouseDown, at: CGPoint(x: 100, y: trackY(in: made.panel)), to: made.panel)
-    send(.leftMouseUp, at: CGPoint(x: 100, y: trackY(in: made.panel)), to: made.panel)
+    let y = trackY(in: made.panel)
+    send(.leftMouseDown, at: CGPoint(x: 40, y: y), to: made.panel)
+    send(.leftMouseDragged, at: CGPoint(x: made.panel.frame.width - 40, y: y), to: made.panel)
+    send(.leftMouseUp, at: CGPoint(x: made.panel.frame.width - 40, y: y), to: made.panel)
 
     #expect(received.values.isEmpty)
+    #expect(received.commits == 0)
+  }
+
+  /// The explanation is the only reason this HUD exists, so it had better be
+  /// laid out rather than clipped to the height of a plate that has none.
+  ///
+  /// Compared against the same kind without a sentence, not against a volume
+  /// HUD. The unavailable one drops the large figure and gains two lines of
+  /// caption, which very nearly cancel — so measuring it against a different
+  /// kind would be measuring the figure, and would have passed or failed for
+  /// reasons that have nothing to do with the sentence.
+  @Test("The unavailable indicator makes room for its explanation")
+  func explanationIsLaidOut() {
+    func height(detail: String?) -> CGFloat {
+      let view = OSDView(
+        kind: .unavailable, value: 0, accent: .blue, displayName: "Probe", detail: detail
+      )
+      .withMotionTokens()
+      .withAppTheme(paintsWindow: false)
+      let made = OverlayPanel.make(content: AnyView(view), acceptsMouse: true)
+      made.hosting.layoutSubtreeIfNeeded()
+      return made.hosting.fittingSize.height
+    }
+
+    let bare = height(detail: nil)
+    let explained = height(
+      detail: "Probe has no DDC audio, and the output device has a fixed level."
+    )
+
+    #expect(explained > bare)
+    // Two lines of caption at 210 points wide, not one clipped line.
+    #expect(explained - bare > 20)
   }
 }

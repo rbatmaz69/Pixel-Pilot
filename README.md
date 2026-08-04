@@ -236,6 +236,30 @@ and always in the same place. The identify overlay keeps refusing mouse events
 outright, because it covers whole screens — accepting them there would make
 identifying the displays mean not being able to click on any of them.
 
+**A volume key with nowhere to go now says so.** On a monitor with no DDC audio
+whose digital output sits at a fixed level, pressing the volume keys used to do
+nothing at all — the press was passed through and vanished. From the outside
+"the app is not running", "the app ignores this key" and "the app tried and
+there is no volume control here" are the same silence, and only the last one is
+true. It is also every volume key press, all day.
+
+So the indicator appears: a speaker carrying an exclamation mark, no figure, an
+empty track, and one line saying why. The glyph is deliberately not the slashed
+speaker that means muted — muted is a state you put something into and can take
+it out of again, and this is a control that does not exist. Drawing them the
+same would answer "did I just mute it?" with a shrug. There is no fill on the
+track either, because a fill of any width is a reading and the point of this HUD
+is that there is nothing to read.
+
+The sentence is the short form of `DisplayViewModel.volumeUnavailableReason` and
+lives beside it, so the two cannot drift into disagreeing about which of them is
+true: the window gets the three sentences with the fix in them, a plate 210
+points wide gets the fact.
+
+It is shown only when the press can also be swallowed. Without that, macOS acts
+on the same key and draws its own indicator, and the answer to one silent HUD
+would have been two of them.
+
 **A figure can be typed.** Click a percentage anywhere in the app and it becomes
 a field, prefilled and fully selected, so the first digit replaces the figure
 rather than making it ten times bigger. Return writes, Escape and clicking away

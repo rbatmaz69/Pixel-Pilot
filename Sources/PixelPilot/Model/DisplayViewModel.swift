@@ -193,6 +193,21 @@ final class DisplayViewModel: Identifiable {
     return "\(device) has no volume macOS can change."
   }
 
+  /// The same in one line, for the on-screen indicator.
+  ///
+  /// Next to the long form rather than built where it is shown, so the two
+  /// cannot drift into disagreeing about which of them is true. A HUD is 210
+  /// points wide and on screen for a second: the window gets the three
+  /// sentences with the fix in them, this gets the fact.
+  var volumeUnavailableSummary: String? {
+    guard volumeRoute == .unavailable else { return nil }
+    let device = SystemVolume.defaultOutputDeviceName() ?? "the output device"
+    if capabilities?.isUsable(.audioSpeakerVolume) == false, queue != nil {
+      return "\(name) has no DDC audio, and \(device) has a fixed level."
+    }
+    return "\(device) has no volume macOS can change."
+  }
+
   /// Re-evaluates the audio route after the output device changed.
   func refreshVolumeRoute() async {
     let route = await volumeController.route

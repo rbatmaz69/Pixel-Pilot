@@ -5,6 +5,15 @@ enum OSDKind: Equatable {
   case brightness
   case volume
   case muted
+  /// The key was pressed, understood, and there is nothing to move.
+  ///
+  /// Worth a HUD of its own rather than silence. "This app did not react" and
+  /// "this app reacted and the hardware cannot do it" look identical when both
+  /// produce nothing, and the difference is the whole question somebody has
+  /// when their volume keys stop working on a new monitor. The same reasoning
+  /// as `DisplayViewModel.volumeUnavailableReason`, which spells the case out
+  /// in the Displays window instead of just omitting the slider.
+  case unavailable
 
   /// Icon that reflects the level, the way the system OSD does — a speaker with
   /// no waves at zero reads as "off" without needing to parse a number.
@@ -19,6 +28,12 @@ enum OSDKind: Equatable {
       else { "speaker.wave.3.fill" }
     case .muted:
       "speaker.slash.fill"
+    case .unavailable:
+      // Not the slashed speaker, which is already muted's. Muted is a state you
+      // put the thing into and can take it out of again; this is a control that
+      // does not exist. Drawing them the same would answer "did I just mute
+      // it?" with a shrug.
+      "speaker.badge.exclamationmark.fill"
     }
   }
 
@@ -27,6 +42,7 @@ enum OSDKind: Equatable {
     case .brightness: "Brightness"
     case .volume: "Volume"
     case .muted: "Muted"
+    case .unavailable: "Volume unavailable"
     }
   }
 }
@@ -42,6 +58,10 @@ struct OSDView: View {
   let value: Double
   let accent: Color
   let displayName: String
+  /// Why there is nothing to move, for `.unavailable`. One line, and the short
+  /// form of `DisplayViewModel.volumeUnavailableReason` — a plate 210 points
+  /// wide is not the place for the three-sentence version the window carries.
+  var detail: String?
   /// What a drag on the track means, or nil for an indicator with nothing to
   /// drag — a mute state, or a route this app cannot move.
   var adjust: ((Double) -> Void)?
@@ -65,13 +85,14 @@ struct OSDView: View {
   @State private var scrubbed: Double?
 
   private var isMuted: Bool { kind == .muted }
+  private var isUnavailable: Bool { kind == .unavailable }
 
   /// The level being shown: what was dragged if anything was, otherwise what
   /// was handed in.
   private var level: Double { scrubbed ?? value }
 
   /// Whether the track can be grabbed at all.
-  private var isAdjustable: Bool { adjust != nil && !isMuted }
+  private var isAdjustable: Bool { adjust != nil && !isMuted && !isUnavailable }
 
   var body: some View {
     VStack(spacing: Layout.snug) {
@@ -79,7 +100,7 @@ struct OSDView: View {
         bloom
         Image(systemName: kind.symbol(for: level))
           .font(.system(size: 34, weight: .medium))
-          .foregroundStyle(isMuted ? AnyShapeStyle(.secondary) : AnyShapeStyle(theme.fill(for: accent)))
+          .foregroundStyle(glyphStyle)
           // The symbol swaps as the level crosses a threshold; a replace
           // transition makes that read as one icon changing rather than two
           // icons flickering. The bounce is what makes crossing a threshold
@@ -89,7 +110,7 @@ struct OSDView: View {
       }
       .frame(height: 44)
 
-      if !isMuted {
+      if !isMuted, !isUnavailable {
         Text("\(Int((level * 100).rounded()))%")
           .font(TypeScale.heroReadout)
           .foregroundStyle(theme.ink(for: accent))
@@ -132,6 +153,17 @@ struct OSDView: View {
         .font(.caption2)
         .foregroundStyle(.tertiary)
         .lineLimit(1)
+
+      // Only the unavailable case has anything to say here. Every other HUD is
+      // a figure and a track, and a sentence under those would be a caption on
+      // something that does not need one.
+      if let detail {
+        Text(detail)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+          .fixedSize(horizontal: false, vertical: true)
+      }
     }
     .padding(.horizontal, Layout.loose)
     .padding(.vertical, Layout.loose)
@@ -187,6 +219,14 @@ struct OSDView: View {
       .animation(motion.expressive, value: hasArrived)
   }
 
+  /// The glyph's colour. Accent when there is a level to report, and out of the
+  /// accent entirely when there is not — the app's colour is what it uses to
+  /// say "this is a thing you set", and the unavailable HUD is the one case
+  /// where it is not.
+  private var glyphStyle: AnyShapeStyle {
+    isMuted || isUnavailable ? AnyShapeStyle(.secondary) : AnyShapeStyle(theme.fill(for: accent))
+  }
+
   private var track: some View {
     GeometryReader { geometry in
       let width = geometry.size.width
@@ -196,14 +236,19 @@ struct OSDView: View {
         Capsule(style: .continuous)
           .fill(.quaternary)
 
-        Capsule(style: .continuous)
-          .fill(isMuted ? AnyShapeStyle(.tertiary) : AnyShapeStyle(theme.fill(for: accent)))
-          .frame(width: filled)
-          .shadow(color: theme.glow(for: accent, active: !isMuted), radius: 6, y: 1)
-          // A spatial spring: the fill is a thing moving, so a little overshoot
-          // is what makes repeated key presses feel responsive instead of
-          // mechanical.
-          .animation(motion.spatialFast, value: filled)
+        // Nothing on top of the empty capsule when there is no level. A fill of
+        // any width would be a reading, and the point of this HUD is that there
+        // is nothing to read.
+        if !isUnavailable {
+          Capsule(style: .continuous)
+            .fill(isMuted ? AnyShapeStyle(.tertiary) : AnyShapeStyle(theme.fill(for: accent)))
+            .frame(width: filled)
+            .shadow(color: theme.glow(for: accent, active: !isMuted), radius: 6, y: 1)
+            // A spatial spring: the fill is a thing moving, so a little
+            // overshoot is what makes repeated key presses feel responsive
+            // instead of mechanical.
+            .animation(motion.spatialFast, value: filled)
+        }
       }
     }
     .frame(height: 8)

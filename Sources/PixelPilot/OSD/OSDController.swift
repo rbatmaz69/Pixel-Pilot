@@ -43,6 +43,7 @@ final class OSDController {
     let value: Double
     let accent: Color
     let displayName: String
+    let detail: String?
     let adjust: ((Double) -> Void)?
     let commit: (() -> Void)?
   }
@@ -62,6 +63,7 @@ final class OSDController {
     accent: Color,
     displayName: String,
     on displayID: CGDirectDisplayID,
+    detail: String? = nil,
     adjust: ((Double) -> Void)? = nil,
     commit: (() -> Void)? = nil
   ) {
@@ -82,6 +84,7 @@ final class OSDController {
       value: value,
       accent: accent,
       displayName: displayName,
+      detail: detail,
       adjust: adjust,
       commit: commit
     )
@@ -150,6 +153,7 @@ final class OSDController {
         value: current.value,
         accent: current.accent,
         displayName: current.displayName,
+        detail: current.detail,
         adjust: current.adjust,
         commit: current.commit
       )

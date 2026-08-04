@@ -509,7 +509,7 @@ final class AppModel {
       guard MediaKeyPolicy.handlesSystemVolume(
         isControllable: systemAudio.isControllable,
         canTakeOverFromSystem: canTakeOverFromSystem
-      ) else { return false }
+      ) else { return sayThereIsNoVolume(on: display) }
       let value = systemAudio.adjustVolume(by: event.key == .volumeUp ? step : -step)
       presentSystemVolume(value, on: display)
       return true
@@ -523,11 +523,44 @@ final class AppModel {
       guard MediaKeyPolicy.handlesSystemVolume(
         isControllable: systemAudio.isControllable,
         canTakeOverFromSystem: canTakeOverFromSystem
-      ) else { return false }
+      ) else { return sayThereIsNoVolume(on: display) }
       systemAudio.toggleMute()
       presentSystemVolume(systemAudio.volume, on: display)
       return true
     }
+  }
+
+  /// Answers a volume key that has nowhere to go.
+  ///
+  /// The alternative — and what this did until now — was to pass the press
+  /// through and let it vanish. From the outside "the app is not running", "the
+  /// app ignores this key" and "the app tried and this monitor has no volume
+  /// control" are the same silence, and only the last one is true. On a monitor
+  /// with no DDC audio and a digital output at a fixed level, that silence is
+  /// every volume key press, all day.
+  ///
+  /// **Only when the press can also be swallowed.** Without that, macOS acts on
+  /// the same key and draws its own indicator, and the answer to a silent HUD
+  /// would be two of them. `canTakeOverFromSystem` is already false in every
+  /// case where `handlesSystemVolume` was false for the other reason, so this
+  /// reads as: we could have taken the key, there was simply nothing to do with
+  /// it.
+  private func sayThereIsNoVolume(on display: DisplayViewModel) -> Bool {
+    guard canTakeOverFromSystem else { return false }
+    presentNoVolume(on: display)
+    return true
+  }
+
+  /// The indicator itself, for the callers that have already decided to show it.
+  private func presentNoVolume(on display: DisplayViewModel) {
+    present(
+      .unavailable,
+      value: 0,
+      on: display,
+      detail: display.volumeUnavailableSummary,
+      adjust: nil,
+      commit: nil
+    )
   }
 
   // MARK: - App rules
@@ -1012,6 +1045,10 @@ final class AppModel {
         } else if systemAudio.isControllable {
           let value = systemAudio.adjustVolume(by: builtin == .volumeUp ? step : -step)
           presentSystemVolume(value, on: display)
+        } else {
+          // A shortcut the user chose themselves, so there is no macOS press to
+          // collide with and nothing to check before answering.
+          presentNoVolume(on: display)
         }
 
       case .toggleMute:
@@ -1021,6 +1058,8 @@ final class AppModel {
         } else if systemAudio.isControllable {
           systemAudio.toggleMute()
           presentSystemVolume(systemAudio.volume, on: display)
+        } else {
+          presentNoVolume(on: display)
         }
       }
     }
@@ -1043,6 +1082,7 @@ final class AppModel {
     _ kind: OSDKind,
     value: Double,
     on display: DisplayViewModel,
+    detail: String? = nil,
     adjust: ((Double) -> Void)?,
     commit: (() -> Void)?
   ) {
@@ -1053,6 +1093,7 @@ final class AppModel {
       accent: display.accent,
       displayName: display.name,
       on: display.displayID,
+      detail: detail,
       adjust: adjust,
       commit: commit
     )
