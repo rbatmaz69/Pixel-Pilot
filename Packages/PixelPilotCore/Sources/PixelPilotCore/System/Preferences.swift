@@ -198,17 +198,23 @@ public enum ThemeStyle: String, Codable, Sendable, CaseIterable {
 /// on*, and they part company constantly: the pointer spends most of its life
 /// parked wherever it was last put down, which is very often not where the
 /// window being typed into is.
+/// The third is not a third answer to that question — it declines it. With
+/// several monitors on one desk, the room got darker for all of them, and
+/// aiming at one is the wrong shape entirely.
 public enum KeyTarget: String, Codable, Sendable, CaseIterable {
   /// The screen holding the frontmost application's focused window.
   case focusedWindow
   /// The screen the pointer is over. What the app did before there was a
   /// choice, and a deliberate way to aim: point at a monitor, then press.
   case pointer
+  /// Every screen at once, keeping the differences between them.
+  case allDisplays
 
   public var displayName: String {
     switch self {
     case .focusedWindow: "Where you're working"
     case .pointer: "Under the pointer"
+    case .allDisplays: "All displays"
     }
   }
 
@@ -216,8 +222,20 @@ public enum KeyTarget: String, Codable, Sendable, CaseIterable {
     switch self {
     case .focusedWindow: "The screen with the window you're typing in."
     case .pointer: "The screen the pointer happens to be on."
+    case .allDisplays:
+      "Every screen moves together, keeping the differences you set between them. "
+        + "The same group the panel's master slider drives."
     }
   }
+
+  /// Whether a press moves the whole group rather than one screen.
+  ///
+  /// A separate question from *which* screen, and kept separate on purpose:
+  /// even a press that moves everything has one screen it is drawn on, so
+  /// `KeyTargetPolicy.target` still has an answer to give. Folding the two
+  /// together — a target that sometimes returns a list — would rewrite every
+  /// caller that needs exactly one.
+  public var movesEveryDisplay: Bool { self == .allDisplays }
 }
 
 /// Preferences that are not per-display.

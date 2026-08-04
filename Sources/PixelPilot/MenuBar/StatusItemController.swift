@@ -54,6 +54,10 @@ final class StatusItemController: NSObject {
     item.button?.toolTip = "Pixel Pilot"
     statusItem = item
 
+    // The shortcut that opens the panel does exactly what clicking the icon
+    // does, including the guard against a click that just dismissed it.
+    model.onTogglePanel = { [weak self] in self?.togglePanel() }
+
     installScrollHandling(on: item)
     installDropHandling(on: item)
   }

@@ -116,7 +116,10 @@ struct OSDInteractionTests {
   /// precisely to say that nothing can be changed, so a handle on it would
   /// contradict the only thing it is there to communicate.
   @Test("Indicators with nowhere to send a value have no handle", arguments: [
-    OSDKind.muted, OSDKind.unavailable,
+    OSDKind.muted,
+    OSDKind.unavailable(.volume),
+    OSDKind.unavailable(.contrast),
+    OSDKind.preset(name: "Evening", symbol: "moon.fill"),
   ])
   func inertKinds(_ kind: OSDKind) {
     let received = Received()
@@ -125,7 +128,7 @@ struct OSDInteractionTests {
       value: 0,
       accent: .blue,
       displayName: "Probe",
-      detail: kind == .unavailable ? "Probe has no DDC audio." : nil,
+      detail: kind == .unavailable(.volume) ? "Probe has no DDC audio." : nil,
       // Supplied on purpose, to prove the view refuses it rather than merely
       // never being handed one.
       adjust: { received.values.append($0) },
@@ -164,7 +167,8 @@ struct OSDInteractionTests {
   func explanationIsLaidOut() {
     func height(detail: String?) -> CGFloat {
       let view = OSDView(
-        kind: .unavailable, value: 0, accent: .blue, displayName: "Probe", detail: detail
+        kind: .unavailable(.volume), value: 0, accent: .blue, displayName: "Probe",
+        detail: detail
       )
       .withMotionTokens()
       .withAppTheme(paintsWindow: false)

@@ -70,4 +70,34 @@ struct KeyTargetPolicyTests {
   func noDisplaysGivesNothing() {
     #expect(target(.focusedWindow, focusedWindow: external, connected: []) == nil)
   }
+
+  // MARK: - Moving everything
+
+  /// A press that moves the whole group still has to be *drawn* on one screen,
+  /// so this mode still has a target — and it is the screen being worked on,
+  /// because that is the one that will be looked at.
+  @Test("Moving everything still aims the indicator, the same way the focused mode does")
+  func allDisplaysPlacesLikeFocusedWindow() {
+    #expect(target(.allDisplays, focusedWindow: external, pointer: builtin) == external)
+    #expect(target(.allDisplays, focusedWindow: nil, pointer: builtin) == builtin)
+    #expect(target(.allDisplays) == external, "and shares the same last resort")
+    #expect(target(.allDisplays, focusedWindow: external, connected: []) == nil)
+  }
+
+  /// The two questions are separate on purpose: "which screen" and "one or all".
+  @Test("Only the all-displays mode moves the group")
+  func onlyOneModeMovesEverything() {
+    #expect(KeyTarget.allDisplays.movesEveryDisplay)
+    #expect(!KeyTarget.focusedWindow.movesEveryDisplay)
+    #expect(!KeyTarget.pointer.movesEveryDisplay)
+  }
+
+  /// Three modes in a segmented picker, each of which has to say which it is.
+  @Test("Every mode names and explains itself")
+  func modesDescribeThemselves() {
+    for mode in KeyTarget.allCases {
+      #expect(!mode.displayName.isEmpty)
+      #expect(!mode.summary.isEmpty)
+    }
+  }
 }

@@ -76,10 +76,13 @@ struct KeySettings: View {
           + "Turning this off hands every key straight back. Hold Shift and Option while "
           + "pressing for finer steps. The trackpad taps only on hardware that can — macOS "
           + "decides that, and its own setting in Trackpad preferences wins over this one. "
-          + "An external display can be set to follow the built-in panel in the Displays "
-          + "window, which is how the light in the room reaches it. Aiming at the window "
-          + "you're working in needs the Accessibility permission below — the same one the "
-          + "keys already need — and falls back to the pointer whenever it cannot tell.")
+          + "An external display can be set to follow the built-in panel on its own page "
+          + "under Displays, which is how the light in the room reaches it. Aiming at the "
+          + "window you're working in needs the Accessibility permission below — the same "
+          + "one the keys already need — and falls back to the pointer whenever it cannot "
+          + "tell. Aiming at all of them instead moves the group the panel's master slider "
+          + "drives, so that slider appears the first time a key is pressed. The global "
+          + "shortcuts follow this setting too.")
       }
     }
   }

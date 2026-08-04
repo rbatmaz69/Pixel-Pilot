@@ -596,6 +596,41 @@ final class DisplayViewModel: Identifiable {
     return target
   }
 
+  /// Nudges contrast, and returns where it landed — synchronously, for the same
+  /// reason `adjustBrightness` does.
+  @discardableResult
+  func adjustContrast(by step: Double) -> Double {
+    let target = min(1, max(0, contrast + step))
+    setContrast(target)
+    return target
+  }
+
+  /// Nudges the white point along the Kelvin scale, and returns the new one —
+  /// or nil, which is this control's "off".
+  ///
+  /// Two rules that are not obvious from the arithmetic:
+  ///
+  /// **From off, a step starts at neutral.** There is no current value to add
+  /// to, and starting at either end would jump the screen a long way for one
+  /// press. Neutral is where the scale's own middle is, so the first press moves
+  /// exactly one step off it — which is the only reading of "warmer" that is
+  /// about the screen you are looking at.
+  ///
+  /// **Landing on neutral stores nil, not 6500.** Those are the same picture and
+  /// not the same state: at neutral there is no table of ours on the display at
+  /// all. So walking the warmth all the way back takes it off rather than
+  /// leaving one behind that does nothing — the same conversion
+  /// `AppModel.applyScheduledValues` makes for a scheduled stop.
+  @discardableResult
+  func adjustColorTemperature(by step: Double) -> Double? {
+    let range = ColorTemperature.range
+    let current = colorTemperatureKelvin ?? ColorTemperature.neutralKelvin
+    let target = min(range.upperBound, max(range.lowerBound, current + step))
+    let settled = abs(target - ColorTemperature.neutralKelvin) < 1 ? nil : target
+    setColorTemperature(settled)
+    return settled
+  }
+
   @discardableResult
   func adjustVolume(by step: Double) -> Double {
     let target = min(1, max(0, volume + step))

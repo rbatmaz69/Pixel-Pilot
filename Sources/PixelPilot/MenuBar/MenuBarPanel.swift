@@ -129,7 +129,9 @@ struct MenuBarPanel: View {
         Image(systemName: "square.on.square.dashed")
           .font(.caption.weight(.semibold))
           .foregroundStyle(.secondary)
-        Text("All displays")
+        // Shared with the HUD the all-displays key target puts up, so the two
+        // cannot end up calling the same group two different things.
+        Text(AppModel.everyDisplayName)
           .font(TypeScale.rowTitle)
         Spacer(minLength: 0)
         if model.isSyncingBrightness {

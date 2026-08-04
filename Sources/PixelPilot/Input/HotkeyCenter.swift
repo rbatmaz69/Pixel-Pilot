@@ -69,20 +69,111 @@ final class HotkeyCenter {
     case builtin(Builtin)
     case preset(UUID)
 
+    /// Everything a shortcut can do that is not "apply that preset".
+    ///
+    /// The raw values of the first five are load-bearing: they are the storage
+    /// keys, and changing one takes the shortcut with it. New cases are free to
+    /// be added — `HotkeyStore` drops keys it does not recognise one at a time
+    /// rather than refusing the whole file — but none of these five may be
+    /// renamed.
     enum Builtin: String, CaseIterable, Sendable {
       case brightnessUp
       case brightnessDown
       case volumeUp
       case volumeDown
       case toggleMute
+      case allBrightnessUp
+      case allBrightnessDown
+      case contrastUp
+      case contrastDown
+      case warmer
+      case cooler
+      case nextPreset
+      case previousPreset
+      case identifyDisplays
+      case openPanel
 
       var displayName: String {
         switch self {
         case .brightnessUp: "Increase brightness"
         case .brightnessDown: "Decrease brightness"
+        case .allBrightnessUp: "Increase brightness everywhere"
+        case .allBrightnessDown: "Decrease brightness everywhere"
+        case .contrastUp: "Increase contrast"
+        case .contrastDown: "Decrease contrast"
+        case .warmer: "Warmer"
+        case .cooler: "Cooler"
         case .volumeUp: "Increase volume"
         case .volumeDown: "Decrease volume"
         case .toggleMute: "Toggle mute"
+        case .nextPreset: "Next preset"
+        case .previousPreset: "Previous preset"
+        case .identifyDisplays: "Identify displays"
+        case .openPanel: "Open the menu bar panel"
+        }
+      }
+
+      /// The glyph beside the name.
+      ///
+      /// There was none, and the settings page drew a command symbol on every
+      /// row — fine for five rows, useless for fifteen. `MediaKeyAction` in the
+      /// core carries one for the same reason, and where the two describe the
+      /// same key they use the same glyph.
+      var symbolName: String {
+        switch self {
+        case .brightnessUp, .allBrightnessUp: "sun.max"
+        case .brightnessDown, .allBrightnessDown: "sun.min"
+        case .contrastUp, .contrastDown: "circle.lefthalf.filled"
+        case .warmer: "thermometer.sun"
+        case .cooler: "snowflake"
+        case .volumeUp: "speaker.wave.3"
+        case .volumeDown: "speaker.wave.1"
+        case .toggleMute: "speaker.slash"
+        case .nextPreset: "chevron.forward.circle"
+        case .previousPreset: "chevron.backward.circle"
+        case .identifyDisplays: "number.circle"
+        case .openPanel: "menubar.arrow.down.rectangle"
+        }
+      }
+
+      /// Which card this row belongs in.
+      ///
+      /// Fifteen rows in one list is a list nobody reads to the end of. The
+      /// split is by what the shortcut acts on, which is also how somebody
+      /// looking for one would think about it.
+      var group: Group {
+        switch self {
+        case .brightnessUp, .brightnessDown, .allBrightnessUp, .allBrightnessDown,
+             .contrastUp, .contrastDown, .warmer, .cooler:
+          .displays
+        case .volumeUp, .volumeDown, .toggleMute:
+          .sound
+        case .nextPreset, .previousPreset:
+          .presets
+        case .identifyDisplays, .openPanel:
+          .app
+        }
+      }
+
+      enum Group: String, CaseIterable, Sendable {
+        case displays, sound, presets, app
+
+        var title: String {
+          switch self {
+          case .displays: "Displays"
+          case .sound: "Sound"
+          case .presets: "Presets"
+          case .app: "Pixel Pilot"
+          }
+        }
+
+        var symbolName: String {
+          switch self {
+          case .displays: "display"
+          case .sound: "speaker.wave.2"
+          case .presets: "square.stack"
+          case .app: "command"
+          }
         }
       }
     }

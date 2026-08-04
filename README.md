@@ -15,7 +15,12 @@ Requires macOS 26 (Tahoe) on Apple Silicon.
 - **The keyboard's brightness and volume keys**, intercepted and acted on,
   with its own indicator — macOS 26 no longer renders third-party values in
   the system one. The built-in panel included: while the app runs its keys are
-  the app's, which also means macOS stops dimming it for the room.
+  the app's, which also means macOS stops dimming it for the room. They aim at
+  the screen you are working on, the one under the pointer, or **all of them at
+  once**, keeping the differences you set between them.
+- **Fifteen global shortcuts**, for everything the keys cannot reach: contrast,
+  warmth, stepping through presets, identifying the displays, opening the panel,
+  and moving every screen together whatever the key setting says.
 - **Following the built-in panel**, so an external display tracks the light in
   the room. macOS already turns the ambient light sensor into a brightness on
   the Mac's own screen; reading that is a better signal than any curve this app
@@ -304,6 +309,30 @@ The other tempting shape was letting digits typed anywhere in the panel land on
 whichever card the pointer happened to be over. That needs an event monitor
 rather than focus, has no visible affordance, and leaves "which card did that go
 to?" a question the interface cannot answer.
+
+**A key can decline to pick a screen.** `KeyTarget` had two cases and they were
+two answers to one question — *which* display — when the common case on a desk
+with three monitors is that the room got darker for all of them. The third case
+is not a third answer; it says the question does not apply.
+
+It reuses the group the panel's master slider drives rather than growing a
+second copy of the same arithmetic. That group exists because moving displays
+together is harder than it looks: a screen sitting 20 % below the others hits
+zero first, and re-deriving the offsets from where the displays currently are
+would quietly flatten the spread the moment it clamped, unrecoverably, because
+nothing recorded it. `BrightnessSync` captures the offsets once and clamps only
+on the way out. The first press arms it, which is also why the master row then
+appears in the panel — that row is this setting, shown.
+
+Two shortcuts move the group regardless of the setting, for "normally one
+screen, but this key does all of them". With a single display there is no group,
+and both fall through to the ordinary path rather than pretending.
+
+`KeyTargetPolicy.target` still answers for this mode, and answers the same as
+the focused-window one. A press that moves everything is still *drawn*
+somewhere, and the screen being worked on is the one that will be looked at.
+Whether the group moves is a separate property — a `target` that sometimes
+returned a list would have rewritten every caller that needs exactly one.
 
 **Every setting is in one window.** There used to be two — a "Displays" window
 with the per-monitor controls and configuration, and a "Settings" window with

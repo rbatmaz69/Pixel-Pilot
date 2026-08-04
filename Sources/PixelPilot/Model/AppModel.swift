@@ -494,8 +494,7 @@ final class AppModel {
         strategy: display.brightnessStrategy,
         canTakeOverFromSystem: canTakeOverFromSystem
       ) else { return false }
-      let value = display.adjustBrightness(by: event.key == .brightnessUp ? step : -step)
-      presentBrightness(value, on: display)
+      stepBrightness(by: event.key == .brightnessUp ? step : -step, on: display)
       return true
 
     case .volumeUp, .volumeDown:
@@ -530,6 +529,35 @@ final class AppModel {
     }
   }
 
+  /// One brightness step, on one screen or on all of them.
+  ///
+  /// Which it is comes from `KeyTarget.movesEveryDisplay`, so the keys and the
+  /// global shortcuts cannot drift apart on it — and both go through the same
+  /// group the panel's master slider drives, rather than a second copy of the
+  /// same arithmetic. Arming that group on the first press is not a side
+  /// effect: the master row appearing in the panel *is* the setting, shown.
+  ///
+  /// With one display there is no group to move, so it falls through to the
+  /// ordinary path rather than pretending.
+  private func stepBrightness(by step: Double, on display: DisplayViewModel) {
+    guard preferences.global.keyTarget.movesEveryDisplay, canSyncBrightness else {
+      presentBrightness(display.adjustBrightness(by: step), on: display)
+      return
+    }
+    stepEveryDisplayBrightness(by: step, drawnOn: display)
+  }
+
+  /// The group, moved by a step, whatever the key target says.
+  ///
+  /// Split out because two shortcuts mean it unconditionally — "normally one
+  /// screen, but this key does all of them".
+  private func stepEveryDisplayBrightness(by step: Double, drawnOn display: DisplayViewModel) {
+    if !isSyncingBrightness { setSyncingBrightness(true) }
+    setMasterBrightness(min(1, max(0, masterBrightness + step)))
+    commitMasterBrightness()
+    presentMasterBrightness(masterBrightness, on: display)
+  }
+
   /// Answers a volume key that has nowhere to go.
   ///
   /// The alternative — and what this did until now — was to pass the press
@@ -554,7 +582,7 @@ final class AppModel {
   /// The indicator itself, for the callers that have already decided to show it.
   private func presentNoVolume(on display: DisplayViewModel) {
     present(
-      .unavailable,
+      .unavailable(.volume),
       value: 0,
       on: display,
       detail: display.volumeUnavailableSummary,
@@ -866,6 +894,20 @@ final class AppModel {
   /// Bumped whenever several displays change together, to run the accent wave.
   private(set) var groupChangeTick = 0
 
+  /// The preset most recently applied, whoever applied it.
+  ///
+  /// Only "next preset" and "previous preset" read it. It is not a claim that
+  /// the displays are still in that state — a slider moved afterwards makes it
+  /// stale immediately — only a note of where stepping should carry on from.
+  private(set) var lastAppliedPresetID: UUID?
+
+  /// Opens or closes the menu bar panel.
+  ///
+  /// A closure because the panel belongs to `StatusItemController` and this
+  /// object has no business knowing what one is — the same arrangement
+  /// `MenuBarPanel` uses to reach the settings window. Set in `install()`.
+  var onTogglePanel: (() -> Void)?
+
   /// Only worth offering when there is more than one thing to gang.
   var canSyncBrightness: Bool { displays.count > 1 }
 
@@ -931,6 +973,11 @@ final class AppModel {
   /// haptic and without a second copy of the fan-out. The confirmation and the
   /// wave belong to the press; the writes belong to the preset.
   private func run(_ preset: Preset) {
+    // Recorded here rather than in `apply(_:)`, so a preset that arrived from
+    // the schedule, an app rule or the system appearance also becomes the place
+    // "next preset" steps on from. Carrying on from wherever the displays
+    // actually are is the only reading of "next" that is not a surprise.
+    lastAppliedPresetID = preset.id
     presetTask?.cancel()
     presetTask = Task { [displays] in
       for display in displays {
@@ -1010,6 +1057,9 @@ final class AppModel {
 
   func deletePreset(id: UUID) {
     presets.delete(id: id)
+    // Otherwise "next preset" would step on from a preset that no longer has a
+    // place in the list, and land somewhere arbitrary.
+    if lastAppliedPresetID == id { lastAppliedPresetID = nil }
     let existing = Set(presets.presets.map(\.id))
     hotkeys.pruneMissingPresets(existing: existing)
     // A rule aimed at a deleted preset is the worst kind of broken: still
@@ -1062,13 +1112,61 @@ final class AppModel {
       apply(preset)
 
     case let .builtin(builtin):
+      // Neither of these needs a display, and demanding one would make them
+      // stop working in exactly the situation they are most useful in — nothing
+      // answering on the bus, and no way to find the panel.
+      switch builtin {
+      case .openPanel:
+        onTogglePanel?()
+        return
+      case .identifyDisplays:
+        identifyDisplays()
+        return
+      case .nextPreset, .previousPreset:
+        stepPreset(forward: builtin == .nextPreset)
+        return
+      default:
+        break
+      }
+
       guard let display = focusedDisplay, display.isReady else { return }
+      // Always the coarse step. A shortcut cannot carry the Shift-and-Option
+      // that gets `fineKeyStep` out of a media key, because those modifiers are
+      // already part of the shortcut itself.
       let step = preferences.global.keyStep
 
       switch builtin {
       case .brightnessUp, .brightnessDown:
-        let value = display.adjustBrightness(by: builtin == .brightnessUp ? step : -step)
-        presentBrightness(value, on: display)
+        stepBrightness(by: builtin == .brightnessUp ? step : -step, on: display)
+
+      case .allBrightnessUp, .allBrightnessDown:
+        guard canSyncBrightness else {
+          // One display is the whole group. Doing the ordinary thing beats
+          // doing nothing and beats claiming a group that is not there.
+          presentBrightness(
+            display.adjustBrightness(by: builtin == .allBrightnessUp ? step : -step),
+            on: display
+          )
+          return
+        }
+        stepEveryDisplayBrightness(
+          by: builtin == .allBrightnessUp ? step : -step, drawnOn: display
+        )
+
+      case .contrastUp, .contrastDown:
+        guard display.supportsContrast else { return presentNoContrast(on: display) }
+        presentContrast(
+          display.adjustContrast(by: builtin == .contrastUp ? step : -step), on: display
+        )
+
+      case .warmer, .cooler:
+        // The step is a fraction of the Kelvin range rather than of 0…1, so one
+        // press means the same share of the scale here as it does anywhere else.
+        let range = ColorTemperature.range
+        let span = (range.upperBound - range.lowerBound) * step
+        presentWarmth(
+          display.adjustColorTemperature(by: builtin == .warmer ? -span : span), on: display
+        )
 
       case .volumeUp, .volumeDown:
         if display.hasDisplayAudio {
@@ -1093,7 +1191,37 @@ final class AppModel {
         } else {
           presentNoVolume(on: display)
         }
+
+      case .openPanel, .identifyDisplays, .nextPreset, .previousPreset:
+        // Answered above, before a display was required.
+        break
       }
+    }
+  }
+
+  /// Steps through the presets in the order they are listed.
+  ///
+  /// From nothing, the first — someone who has never applied one and presses
+  /// "next" means "give me one", not "give me the second". Wraps at both ends,
+  /// because a list you can walk off is a shortcut that stops working and does
+  /// not say why.
+  /// Not private, so `HotkeyTests` can drive it. Registering a real Carbon
+  /// shortcut and pressing it is the only other way in, and neither of those is
+  /// something a test can do.
+  func stepPreset(forward: Bool) {
+    guard !presetList.isEmpty else { return }
+    let index = lastAppliedPresetID.flatMap { id in
+      presetList.firstIndex { $0.id == id }
+    }
+    let next: Int = if let index {
+      (index + (forward ? 1 : -1) + presetList.count) % presetList.count
+    } else {
+      forward ? 0 : presetList.count - 1
+    }
+    let preset = presetList[next]
+    apply(preset)
+    if let display = focusedDisplay {
+      presentPreset(preset, on: display)
     }
   }
 
@@ -1110,10 +1238,14 @@ final class AppModel {
   ///     it. Every test passed, because each one supplied the closure the app
   ///     did not. A parameter with no default is the compiler asking the
   ///     question at each call site, which is the only place that can answer it.
+  ///   - name: What the HUD calls what it is about, when that is not one
+  ///     display's name — the whole group, or a preset. `display` is then only
+  ///     where to draw it and what colour to draw it in.
   private func present(
     _ kind: OSDKind,
     value: Double,
     on display: DisplayViewModel,
+    name: String? = nil,
     detail: String? = nil,
     adjust: ((Double) -> Void)?,
     commit: (() -> Void)?
@@ -1123,7 +1255,7 @@ final class AppModel {
       kind: kind,
       value: value,
       accent: display.accent,
-      displayName: display.name,
+      displayName: name ?? display.name,
       on: display.displayID,
       detail: detail,
       adjust: adjust,
@@ -1175,6 +1307,85 @@ final class AppModel {
   func presentScrolledBrightness(_ value: Double, on display: DisplayViewModel) {
     presentBrightness(value, on: display)
   }
+
+  /// The whole group, drawn on one screen and named for all of them.
+  ///
+  /// `display` is only the placement and the colour — the same arrangement
+  /// `presentSystemVolume` uses for a value that is not the display's either.
+  /// Dragging it moves the master, so the HUD is the master slider wherever the
+  /// pointer already is.
+  private func presentMasterBrightness(_ value: Double, on display: DisplayViewModel) {
+    present(
+      .brightness,
+      value: value,
+      on: display,
+      name: Self.everyDisplayName,
+      adjust: { [weak self] in self?.setMasterBrightness($0) },
+      commit: { [weak self] in self?.commitMasterBrightness() }
+    )
+  }
+
+  private func presentContrast(_ value: Double, on display: DisplayViewModel) {
+    present(
+      .contrast,
+      value: value,
+      on: display,
+      adjust: { [weak display] in display?.setContrast($0) },
+      commit: nil
+    )
+  }
+
+  /// A panel with no contrast gets told so, for the reason
+  /// `sayThereIsNoVolume` exists: silence cannot distinguish "did nothing"
+  /// from "there is nothing here to do".
+  private func presentNoContrast(on display: DisplayViewModel) {
+    present(
+      .unavailable(.contrast),
+      value: 0,
+      on: display,
+      detail: "This display did not report a usable contrast control.",
+      adjust: nil,
+      commit: nil
+    )
+  }
+
+  /// The white point, as a fraction of the Kelvin range so the track means the
+  /// same thing it does on the colour card.
+  private func presentWarmth(_ kelvin: Double?, on display: DisplayViewModel) {
+    present(
+      .warmth,
+      value: KelvinTrack.fraction(of: kelvin ?? ColorTemperature.neutralKelvin),
+      on: display,
+      adjust: { [weak display] fraction in
+        let range = ColorTemperature.range
+        let target = range.lowerBound + fraction * (range.upperBound - range.lowerBound)
+        display?.setColorTemperature(
+          abs(target - ColorTemperature.neutralKelvin) < 1 ? nil : target
+        )
+      },
+      commit: nil
+    )
+  }
+
+  /// Says which preset just landed.
+  ///
+  /// No level and nothing to drag: it reports a thing that has already
+  /// happened. Stepping through presets without it means pressing twice and
+  /// then going to look at what you got.
+  private func presentPreset(_ preset: Preset, on display: DisplayViewModel) {
+    present(
+      .preset(name: preset.name, symbol: preset.symbolName),
+      value: 0,
+      on: display,
+      name: "Preset",
+      adjust: nil,
+      commit: nil
+    )
+  }
+
+  /// What the HUD and the panel's master row both call the group. One constant,
+  /// because two spellings of it is how they end up disagreeing.
+  static let everyDisplayName = "All displays"
 
   // MARK: - Which screen a key press means
 

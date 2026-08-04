@@ -29,8 +29,14 @@ public enum KeyTargetPolicy {
     // share a fallback rather than each having their own: a preference for the
     // focused window is a preference about which signal to *believe*, not an
     // instruction to do nothing when that signal is missing.
+    //
+    // `allDisplays` is here too, and answers the same as `focusedWindow`. A
+    // press that moves the whole group still has to be *drawn* somewhere, and
+    // the screen being worked on is the one that will be looked at. Whether the
+    // group moves is `KeyTarget.movesEveryDisplay`, which is a different
+    // question and is asked separately.
     let preferred: [CGDirectDisplayID?] = switch mode {
-    case .focusedWindow: [focusedWindow, pointer]
+    case .focusedWindow, .allDisplays: [focusedWindow, pointer]
     case .pointer: [pointer, focusedWindow]
     }
 

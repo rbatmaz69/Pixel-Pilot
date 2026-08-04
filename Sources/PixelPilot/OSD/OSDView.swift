@@ -1,8 +1,14 @@
+import PixelPilotCore
 import SwiftUI
 
 /// What the heads-up display is showing.
 enum OSDKind: Equatable {
   case brightness
+  case contrast
+  /// The white point. The only kind whose figure is not a percentage — `value`
+  /// is still a fraction of `ColorTemperature.range`, because that is what a
+  /// track is, and the readout converts it back.
+  case warmth
   case volume
   case muted
   /// The key was pressed, understood, and there is nothing to move.
@@ -13,7 +19,21 @@ enum OSDKind: Equatable {
   /// when their volume keys stop working on a new monitor. The same reasoning
   /// as `DisplayViewModel.volumeUnavailableReason`, which spells the case out
   /// on the display's settings page instead of just omitting the slider.
-  case unavailable
+  ///
+  /// It carries what it is about, because it stopped being only about volume
+  /// the moment a contrast key could be pressed on a panel with no contrast.
+  case unavailable(Unavailable)
+  /// A preset was applied. The only kind with no level at all.
+  ///
+  /// It exists for the shortcuts that step through presets: pressing "next"
+  /// twice with nothing on screen is a change you have to go and verify, which
+  /// is the opposite of what a shortcut is for.
+  case preset(name: String, symbol: String)
+
+  enum Unavailable: Equatable {
+    case volume
+    case contrast
+  }
 
   /// Icon that reflects the level, the way the system OSD does — a speaker with
   /// no waves at zero reads as "off" without needing to parse a number.
@@ -21,6 +41,12 @@ enum OSDKind: Equatable {
     switch self {
     case .brightness:
       value < 0.34 ? "sun.min.fill" : (value < 0.67 ? "sun.max" : "sun.max.fill")
+    case .contrast:
+      "circle.lefthalf.filled"
+    case .warmth:
+      // Warm end, neutral, cool end. The same three-way reading the slider's
+      // labels give, so the glyph and the track agree about which way is which.
+      value < 0.4 ? "thermometer.sun.fill" : (value < 0.72 ? "thermometer.medium" : "snowflake")
     case .volume:
       if value <= 0.001 { "speaker.fill" }
       else if value < 0.34 { "speaker.wave.1.fill" }
@@ -28,21 +54,59 @@ enum OSDKind: Equatable {
       else { "speaker.wave.3.fill" }
     case .muted:
       "speaker.slash.fill"
-    case .unavailable:
+    case let .unavailable(what):
       // Not the slashed speaker, which is already muted's. Muted is a state you
       // put the thing into and can take it out of again; this is a control that
       // does not exist. Drawing them the same would answer "did I just mute
       // it?" with a shrug.
-      "speaker.badge.exclamationmark.fill"
+      switch what {
+      case .volume: "speaker.badge.exclamationmark.fill"
+      case .contrast: "circle.badge.exclamationmark.fill"
+      }
+    case let .preset(_, symbol):
+      symbol
     }
   }
 
   var accessibilityLabel: String {
     switch self {
     case .brightness: "Brightness"
+    case .contrast: "Contrast"
+    case .warmth: "Warmth"
     case .volume: "Volume"
     case .muted: "Muted"
-    case .unavailable: "Volume unavailable"
+    case .unavailable(.volume): "Volume unavailable"
+    case .unavailable(.contrast): "Contrast unavailable"
+    case .preset: "Preset applied"
+    }
+  }
+
+  /// Whether there is a figure and a track at all.
+  ///
+  /// False for the three that report rather than set: a mute state, a control
+  /// that is not there, and a preset that has already been applied.
+  var hasLevel: Bool {
+    switch self {
+    case .brightness, .contrast, .warmth, .volume: true
+    case .muted, .unavailable, .preset: false
+    }
+  }
+
+  /// The figure over the track, in whatever unit this kind is in.
+  func readout(for value: Double) -> String {
+    switch self {
+    case .warmth:
+      let range = ColorTemperature.range
+      let kelvin = range.lowerBound + value * (range.upperBound - range.lowerBound)
+      // Neutral is a state, not a temperature — at neutral there is no table of
+      // ours on the display at all, and "6500 K" would report a setting where
+      // the honest answer is that there isn't one.
+      return abs(kelvin - ColorTemperature.neutralKelvin) < 25
+        ? "Neutral" : "\(Int((kelvin / 50).rounded() * 50)) K"
+    case let .preset(name, _):
+      return name
+    default:
+      return "\(Int((value * 100).rounded()))%"
     }
   }
 }
@@ -85,14 +149,15 @@ struct OSDView: View {
   @State private var scrubbed: Double?
 
   private var isMuted: Bool { kind == .muted }
-  private var isUnavailable: Bool { kind == .unavailable }
+  private var isUnavailable: Bool { if case .unavailable = kind { true } else { false } }
+  private var isPreset: Bool { if case .preset = kind { true } else { false } }
 
   /// The level being shown: what was dragged if anything was, otherwise what
   /// was handed in.
   private var level: Double { scrubbed ?? value }
 
   /// Whether the track can be grabbed at all.
-  private var isAdjustable: Bool { adjust != nil && !isMuted && !isUnavailable }
+  private var isAdjustable: Bool { adjust != nil && kind.hasLevel }
 
   var body: some View {
     VStack(spacing: Layout.snug) {
@@ -110,12 +175,22 @@ struct OSDView: View {
       }
       .frame(height: 44)
 
-      if !isMuted, !isUnavailable {
-        Text("\(Int((level * 100).rounded()))%")
+      if kind.hasLevel {
+        Text(kind.readout(for: level))
           .font(TypeScale.heroReadout)
           .foregroundStyle(theme.ink(for: accent))
           .contentTransition(.numericText(value: level))
           .animation(motion.effectFast, value: level)
+      } else if isPreset {
+        // The preset's name, in the slot the figure would occupy. Smaller,
+        // because a name is read rather than glanced at, and because "Reading
+        // in the evening" at 26 points does not fit a plate 210 wide.
+        Text(kind.readout(for: level))
+          .font(TypeScale.sheetTitle)
+          .foregroundStyle(theme.ink(for: accent))
+          .multilineTextAlignment(.center)
+          .lineLimit(2)
+          .fixedSize(horizontal: false, vertical: true)
       }
 
       // A slider from the first frame, not one that appears once the pointer
@@ -128,26 +203,32 @@ struct OSDView: View {
       //
       // A fixed height, so the plate is never resized under the pointer. The
       // window is sized once, when the HUD is shown.
-      ZStack {
-        if isAdjustable {
-          ExpressiveSlider(
-            // An explicit closure rather than passing `scrub` by reference:
-            // handing a main-actor method straight to `Binding` crashes the
-            // 6.3.3 compiler in IRGen, on the thunk it builds to strip the
-            // isolation off.
-            value: Binding(get: { level }, set: { scrub($0) }),
-            accent: accent,
-            // No marks. The HUD is a glance, and a quarter that tugs is a
-            // detail for a control you are settling into rather than one you
-            // reached for on the way past.
-            detents: [],
-            onCommit: { _ in commit?() }
-          )
-        } else {
-          track
+      // A preset gets no track at all — not even the empty one. There is no
+      // level behind it to leave a gap for, and a bare capsule under a name
+      // would be a control that reports nothing and cannot be moved.
+      if !isPreset {
+        ZStack {
+          if isAdjustable {
+            ExpressiveSlider(
+              // An explicit closure rather than passing `scrub` by reference:
+              // handing a main-actor method straight to `Binding` crashes the
+              // 6.3.3 compiler in IRGen, on the thunk it builds to strip the
+              // isolation off.
+              value: Binding(get: { level }, set: { scrub($0) }),
+              accent: accent,
+              trackStyle: kind == .warmth ? AnyShapeStyle(KelvinTrack.gradient) : nil,
+              // No marks. The HUD is a glance, and a quarter that tugs is a
+              // detail for a control you are settling into rather than one you
+              // reached for on the way past.
+              detents: [],
+              onCommit: { _ in commit?() }
+            )
+          } else {
+            track
+          }
         }
+        .frame(height: KnobGeometry.dragging.trackHeight + 12)
       }
-      .frame(height: KnobGeometry.dragging.trackHeight + 12)
 
       Text(displayName)
         .font(.caption2)
@@ -185,7 +266,9 @@ struct OSDView: View {
     .onChange(of: value) { _, _ in scrubbed = nil }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(kind.accessibilityLabel)
-    .accessibilityValue(Text(level, format: .percent.precision(.fractionLength(0))))
+    // Through the same function the figure uses, so a screen reader is never
+    // told a percentage for a HUD showing Kelvin or a preset's name.
+    .accessibilityValue(kind.readout(for: level))
     .accessibilityAdjustableAction { direction in
       guard isAdjustable else { return }
       let step = 1.0 / 16.0
@@ -224,6 +307,8 @@ struct OSDView: View {
   /// say "this is a thing you set", and the unavailable HUD is the one case
   /// where it is not.
   private var glyphStyle: AnyShapeStyle {
+    // A preset keeps the accent: it is a thing that was set, which is exactly
+    // what the colour is for. Only the two that report a dead end lose it.
     isMuted || isUnavailable ? AnyShapeStyle(.secondary) : AnyShapeStyle(theme.fill(for: accent))
   }
 
