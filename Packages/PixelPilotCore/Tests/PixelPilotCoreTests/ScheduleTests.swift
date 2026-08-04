@@ -148,4 +148,68 @@ struct ScheduleTests {
       .map { berlin.component(.hour, from: $0.date) }
     #expect(hours == [8, 14, 22])
   }
+
+  // MARK: - Actions
+
+  /// A `DaySchedule` is stored inside `GlobalSettings`, so a stop that fails to
+  /// decode does not lose the schedule — it loses the theme, the key settings
+  /// and everything else in the same blob. Every schedule anybody has stored is
+  /// in the old flat shape, which makes this the load-bearing test of the lot.
+  @Test("A stop stored before actions existed decodes, and keeps both values")
+  func flatStopsStillDecode() throws {
+    let stored = """
+    {"isEnabled":true,"stops":[
+      {"id":"\(UUID().uuidString)","time":{"clock":{"hour":22,"minute":0}},
+       "brightness":0.35,"kelvin":3200}]}
+    """
+    let schedule = try JSONDecoder().decode(DaySchedule.self, from: Data(stored.utf8))
+
+    let stop = try #require(schedule.stops.first)
+    #expect(stop.brightness == 0.35)
+    #expect(stop.kelvin == 3200)
+    #expect(stop.presetID == nil)
+  }
+
+  @Test("A stop that carried only one of the two still carries only that one")
+  func flatStopKeepsItsOmission() throws {
+    let stored = """
+    {"isEnabled":true,"stops":[
+      {"id":"\(UUID().uuidString)","time":{"clock":{"hour":8,"minute":0}},"brightness":0.9}]}
+    """
+    let schedule = try JSONDecoder().decode(DaySchedule.self, from: Data(stored.utf8))
+
+    let stop = try #require(schedule.stops.first)
+    #expect(stop.brightness == 0.9)
+    #expect(stop.kelvin == nil, "absent must stay 'leave the colour alone'")
+  }
+
+  @Test("A preset stop survives storage")
+  func presetStopRoundTrips() throws {
+    let id = UUID()
+    let schedule = DaySchedule(isEnabled: true, stops: [
+      ScheduleStop(time: .clock(hour: 22, minute: 0), action: .preset(id)),
+    ])
+    let decoded = try JSONDecoder().decode(
+      DaySchedule.self, from: try JSONEncoder().encode(schedule)
+    )
+
+    let stop = try #require(decoded.stops.first)
+    #expect(stop.presetID == id)
+    // The two values are a question about the preset, not about the stop.
+    #expect(stop.brightness == nil)
+    #expect(stop.kelvin == nil)
+  }
+
+  /// Timing knows only `time`, so a preset stop has to schedule exactly like
+  /// any other. This is here so that stays true.
+  @Test("A preset stop is scheduled like any other")
+  func presetStopsSchedule() throws {
+    let schedule = DaySchedule(isEnabled: true, stops: [
+      ScheduleStop(time: .clock(hour: 22, minute: 0), action: .preset(UUID())),
+    ])
+    let next = try #require(schedule.nextTransition(
+      after: moment(2024, 3, 10, 12), solar: noSolar, calendar: berlin
+    ))
+    #expect(next.date == moment(2024, 3, 10, 22))
+  }
 }

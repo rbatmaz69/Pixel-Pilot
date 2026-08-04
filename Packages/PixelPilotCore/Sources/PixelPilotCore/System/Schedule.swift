@@ -12,24 +12,89 @@ public enum ScheduleTime: Codable, Sendable, Hashable {
   }
 }
 
-/// What to do at that time.
+/// What happens at a stop.
 ///
-/// Both values are optional so a stop can change only one of them. A schedule
-/// that dims in the evening without touching colour is a perfectly ordinary
-/// thing to want, and forcing a value for both would mean inventing one.
+/// Either two numbers for every display, or a preset — never both. A preset
+/// already says something per display, and a brightness sitting next to it
+/// saying something else for all of them is exactly the kind of "which one
+/// wins" the rest of this app refuses to have.
+///
+/// Within `values` both are optional so a stop can change only one of them. A
+/// schedule that dims in the evening without touching colour is a perfectly
+/// ordinary thing to want, and forcing a value for both would mean inventing
+/// one.
+public enum ScheduleAction: Codable, Sendable, Hashable {
+  case values(brightness: Double?, kelvin: Double?)
+  case preset(UUID)
+}
+
+/// What to do at that time.
 public struct ScheduleStop: Codable, Sendable, Hashable, Identifiable {
   public var id: UUID
   public var time: ScheduleTime
-  public var brightness: Double?
-  public var kelvin: Double?
+  public var action: ScheduleAction
+
+  public init(id: UUID = UUID(), time: ScheduleTime, action: ScheduleAction) {
+    self.id = id
+    self.time = time
+    self.action = action
+  }
 
   public init(
     id: UUID = UUID(), time: ScheduleTime, brightness: Double? = nil, kelvin: Double? = nil
   ) {
-    self.id = id
-    self.time = time
-    self.brightness = brightness
-    self.kelvin = kelvin
+    self.init(id: id, time: time, action: .values(brightness: brightness, kelvin: kelvin))
+  }
+
+  /// The two values, for the surfaces that draw a stop rather than run it — the
+  /// arc's tint, the readout under it. A preset stop has neither, and answering
+  /// nil is the honest answer: what it will do is a question about the preset.
+  public var brightness: Double? {
+    if case let .values(brightness, _) = action { brightness } else { nil }
+  }
+
+  public var kelvin: Double? {
+    if case let .values(_, kelvin) = action { kelvin } else { nil }
+  }
+
+  public var presetID: UUID? {
+    if case let .preset(id) = action { id } else { nil }
+  }
+
+  // MARK: - Storage
+
+  private enum CodingKeys: String, CodingKey {
+    case id, time, action, brightness, kelvin
+  }
+
+  /// Written by hand for one reason: schedules stored before `action` existed
+  /// have `brightness` and `kelvin` flat on the stop.
+  ///
+  /// The synthesised decoder would throw on those, and a `DaySchedule` lives
+  /// inside `GlobalSettings` — so a throw here does not lose the schedule, it
+  /// loses the theme, the key settings and everything else stored beside it.
+  /// The same shape as the hand-written decoders in `Preferences`, and for the
+  /// same reason.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(UUID.self, forKey: .id)
+    time = try container.decode(ScheduleTime.self, forKey: .time)
+
+    if let action = try container.decodeIfPresent(ScheduleAction.self, forKey: .action) {
+      self.action = action
+    } else {
+      self.action = .values(
+        brightness: try container.decodeIfPresent(Double.self, forKey: .brightness),
+        kelvin: try container.decodeIfPresent(Double.self, forKey: .kelvin)
+      )
+    }
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encode(time, forKey: .time)
+    try container.encode(action, forKey: .action)
   }
 }
 

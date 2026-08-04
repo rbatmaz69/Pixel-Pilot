@@ -667,6 +667,29 @@ final class AppModel {
   /// whatever the displays happened to be at would drift a little further
   /// every day and end up somewhere nobody chose.
   private func applyScheduleStop(_ stop: ScheduleStop) {
+    switch stop.action {
+    case let .values(brightness, kelvin):
+      applyScheduledValues(brightness: brightness, kelvin: kelvin)
+
+    case let .preset(id):
+      // A stop pointing at a preset that has since been deleted does nothing,
+      // and says so in the log rather than looking like the schedule failed to
+      // fire. The stop is left alone: the settings row marks it, and removing
+      // somebody's hand-placed stop on their behalf is not this code's call.
+      guard let preset = presets.preset(id: id) else {
+        log.record(.info("Scheduled preset is missing — nothing applied"))
+        return
+      }
+      groupChangeTick += 1
+      log.record(.info("Applying scheduled preset '\(preset.name)'"))
+      // Not `apply(_:)`: that one confirms with a haptic, which belongs to a
+      // press. A tap at the wrist at ten in the evening, with nobody touching
+      // anything, is the app claiming credit for a decision made hours ago.
+      run(preset)
+    }
+  }
+
+  private func applyScheduledValues(brightness: Double?, kelvin: Double?) {
     groupChangeTick += 1
     log.record(.info("Applying scheduled change"))
 
@@ -674,10 +697,10 @@ final class AppModel {
     presetTask = Task { [displays] in
       for display in displays {
         guard !Task.isCancelled else { return }
-        if let brightness = stop.brightness {
+        if let brightness {
           display.setBrightness(brightness)
         }
-        if let kelvin = stop.kelvin {
+        if let kelvin {
           // 6500 K is neutral, and neutral means no table of ours at all
           // rather than a very slight tint.
           display.setColorTemperature(
@@ -899,7 +922,15 @@ final class AppModel {
     // acknowledgement of the click.
     Haptics.confirm()
     groupChangeTick += 1
+    run(preset)
+  }
 
+  /// The preset itself, with nothing said about it.
+  ///
+  /// Split out from `apply(_:)` so the schedule can apply a preset without the
+  /// haptic and without a second copy of the fan-out. The confirmation and the
+  /// wave belong to the press; the writes belong to the preset.
+  private func run(_ preset: Preset) {
     presetTask?.cancel()
     presetTask = Task { [displays] in
       for display in displays {
@@ -912,6 +943,9 @@ final class AppModel {
         if let contrast = entry.contrast, display.supportsContrast {
           display.setContrast(contrast)
         }
+        if let volume = entry.volume, display.supportsVolume {
+          display.setVolume(volume)
+        }
         // Colour goes through the gamma table rather than the bus, so it costs
         // no round trip and needs no place in the sequencing below. `nil` here
         // is `PresetColor.neutral`, which takes our white point off the display
@@ -920,9 +954,6 @@ final class AppModel {
         if let color = entry.color {
           display.setColorTemperature(color.kelvinValue)
         }
-        // Input switching is deliberately not applied from presets. It is the
-        // one action that can leave the Mac with no picture, and a preset is
-        // exactly the wrong place for something that needs a confirmation.
         await display.commitBrightnessAndWait()
       }
       log.record(.info("Applied preset '\(preset.name)'"))
@@ -940,6 +971,7 @@ final class AppModel {
       entries[display.key] = PresetEntry(
         brightness: display.brightness,
         contrast: display.supportsContrast ? display.contrast : nil,
+        volume: display.supportsVolume ? display.volume : nil,
         color: PresetColor(kelvinValue: display.colorTemperatureKelvin)
       )
     }

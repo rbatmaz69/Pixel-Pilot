@@ -41,7 +41,7 @@ struct PresetTests {
     let entry = PresetStore(defaults: defaults).presets.first?.entries[displayA]
     #expect(entry?.brightness == 0.3)
     #expect(entry?.contrast == nil)
-    #expect(entry?.inputSource == nil)
+    #expect(entry?.volume == nil)
   }
 
   @Test("An entry with nothing set is not treated as an instruction")
@@ -205,6 +205,34 @@ struct PresetTests {
     #expect(entry.brightness == 0.3)
     #expect(entry.contrast == 0.5)
     #expect(entry.color == nil, "absent must mean 'leave the colour alone'")
+    #expect(entry.volume == nil, "and absent must mean 'leave the volume alone'")
+  }
+
+  /// `inputSource` was carried through storage and read by nothing, so it was
+  /// removed. Every preset anyone has stored still has the key in it, and the
+  /// synthesised decoder ignoring an unknown key is the only reason removing it
+  /// was safe — which makes that worth a test rather than an assumption.
+  @Test("A preset still carrying the removed input source decodes rather than throwing")
+  func oldPresetsDecodeWithInputSource() throws {
+    let stored = """
+    [{"id":"\(UUID().uuidString)","name":"Console","symbolName":"gamecontroller.fill",
+      "entries":{"4485219c2d511fb4":{"brightness":0.8,"inputSource":17}}}]
+    """
+    let presets = try JSONDecoder().decode([Preset].self, from: Data(stored.utf8))
+
+    let entry = try #require(presets.first?.entries[displayA])
+    #expect(entry.brightness == 0.8)
+  }
+
+  @Test("Volume survives storage")
+  func volumeRoundTrips() throws {
+    let preset = Preset(name: "Film", entries: [displayA: PresetEntry(volume: 0.4)])
+    let decoded = try JSONDecoder().decode(
+      Preset.self, from: try JSONEncoder().encode(preset)
+    )
+
+    #expect(decoded.entries[displayA]?.volume == 0.4)
+    #expect(decoded.entry(for: displayA) != nil, "a volume alone is still an instruction")
   }
 
   // MARK: - Re-capturing

@@ -100,12 +100,14 @@ struct PresetSettings: View {
             .disabled(newPresetName.trimmingCharacters(in: .whitespaces).isEmpty)
           }
 
-          CardFooter("Stores the brightness, contrast and warmth of every connected "
+          CardFooter("Stores the brightness, contrast, warmth and volume of every connected "
             + "display — including warmth that is switched off, so a daytime preset can "
-            + "undo a night one rather than only warm things differently. Input source is "
-            + "left out on purpose: switching inputs needs a confirmation, which a preset "
-            + "cannot ask for. To adjust a preset later, set the displays up and press its "
-            + "update button rather than making a new one.")
+            + "undo a night one rather than only warm things differently. Contrast and "
+            + "volume are only taken from displays that have them. Input source is left out "
+            + "on purpose: switching inputs needs a confirmation, and a preset applied by "
+            + "the schedule or by an app has nobody in front of it to ask. To adjust a "
+            + "preset later, set the displays up and press its update button rather than "
+            + "making a new one.")
         }
       }
       .entrance(index: 1)
@@ -240,6 +242,9 @@ struct PresetSettings: View {
             }
             if let contrast = entry.contrast {
               miniTrack(contrast, symbol: "circle.lefthalf.filled")
+            }
+            if let volume = entry.volume {
+              miniTrack(volume, symbol: "speaker.wave.2.fill")
             }
             if let color = entry.color {
               // A track would be wrong here: warmth is not a fraction of

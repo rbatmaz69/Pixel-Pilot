@@ -24,15 +24,17 @@ Requires macOS 26 (Tahoe) on Apple Silicon.
   level. See [Following](#following-the-built-in-panel).
 - **Scroll over the menu bar icon** to change brightness.
 - **One slider for every display**, keeping the differences between them.
-- **Presets** carrying brightness, contrast and warmth — including warmth
-  switched off, so a daytime preset can undo a night one. Applied by hand, by
-  global shortcut, by system appearance, on a schedule, or by which application
-  is in front. Captured by setting the displays up rather than by typing
-  numbers, and adjusted the same way: set the screens, press update. Rest the
-  pointer on one and every slider shows where it would go, before it goes
+- **Presets** carrying brightness, contrast, warmth and volume — including
+  warmth switched off, so a daytime preset can undo a night one. Applied by
+  hand, by global shortcut, by system appearance, on a schedule, or by which
+  application is in front. Captured by setting the displays up rather than by
+  typing numbers, and adjusted the same way: set the screens, press update. Rest
+  the pointer on one and every slider shows where it would go, before it goes
   there. See [Asking before doing](#asking-before-doing).
 - **A schedule** following the clock or the sun, with the day drawn as an arc
-  you can point along to see what it will do at nine in the evening.
+  you can point along to see what it will do at nine in the evening. A stop
+  either sets a brightness and a warmth on every display or applies a preset,
+  which is how it reaches one monitor and not the other.
 - **Identify**, putting a number on each screen, plus a map of how they are
   arranged — which fills with each screen's own level, and can be dragged.
 - **Typing an exact figure**, for the times a slider is the wrong instrument.
@@ -170,6 +172,30 @@ Pointing at a picture is a question about the picture. It wraps through
 midnight, because the early hours are exactly the stretch an evening setting is
 most likely to still be governing and the stretch nobody scrubs while checking
 their work. `DayArcTests` pins that.
+
+**A stop is either two numbers or a preset, never both.** A brightness and a
+warmth apply to every display, which is the right shape for the ordinary case
+and no shape at all for "dim the desk monitors and leave the laptop". A preset
+already says something per display, so pointing a stop at one is how the
+schedule reaches contrast, volume, or one screen and not the other. Both at
+once was the tempting third option and would have meant a preset and a
+brightness disagreeing with no rule to settle it.
+
+Every schedule anyone has stored is in the shape from before that split, with
+`brightness` and `kelvin` flat on the stop, so `ScheduleStop` decodes by hand:
+try the action, fall back to the two keys. A `DaySchedule` lives inside
+`GlobalSettings`, so a throw there does not lose the schedule — it loses the
+theme, the key settings and everything else in the same blob.
+
+A stop whose preset has since been deleted is **marked, not removed.** It says
+so in its row and does nothing when it fires. The stop was placed by hand on the
+arc; deleting somebody's work on their behalf because something else went is a
+decision this app does not get to make. App rules do the opposite, and the
+difference is that a rule is created by dropping an icon.
+
+Applying a preset from a stop takes the same path as pressing its button, minus
+the haptic. A tap at the wrist at ten in the evening, with nobody touching
+anything, is the app claiming credit for a decision made hours ago.
 
 It is a hover rather than a drag, and that is what makes it read as looking
 rather than as editing. A drag would have to be told apart from dragging a

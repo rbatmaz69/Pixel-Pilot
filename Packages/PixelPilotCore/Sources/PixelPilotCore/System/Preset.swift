@@ -39,11 +39,19 @@ public enum PresetColor: Codable, Sendable, Hashable {
 /// preset called "Night" probably wants to lower brightness and leave contrast
 /// alone; forcing it to carry a value for everything would mean it silently
 /// undoes adjustments the user made for other reasons. Absent means "leave it".
+/// **There is deliberately no input source here.** Switching inputs is the one
+/// action that can leave the Mac with no picture, so it needs a confirmation —
+/// and a preset applied by a schedule, an app rule or the system appearance has
+/// nobody in front of it to ask. There used to be a field for it, carried
+/// through storage and read by nothing; a preset that looks like it remembers
+/// the input and silently does not is worse than one that never claimed to.
+///
+/// Volume is here and mute is not: zero is silence, and a second field meaning
+/// the same state is somewhere for the two to disagree.
 public struct PresetEntry: Codable, Sendable, Hashable {
   public var brightness: Double?
   public var contrast: Double?
-  /// A VCP 0x60 value. Only ever set from values the display declared.
-  public var inputSource: UInt8?
+  public var volume: Double?
   /// The white point, or nil to leave the colour untouched.
   ///
   /// No hand-written `init(from:)` for this, unlike everything in
@@ -52,22 +60,24 @@ public struct PresetEntry: Codable, Sendable, Hashable {
   /// absent rather than throwing. That distinction is load-bearing —
   /// `PresetStore.decode` swallows a throw with `try?` and would take *every*
   /// preset with it — so it is pinned by a test rather than left to memory.
+  /// The same decoder is what lets a preset written *before* this rewrite, with
+  /// an `inputSource` key still in it, decode by ignoring the key.
   public var color: PresetColor?
 
   public init(
     brightness: Double? = nil,
     contrast: Double? = nil,
-    inputSource: UInt8? = nil,
+    volume: Double? = nil,
     color: PresetColor? = nil
   ) {
     self.brightness = brightness
     self.contrast = contrast
-    self.inputSource = inputSource
+    self.volume = volume
     self.color = color
   }
 
   public var isEmpty: Bool {
-    brightness == nil && contrast == nil && inputSource == nil && color == nil
+    brightness == nil && contrast == nil && volume == nil && color == nil
   }
 }
 
