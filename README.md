@@ -736,3 +736,8 @@ The DDC/CI wire protocol implementation follows
 [m1ddc](https://github.com/waydabber/m1ddc) and
 [MonitorControl](https://github.com/MonitorControl/MonitorControl), both MIT
 licensed.
+
+## Licence
+
+[Apache 2.0](LICENSE). MIT code from the two projects above remains under its
+own terms; Apache 2.0 is compatible with it in this direction.
