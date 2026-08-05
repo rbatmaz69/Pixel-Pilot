@@ -159,6 +159,32 @@ struct PreferencesTests {
     #expect(restored.timing == .default, "absent keys fall back to their defaults")
     #expect(restored.respondsToMediaKeys)
     #expect(!restored.extraDimmingEnabled)
+    #expect(restored.toneCurve == nil, "a display that predates the finish has none")
+  }
+
+  @Test("The finish survives a round trip, and off stays off")
+  func toneCurveRoundTrips() {
+    let defaults = makeDefaults()
+    let preferences = Preferences(defaults: defaults)
+
+    preferences.update(key) { $0.toneCurve = .matte }
+    #expect(Preferences(defaults: defaults).settings(for: key).toneCurve == .matte)
+
+    preferences.update(key) { $0.toneCurve = nil }
+    #expect(Preferences(defaults: defaults).settings(for: key).toneCurve == nil)
+  }
+
+  /// The finish is written to the gamma table but is not a way of delivering
+  /// brightness, so it must not make a display look like one that needs its
+  /// gamma dimming reset when the strategy changes.
+  @Test("A finish alone does not make a display a gamma-dimmed one")
+  func finishIsNotGammaDimming() {
+    var settings = DisplaySettings()
+    settings.toneCurve = .ink
+    #expect(!settings.usesGamma)
+
+    settings.extraDimmingEnabled = true
+    #expect(settings.usesGamma)
   }
 
   /// The one field whose decoding default is the opposite of its declared one.

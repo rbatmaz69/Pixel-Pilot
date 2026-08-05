@@ -254,6 +254,14 @@ struct PresetSettings: View {
                 symbol: "thermometer.sun"
               )
             }
+            if let finish = entry.finish {
+              // Same reasoning as warmth: a finish is a shape, not a fraction,
+              // and "off" is a state rather than a zero.
+              miniLabel(
+                finish.curveValue.map { $0.namedFinish?.lowercased() ?? "custom" } ?? "no finish",
+                symbol: "doc.plaintext"
+              )
+            }
             Spacer(minLength: 0)
           }
         }

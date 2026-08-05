@@ -12,6 +12,10 @@ Requires macOS 26 (Tahoe) on Apple Silicon.
   gamma dimming as a fallback and for going below the backlight minimum.
 - **Colour temperature** per display, applied through the gamma table. See
   [Warmth, and what it costs](#warmth-and-what-it-costs).
+- **A paper finish** per display — Paper, Matte or Ink — which lifts the blacks
+  and brings the white down, the way a matte coating and printed ink both do.
+  It cannot take a reflection off a glossy panel and says so. See
+  [A finish is not a coating](#a-finish-is-not-a-coating).
 - **The keyboard's brightness and volume keys**, intercepted and acted on,
   with its own indicator — macOS 26 no longer renders third-party values in
   the system one. The built-in panel included: while the app runs its keys are
@@ -29,8 +33,9 @@ Requires macOS 26 (Tahoe) on Apple Silicon.
   level. See [Following](#following-the-built-in-panel).
 - **Scroll over the menu bar icon** to change brightness.
 - **One slider for every display**, keeping the differences between them.
-- **Presets** carrying brightness, contrast, warmth and volume — including
-  warmth switched off, so a daytime preset can undo a night one. Applied by
+- **Presets** carrying brightness, contrast, warmth, finish and volume —
+  including warmth and finish switched *off*, so a daytime preset can undo a
+  night one rather than only replace it. Applied by
   hand, by global shortcut, by system appearance, on a schedule, or by which
   application is in front. Captured by setting the displays up rather than by
   typing numbers, and adjusted the same way: set the screens, press update. Rest
@@ -629,6 +634,34 @@ compose by multiplication, so the order they are asked for makes no difference.
 is running — `CBBlueLightClient` is private and is not used here — so the app
 counts how often its own tables are reset in a burst and says what it sees. It
 cannot win that fight, and it does not pretend to.
+
+## A finish is not a coating
+
+The finish reshapes the tone curve: black lifts off zero, white comes down off
+the ceiling, and a softness term moves the midtones between them. Three named
+settings — Paper, Matte, Ink — with the numbers behind them available a press
+away.
+
+**What is real about it.** A matte panel scatters ambient light back into its
+own black level, so its blacks sit higher and its peak white lower than a
+glossy one's. Ink on paper does the same: the darkest mark is not zero and the
+page is not a light source. That curve is reproducible exactly, and reproducing
+it is most of what "looks like paper" means.
+
+**What is not.** It cannot make a glossy screen matte. Gloss is the coating,
+the reflection is physical, and no table on the GPU reaches it. The card in
+Settings says this rather than letting the name imply otherwise.
+
+It is a third term in the same gamma table as dimming and warmth, and it
+composes with both by the same multiplication — so the order the three are asked
+for makes no difference, and dimming brings the lifted black down with it rather
+than leaving a floor to swamp the picture at low brightness. The identity curve
+reproduces the plain scaled ramp bit for bit, which is what lets every test that
+pinned the dimming behaviour keep pinning it unchanged.
+
+It is deliberately not a warmth control. Someone who wants paper *and* warm has
+both, one card apart; a finish that quietly also moved the Kelvin would be two
+things on one control with the second one unlabelled.
 
 ## Panels lie
 

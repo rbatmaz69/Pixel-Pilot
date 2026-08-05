@@ -206,6 +206,54 @@ struct PresetTests {
     #expect(entry.contrast == 0.5)
     #expect(entry.color == nil, "absent must mean 'leave the colour alone'")
     #expect(entry.volume == nil, "and absent must mean 'leave the volume alone'")
+    #expect(entry.finish == nil, "and absent must mean 'leave the finish alone'")
+  }
+
+  // MARK: - Finish
+
+  /// The same three states as `PresetColor`, and for the same reason: without
+  /// `.off` a preset could only swap one finish for another, never take it off.
+  @Test("Off is not a flat curve")
+  func offIsNotAFlatCurve() {
+    #expect(PresetFinish.off != PresetFinish.curve(.identity))
+    #expect(PresetFinish.off.curveValue == nil)
+    #expect(PresetFinish.curve(.matte).curveValue == .matte)
+    #expect(PresetFinish(curveValue: nil) == .off)
+    #expect(PresetFinish(curveValue: .matte) == .curve(.matte))
+  }
+
+  @Test("Both finish states survive storage")
+  func finishRoundTrips() {
+    let (store, defaults) = makeStore()
+    store.save(Preset(name: "Read", entries: [displayA: PresetEntry(finish: .curve(.paper))]))
+    store.save(Preset(name: "Work", entries: [displayA: PresetEntry(finish: .off)]))
+
+    let restored = PresetStore(defaults: defaults).presets
+    #expect(restored.first { $0.name == "Read" }?.entries[displayA]?.finish == .curve(.paper))
+    #expect(restored.first { $0.name == "Work" }?.entries[displayA]?.finish == .off)
+  }
+
+  /// Without this, `entry(for:)` discards a finish-only entry as empty and the
+  /// preset applies nothing at all.
+  @Test("An entry carrying only a finish is still an instruction")
+  func finishOnlyEntryIsNotEmpty() {
+    let entry = PresetEntry(finish: .off)
+    #expect(!entry.isEmpty)
+
+    let preset = Preset(name: "Work", entries: [displayA: entry])
+    #expect(preset.entry(for: displayA) != nil)
+    #expect(preset.affectedDisplays == [displayA])
+  }
+
+  /// The merge is what keeps a preset's word about a monitor that is not
+  /// plugged in right now — the finish has to travel with the rest of it.
+  @Test("Re-capturing keeps the finish for a display that is not present")
+  func recaptureKeepsAbsentDisplaysFinish() {
+    let preset = Preset(name: "Read", entries: [displayB: PresetEntry(finish: .curve(.ink))])
+    let updated = preset.updating(entries: [displayA: PresetEntry(brightness: 0.5)])
+
+    #expect(updated.entries[displayB]?.finish == .curve(.ink))
+    #expect(updated.entries[displayA]?.brightness == 0.5)
   }
 
   /// `inputSource` was carried through storage and read by nothing, so it was

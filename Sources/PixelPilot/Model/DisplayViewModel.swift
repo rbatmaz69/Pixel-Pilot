@@ -79,6 +79,7 @@ final class DisplayViewModel: Identifiable {
     self.capabilityString = settings.capabilityString.map(CapabilityString.init(raw:))
     self.accent = AccentPalette.color(for: display.key, override: settings.accentOverride)
     self.colorTemperatureKelvin = settings.colorTemperatureKelvin
+    self.toneCurve = settings.toneCurve
     self.colorCapabilities = settings.colorCapabilities
 
     let queue = display.transport.map {
@@ -119,7 +120,9 @@ final class DisplayViewModel: Identifiable {
     // A white point chosen on a previous launch has to be put back: the gamma
     // table does not survive a reboot, and a slider showing 3000 K over a
     // display that is actually neutral is worse than not remembering at all.
+    // The finish is in the same table and has the same problem.
     applyWhitePoint()
+    applyToneCurve()
 
     brightness = await brightnessController.brightness()
     brightnessStrategy = await brightnessController.effectiveStrategy
@@ -369,6 +372,13 @@ final class DisplayViewModel: Identifiable {
   private(set) var colorCapabilities: DisplayCapabilities?
   private(set) var isProbingColor = false
 
+  /// The chosen finish, or nil for "leave the tone curve alone".
+  ///
+  /// Nil rather than `ToneCurve.identity` for the same reason nil is not 6500
+  /// above: off means no table of ours on the display, which is a different
+  /// state from one holding a curve that happens to be flat.
+  private(set) var toneCurve: ToneCurve?
+
   /// How many times the system has reset our gamma table recently.
   ///
   /// Night Shift writes the same table we do. There is no public way to ask
@@ -403,6 +413,18 @@ final class DisplayViewModel: Identifiable {
   private func applyWhitePoint() {
     let point = colorTemperatureKelvin.map { ColorTemperature.whitePoint(kelvin: $0) } ?? .neutral
     GammaDimmer.shared.setWhitePoint(point, for: displayID)
+  }
+
+  /// Nil turns the finish off, which takes our curve off the display rather
+  /// than writing a flat one over it.
+  func setToneCurve(_ curve: ToneCurve?) {
+    toneCurve = curve
+    preferences.update(key) { $0.toneCurve = curve }
+    applyToneCurve()
+  }
+
+  private func applyToneCurve() {
+    GammaDimmer.shared.setTone(toneCurve ?? .identity, for: displayID)
   }
 
   /// Called when something outside the app resets the gamma table.

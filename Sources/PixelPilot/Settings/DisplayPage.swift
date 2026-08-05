@@ -28,8 +28,9 @@ struct DisplayPage: View {
           card(1) { InputAndPowerSection(display: display) }
         }
         card(2) { ColorSection(display: display) }
-        card(3) { configuration }
-        card(4) { diagnostics }
+        card(3) { FinishSection(display: display) }
+        card(4) { configuration }
+        card(5) { diagnostics }
       }
       .padding(Layout.loose)
       .frame(maxWidth: .infinity, alignment: .leading)

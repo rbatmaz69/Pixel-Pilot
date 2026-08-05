@@ -61,6 +61,12 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
   /// left completely alone, which is not the same as "set to 6500".
   public var colorTemperatureKelvin: Double?
 
+  /// The chosen finish. `nil` means off, and that is the same distinction
+  /// `colorTemperatureKelvin` draws rather than a second way of saying the
+  /// same thing: off means there is no table of ours on the display at all,
+  /// which is not what "a very flat curve" would mean.
+  public var toneCurve: ToneCurve?
+
   /// Result of the on-demand colour probe, cached like `capabilities` is.
   /// Present means "already asked"; absent means the colour card has never
   /// been opened for this panel.
@@ -112,16 +118,27 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
     accentOverride = try container.decodeIfPresent(Int.self, forKey: .accentOverride)
     capabilityString = try container.decodeIfPresent(String.self, forKey: .capabilityString)
     colorTemperatureKelvin = try container.decodeIfPresent(Double.self, forKey: .colorTemperatureKelvin)
+    // `ToneCurve` degrades field by field on its own, so `decodeIfPresent`
+    // would do — but it is wrapped for the same reason `followCurve` is: a
+    // curve written by a build whose shape differed would otherwise take this
+    // display's whole configuration with it, and losing a finish is a far
+    // smaller loss than losing every setting behind it.
+    toneCurve = try? container.decodeIfPresent(ToneCurve.self, forKey: .toneCurve)
     colorCapabilities = try? container.decodeIfPresent(
       DisplayCapabilities.self, forKey: .colorCapabilities
     )
   }
 
-  /// Whether this configuration puts anything into the display's gamma table.
+  /// Whether this configuration delivers *brightness* through the gamma table.
   ///
   /// Callers need this when switching strategies: gamma is global to the display
   /// and survives the controller that set it, so it has to be cleared explicitly
   /// rather than left behind when a display stops using it.
+  ///
+  /// Warmth and the finish are deliberately not counted, even though they are
+  /// written to the same table. They are not ways of delivering brightness, and
+  /// changing how brightness is delivered is no reason to discard either of
+  /// them — which is exactly what the one caller does with the answer.
   public var usesGamma: Bool {
     brightnessStrategy == .gamma || extraDimmingEnabled
   }

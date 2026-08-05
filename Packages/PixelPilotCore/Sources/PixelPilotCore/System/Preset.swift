@@ -33,6 +33,31 @@ public enum PresetColor: Codable, Sendable, Hashable {
   }
 }
 
+/// What a preset asks of a display's finish.
+///
+/// The same three states as `PresetColor`, for the same reason: with a
+/// `ToneCurve?` there would be "leave the finish alone" and "set this curve",
+/// and no way for a preset called "Work" to say *take the paper look off*. It
+/// would only ever be able to swap one finish for another, and a paper finish
+/// that cannot be undone by the preset that is supposed to undo it is worse
+/// than one that was never offered.
+public enum PresetFinish: Codable, Sendable, Hashable {
+  /// Take our tone curve off this display entirely.
+  case off
+  case curve(ToneCurve)
+
+  /// In the shape `DisplayViewModel.setToneCurve` takes, where `nil` means off.
+  public var curveValue: ToneCurve? {
+    if case let .curve(value) = self { value } else { nil }
+  }
+
+  /// Builds one from that same shape, so the round trip through a view model is
+  /// written once rather than at each call site.
+  public init(curveValue: ToneCurve?) {
+    self = curveValue.map { Self.curve($0) } ?? .off
+  }
+}
+
 /// What a preset asks of one display.
 ///
 /// Every field is optional, and that is the design rather than laziness. A
@@ -63,21 +88,27 @@ public struct PresetEntry: Codable, Sendable, Hashable {
   /// The same decoder is what lets a preset written *before* this rewrite, with
   /// an `inputSource` key still in it, decode by ignoring the key.
   public var color: PresetColor?
+  /// The finish, or nil to leave it untouched. Decoded by the same synthesised
+  /// decoder and for the same reason as `color` above: a preset stored before
+  /// this field existed has to come back with it absent rather than throw.
+  public var finish: PresetFinish?
 
   public init(
     brightness: Double? = nil,
     contrast: Double? = nil,
     volume: Double? = nil,
-    color: PresetColor? = nil
+    color: PresetColor? = nil,
+    finish: PresetFinish? = nil
   ) {
     self.brightness = brightness
     self.contrast = contrast
     self.volume = volume
     self.color = color
+    self.finish = finish
   }
 
   public var isEmpty: Bool {
-    brightness == nil && contrast == nil && volume == nil && color == nil
+    brightness == nil && contrast == nil && volume == nil && color == nil && finish == nil
   }
 }
 

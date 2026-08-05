@@ -23,11 +23,22 @@ enum GammaRamp {
   /// would quietly change the colour that was asked for. The floor still
   /// applies to luminance, and a white point is normalised so one channel is
   /// always at full — so nothing here can black out a screen either.
-  private static func ramp(scale: Double, entries: Int) -> [CGGammaValue] {
+  ///
+  /// `tone` reshapes the ramp before the scale is applied, which is what turns
+  /// a display into something that reads like paper. It is the identity by
+  /// default and the identity reproduces the plain scaled ramp exactly, so a
+  /// caller that never heard of tone curves gets what it always got.
+  ///
+  /// Applying the scale *after* the curve also scales the lifted black, and
+  /// that is the behaviour that is wanted: a floor that stayed put as the
+  /// display dimmed would end up swamping the picture at low brightness.
+  private static func ramp(
+    scale: Double, tone: ToneCurve = .identity, entries: Int
+  ) -> [CGGammaValue] {
     let last = Double(entries - 1)
     let clamped = min(1, max(0, scale))
     return (0 ..< entries).map { index in
-      CGGammaValue(Double(index) / last * clamped)
+      CGGammaValue(tone.value(at: Double(index) / last) * clamped)
     }
   }
 
@@ -35,23 +46,32 @@ enum GammaRamp {
     min(1.0, max(minimumFraction, fraction))
   }
 
-  /// Luminance and colour, in one set of ramps.
+  /// Luminance, colour and finish, in one set of ramps.
   ///
   /// Composition falls out of multiplication, which is the whole reason
   /// warming and dimming can coexist without either fighting the other:
   /// dimming to 60 % at 3000 K is the 3000 K white point scaled by 0.6, and the
-  /// order the two were asked for makes no difference.
+  /// order the two were asked for makes no difference. The tone curve joins on
+  /// the same terms.
   ///
-  /// A neutral white point reproduces `linear` exactly, which is what lets the
-  /// existing dimming tests keep pinning the luminance behaviour unchanged.
+  /// A neutral white point and an identity tone curve reproduce `linear`
+  /// exactly, which is what lets the existing dimming tests keep pinning the
+  /// luminance behaviour unchanged.
+  ///
+  /// One consequence worth naming, because it looks like a bug and is not: the
+  /// white point scales each channel differently, so a lifted black picks up
+  /// the warm cast at 3000 K rather than staying neutral grey. That is what
+  /// paper under a warm lamp does, and the alternative — a neutral floor under
+  /// a warm picture — is the thing that would look wrong.
   static func channels(
-    luminance: Double, whitePoint: WhitePoint, entries: Int = entryCount
+    luminance: Double, whitePoint: WhitePoint, tone: ToneCurve = .identity,
+    entries: Int = entryCount
   ) -> (red: [CGGammaValue], green: [CGGammaValue], blue: [CGGammaValue]) {
     let scale = clampFraction(luminance)
     return (
-      red: ramp(scale: scale * whitePoint.red, entries: entries),
-      green: ramp(scale: scale * whitePoint.green, entries: entries),
-      blue: ramp(scale: scale * whitePoint.blue, entries: entries)
+      red: ramp(scale: scale * whitePoint.red, tone: tone, entries: entries),
+      green: ramp(scale: scale * whitePoint.green, tone: tone, entries: entries),
+      blue: ramp(scale: scale * whitePoint.blue, tone: tone, entries: entries)
     )
   }
 
@@ -150,6 +170,11 @@ public final class GammaDimmer: @unchecked Sendable {
   /// to survive a wake, a colour profile change and a Night Shift transition,
   /// and `reassertAll` can only restore what it still knows.
   private var whitePoints: [CGDirectDisplayID: WhitePoint] = [:]
+  /// Desired finish per display. A third dictionary rather than a field on one
+  /// of the other two, for the third time for the same reason: these three are
+  /// set independently, and folding two of them together would mean one could
+  /// not be changed without restating the other.
+  private var tones: [CGDirectDisplayID: ToneCurve] = [:]
   private var safetyNetInstalled = false
 
   private let logger = Logger(subsystem: "dev.rb.pixelpilot", category: "gamma")
@@ -168,9 +193,14 @@ public final class GammaDimmer: @unchecked Sendable {
     lock.withLock { Set(whitePoints.keys) }
   }
 
-  /// Every display this dimmer is holding something on, of either kind.
+  /// Displays currently carrying a finish.
+  public var finishedDisplays: Set<CGDirectDisplayID> {
+    lock.withLock { Set(tones.keys) }
+  }
+
+  /// Every display this dimmer is holding something on, of any kind.
   private var touchedDisplaysLocked: Set<CGDirectDisplayID> {
-    Set(fractions.keys).union(whitePoints.keys)
+    Set(fractions.keys).union(whitePoints.keys).union(tones.keys)
   }
 
   /// `fraction` of 1.0 removes dimming; lower values darken. Values below the
@@ -210,6 +240,25 @@ public final class GammaDimmer: @unchecked Sendable {
     apply(state, to: displayID)
   }
 
+  /// `.identity` removes the finish.
+  ///
+  /// Composes with both of the above by the same multiplication, so a display
+  /// can be dimmed, warmed and given a paper finish in any order and end up in
+  /// the same place.
+  public func setTone(_ tone: ToneCurve, for displayID: CGDirectDisplayID) {
+    lock.lock()
+    if tone.isIdentity {
+      tones.removeValue(forKey: displayID)
+    } else {
+      tones[displayID] = tone
+      installSafetyNetLocked()
+    }
+    let state = stateLocked(for: displayID)
+    lock.unlock()
+
+    apply(state, to: displayID)
+  }
+
   public func dimming(for displayID: CGDirectDisplayID) -> Double {
     lock.withLock { fractions[displayID] ?? 1.0 }
   }
@@ -218,14 +267,19 @@ public final class GammaDimmer: @unchecked Sendable {
     lock.withLock { whitePoints[displayID] ?? .neutral }
   }
 
-  /// Drops both the dimming and the cast for one display.
+  public func tone(for displayID: CGDirectDisplayID) -> ToneCurve {
+    lock.withLock { tones[displayID] ?? .identity }
+  }
+
+  /// Drops the dimming, the cast and the finish for one display.
   public func clear(_ displayID: CGDirectDisplayID) {
     lock.lock()
     fractions.removeValue(forKey: displayID)
     whitePoints.removeValue(forKey: displayID)
+    tones.removeValue(forKey: displayID)
     lock.unlock()
 
-    apply((luminance: 1.0, whitePoint: .neutral), to: displayID)
+    apply((luminance: 1.0, whitePoint: .neutral, tone: .identity), to: displayID)
   }
 
   /// Restores every display we touched. Called on quit, and safe to call when
@@ -235,10 +289,11 @@ public final class GammaDimmer: @unchecked Sendable {
     let displays = touchedDisplaysLocked
     fractions.removeAll()
     whitePoints.removeAll()
+    tones.removeAll()
     lock.unlock()
 
     for displayID in displays {
-      apply((luminance: 1.0, whitePoint: .neutral), to: displayID)
+      apply((luminance: 1.0, whitePoint: .neutral, tone: .identity), to: displayID)
     }
     backend.restoreAll()
   }
@@ -265,27 +320,34 @@ public final class GammaDimmer: @unchecked Sendable {
     lock.withLock {
       fractions = fractions.filter { onlineDisplayIDs.contains($0.key) }
       whitePoints = whitePoints.filter { onlineDisplayIDs.contains($0.key) }
+      tones = tones.filter { onlineDisplayIDs.contains($0.key) }
     }
   }
 
   // MARK: - Applying
 
-  private typealias GammaState = (luminance: Double, whitePoint: WhitePoint)
+  private typealias GammaState = (luminance: Double, whitePoint: WhitePoint, tone: ToneCurve)
 
   /// Caller must hold `lock`.
   private func stateLocked(for displayID: CGDirectDisplayID) -> GammaState {
-    (fractions[displayID] ?? 1.0, whitePoints[displayID] ?? .neutral)
+    (fractions[displayID] ?? 1.0, whitePoints[displayID] ?? .neutral, tones[displayID] ?? .identity)
   }
 
   private func apply(_ state: GammaState, to displayID: CGDirectDisplayID) {
     // Nothing to hold means hand the table back rather than writing an identity
     // ramp over it — the system's own profile is not necessarily linear, and
     // "restore" is the only way to return whatever it really was.
-    guard state.luminance < 1.0 || !state.whitePoint.isNeutral else {
+    //
+    // All three conditions, not two: a display carrying only a finish is a
+    // display holding something, and leaving the tone out here would restore
+    // the system profile over it on every single write.
+    guard state.luminance < 1.0 || !state.whitePoint.isNeutral || !state.tone.isIdentity else {
       backend.restore(displayID)
       return
     }
-    let ramps = GammaRamp.channels(luminance: state.luminance, whitePoint: state.whitePoint)
+    let ramps = GammaRamp.channels(
+      luminance: state.luminance, whitePoint: state.whitePoint, tone: state.tone
+    )
     backend.applyRamps(red: ramps.red, green: ramps.green, blue: ramps.blue, to: displayID)
   }
 

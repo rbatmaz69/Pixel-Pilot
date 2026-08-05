@@ -1001,6 +1001,12 @@ final class AppModel {
         if let color = entry.color {
           display.setColorTemperature(color.kelvinValue)
         }
+        // The finish rides in the same table on the same terms, so the note
+        // above covers it: no round trip, no place in the sequencing, and
+        // `.off` genuinely takes the curve off rather than flattening it.
+        if let finish = entry.finish {
+          display.setToneCurve(finish.curveValue)
+        }
         await display.commitBrightnessAndWait()
       }
       log.record(.info("Applied preset '\(preset.name)'"))
@@ -1019,7 +1025,8 @@ final class AppModel {
         brightness: display.brightness,
         contrast: display.supportsContrast ? display.contrast : nil,
         volume: display.supportsVolume ? display.volume : nil,
-        color: PresetColor(kelvinValue: display.colorTemperatureKelvin)
+        color: PresetColor(kelvinValue: display.colorTemperatureKelvin),
+        finish: PresetFinish(curveValue: display.toneCurve)
       )
     }
     return entries

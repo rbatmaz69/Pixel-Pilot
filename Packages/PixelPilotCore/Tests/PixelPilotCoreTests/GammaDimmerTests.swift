@@ -19,6 +19,11 @@ private final class RecordingBackend: GammaDimmer.Backend, @unchecked Sendable {
 
   private let lock = NSLock()
   private var _applied: [(display: CGDirectDisplayID, peaks: Peaks)] = []
+  /// The *bottom* of each ramp, recorded alongside the top. A tone curve is the
+  /// first thing here that moves the floor, and a peak alone cannot tell a
+  /// lifted black from an untouched one.
+  private var _floors: [(display: CGDirectDisplayID, peaks: Peaks)] = []
+  private var _ramps: [(display: CGDirectDisplayID, red: [CGGammaValue])] = []
   private var _restored: [CGDirectDisplayID] = []
   private var _restoreAllCount = 0
 
@@ -28,6 +33,16 @@ private final class RecordingBackend: GammaDimmer.Backend, @unchecked Sendable {
 
   func peaks(for display: CGDirectDisplayID) -> Peaks? {
     lock.withLock { _applied.last { $0.display == display }?.peaks }
+  }
+
+  func floors(for display: CGDirectDisplayID) -> Peaks? {
+    lock.withLock { _floors.last { $0.display == display }?.peaks }
+  }
+
+  /// The whole red ramp of the most recent write, for the comparisons that have
+  /// to be exact rather than within a tolerance.
+  func redRamp(for display: CGDirectDisplayID) -> [CGGammaValue]? {
+    lock.withLock { _ramps.last { $0.display == display }?.red }
   }
 
   /// The luminance a caller would read off the screen, for the tests that only
@@ -46,6 +61,12 @@ private final class RecordingBackend: GammaDimmer.Backend, @unchecked Sendable {
         green: Double(green.last ?? 0),
         blue: Double(blue.last ?? 0)
       )))
+      _floors.append((displayID, Peaks(
+        red: Double(red.first ?? 0),
+        green: Double(green.first ?? 0),
+        blue: Double(blue.first ?? 0)
+      )))
+      _ramps.append((displayID, red))
     }
   }
 
@@ -307,5 +328,166 @@ struct GammaDimmerTests {
     #expect(dimmer.dimmedDisplays.isEmpty)
     #expect(backend.restored.contains(displayA))
     #expect(backend.restored.contains(displayB))
+  }
+
+  // MARK: - Finish
+
+  /// The regression guard for the whole tone-curve change: with no finish
+  /// asked for, `channels` has to produce byte for byte what it produced
+  /// before the parameter existed.
+  @Test("An identity tone curve changes nothing about the ramps")
+  func identityToneMatchesPlainDimming() {
+    let plain = GammaRamp.channels(luminance: 0.6, whitePoint: warm)
+    let explicit = GammaRamp.channels(luminance: 0.6, whitePoint: warm, tone: .identity)
+
+    #expect(plain.red == explicit.red)
+    #expect(plain.green == explicit.green)
+    #expect(plain.blue == explicit.blue)
+  }
+
+  @Test("A finish alone is a write, not a restore")
+  func finishAloneWrites() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+
+    dimmer.setTone(.paper, for: displayA)
+
+    #expect(dimmer.finishedDisplays == [displayA])
+    #expect(dimmer.dimmedDisplays.isEmpty, "a finish is not dimming")
+    #expect(dimmer.tintedDisplays.isEmpty, "a finish is not a colour cast")
+    #expect(!backend.applied.isEmpty, "a display holding a finish must not be handed back")
+    #expect(backend.restored.isEmpty)
+  }
+
+  /// The visible half of the feature: black comes up off the floor and white
+  /// comes down off the ceiling.
+  @Test("A finish lifts the black and lowers the white")
+  func finishReshapesTheRamp() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+
+    dimmer.setTone(.matte, for: displayA)
+
+    let floor = backend.floors(for: displayA)?.red ?? 0
+    let peak = backend.peak(for: displayA) ?? 0
+    #expect(abs(floor - ToneCurve.matte.blackLift) < 0.001)
+    #expect(abs(peak - ToneCurve.matte.whiteCeiling) < 0.001)
+    #expect(floor > 0)
+    #expect(peak < 1)
+  }
+
+  @Test("The three named finishes get progressively flatter")
+  func namedFinishesAreOrdered() {
+    #expect(ToneCurve.paper.blackLift < ToneCurve.matte.blackLift)
+    #expect(ToneCurve.matte.blackLift < ToneCurve.ink.blackLift)
+    #expect(ToneCurve.paper.whiteCeiling > ToneCurve.matte.whiteCeiling)
+    #expect(ToneCurve.matte.whiteCeiling > ToneCurve.ink.whiteCeiling)
+  }
+
+  /// The same claim already made for dimming and warmth, now with three terms:
+  /// all of it multiplies, so no order of setting them can produce a different
+  /// screen.
+  @Test("Dimming, warmth and finish compose in any order")
+  func allThreeCompose() {
+    let one = RecordingBackend()
+    let a = GammaDimmer(backend: one)
+    a.setDimming(0.6, for: displayA)
+    a.setWhitePoint(warm, for: displayA)
+    a.setTone(.paper, for: displayA)
+
+    let other = RecordingBackend()
+    let b = GammaDimmer(backend: other)
+    b.setTone(.paper, for: displayA)
+    b.setWhitePoint(warm, for: displayA)
+    b.setDimming(0.6, for: displayA)
+
+    #expect(one.redRamp(for: displayA) == other.redRamp(for: displayA))
+    #expect(one.peaks(for: displayA) == other.peaks(for: displayA))
+    #expect(one.floors(for: displayA) == other.floors(for: displayA))
+  }
+
+  /// Dimming scales the lifted floor rather than leaving it where it was. A
+  /// floor that stayed put would swamp the picture at low brightness.
+  @Test("Dimming brings the lifted black down with it")
+  func dimmingScalesTheLiftedBlack() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+
+    dimmer.setTone(.matte, for: displayA)
+    let undimmed = backend.floors(for: displayA)?.red ?? 0
+    dimmer.setDimming(0.5, for: displayA)
+    let dimmed = backend.floors(for: displayA)?.red ?? 0
+
+    #expect(abs(dimmed - undimmed * 0.5) < 0.001)
+  }
+
+  @Test("Reasserting restores the finish along with everything else")
+  func reassertRestoresFinish() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+    dimmer.setDimming(0.7, for: displayA)
+    dimmer.setWhitePoint(warm, for: displayA)
+    dimmer.setTone(.ink, for: displayA)
+    let before = backend.redRamp(for: displayA)
+
+    dimmer.reassertAll()
+
+    #expect(backend.redRamp(for: displayA) == before)
+  }
+
+  @Test("Setting the identity finish takes it off")
+  func identityToneClearsFinish() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+    dimmer.setDimming(0.4, for: displayA)
+    dimmer.setTone(.paper, for: displayA)
+
+    dimmer.setTone(.identity, for: displayA)
+
+    #expect(dimmer.finishedDisplays.isEmpty)
+    #expect(dimmer.dimmedDisplays == [displayA], "clearing the finish leaves the dimming alone")
+    #expect(abs((backend.floors(for: displayA)?.red ?? 1) - 0) < 0.001)
+  }
+
+  @Test("Pruning and clearing drop finishes too")
+  func pruningAndClearingDropFinishes() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+    dimmer.setTone(.paper, for: displayA)
+    dimmer.setTone(.paper, for: displayB)
+
+    dimmer.pruneOffline(onlineDisplayIDs: [displayA])
+    #expect(dimmer.finishedDisplays == [displayA])
+
+    dimmer.clear(displayA)
+    #expect(dimmer.finishedDisplays.isEmpty)
+    #expect(backend.restored.contains(displayA))
+  }
+
+  @Test("Quitting clears finishes as well")
+  func clearAllClearsFinishes() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+    dimmer.setTone(.ink, for: displayA)
+
+    dimmer.clearAll()
+
+    #expect(dimmer.finishedDisplays.isEmpty)
+    #expect(backend.restored.contains(displayA))
+  }
+
+  /// The lockout guard again, with the new control in play: no finish, at any
+  /// setting, may take a screen darker than the floor dimming is allowed to.
+  @Test("A finish cannot black out a display")
+  func finishCannotBlackOut() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+
+    dimmer.setTone(ToneCurve(blackLift: 99, whiteCeiling: -99, softness: 99), for: displayA)
+    dimmer.setDimming(0, for: displayA)
+
+    let peak = backend.peak(for: displayA) ?? 0
+    #expect(peak >= GammaRamp.minimumFraction * ToneCurve.ceilingRange.lowerBound - 0.001)
+    #expect(peak > 0)
   }
 }
