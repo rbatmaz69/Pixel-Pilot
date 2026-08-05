@@ -169,6 +169,10 @@ struct DisplayPage: View {
 
         Toggle("Brightness keys act on this display", isOn: mediaKeysBinding)
 
+        Toggle("This display sinks back when you're working elsewhere", isOn: attentionBinding)
+          .help("Only has an effect while Attention is switched on, under Keys. "
+            + "Turn it off for a screen that is watched rather than worked on.")
+
         if !display.isBuiltin {
           Divider()
           following
@@ -340,6 +344,19 @@ struct DisplayPage: View {
     )
   }
 
+  /// Unlike its neighbours this one also nudges the controller, because the veil
+  /// is applied from outside this display's own view model — persisting the
+  /// opt-out would otherwise leave the screen sunk until the next window change.
+  private var attentionBinding: Binding<Bool> {
+    Binding(
+      get: { display.settings.dimsWhenUnfocused },
+      set: { value in
+        display.updateSettings { $0.dimsWhenUnfocused = value }
+        model.attentionSettingsChanged()
+      }
+    )
+  }
+
   private var timingBinding: Binding<DDCTiming> {
     Binding(
       get: { display.settings.timing },
@@ -364,8 +381,29 @@ struct DisplayPage: View {
       VStack(alignment: .leading, spacing: Layout.normal) {
         capabilities
         Divider()
+        testPatterns
+        Divider()
         ddcLog
       }
+    }
+  }
+
+  /// The other half of "why is this display wrong": everything above asks the
+  /// panel about itself over DDC, and a panel that lies about its features will
+  /// lie about the rest. These ask the pixels instead.
+  private var testPatterns: some View {
+    VStack(alignment: .leading, spacing: Layout.tight) {
+      Text("Test patterns").font(TypeScale.rowTitle)
+      Text("Fills this screen with images for finding dead pixels, banding, backlight "
+        + "bleed and scaling. Click or press → to move through them, esc to leave.")
+        .font(TypeScale.detail)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+      Button("Show test patterns") {
+        model.showTestPatterns(on: display)
+      }
+      .buttonStyle(.soft)
     }
   }
 

@@ -143,6 +143,7 @@ struct PreferencesTests {
     #expect(restored.keyStep == 1.0 / 16.0, "absent keys fall back to their defaults")
     #expect(restored.hidMediaKeysEnabled)
     #expect(restored.showsOSD)
+    #expect(!restored.attention.isEnabled, "and a nested composite that was never written")
   }
 
   @Test("Display settings missing newer keys keep the values they do carry")
@@ -160,6 +161,26 @@ struct PreferencesTests {
     #expect(restored.respondsToMediaKeys)
     #expect(!restored.extraDimmingEnabled)
     #expect(restored.toneCurve == nil, "a display that predates the finish has none")
+    #expect(restored.dimsWhenUnfocused, "and it takes part in attention by default")
+  }
+
+  /// Off until asked for, like the schedule — and this one moves the light on
+  /// every window switch, so starting it unasked would be the most startling
+  /// thing in the app.
+  @Test("Attention is off on a fresh installation and survives a round trip")
+  func attentionRoundTrips() {
+    let defaults = makeDefaults()
+    #expect(!Preferences(defaults: defaults).global.attention.isEnabled)
+
+    let preferences = Preferences(defaults: defaults)
+    preferences.updateGlobal {
+      $0.attention.isEnabled = true
+      $0.attention.amount = 0.5
+    }
+
+    let restored = Preferences(defaults: defaults).global.attention
+    #expect(restored.isEnabled)
+    #expect(restored.amount == 0.5)
   }
 
   @Test("The finish survives a round trip, and off stays off")

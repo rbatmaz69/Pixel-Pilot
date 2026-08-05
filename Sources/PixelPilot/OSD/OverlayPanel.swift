@@ -32,20 +32,39 @@ enum OverlayPanel {
   ///   of being able to grab the thing you are already looking at, and it is
   ///   bounded by the panel being small, short-lived and always in the same
   ///   place.
+  /// - Parameter canBecomeKey: Whether the panel takes the keyboard.
+  ///
+  ///   False everywhere except the test patterns, and the exception is worth
+  ///   stating because it contradicts the rule the rest of this file is built
+  ///   on. This app is never the active one, deliberately: showing a HUD or
+  ///   identifying the displays must not take focus from whatever is being
+  ///   worked in, because nobody asked for either of those at that moment.
+  ///
+  ///   A test pattern is the opposite situation. It was opened on purpose, it
+  ///   covers the whole screen, and the only real failure mode is not being
+  ///   able to get out of it. Escape is the obvious way out and Escape needs
+  ///   the keyboard, so this one panel takes it.
   static func make(
-    content: AnyView, acceptsMouse: Bool = false
+    content: AnyView, acceptsMouse: Bool = false, canBecomeKey: Bool = false
   ) -> (panel: NSPanel, hosting: NSHostingView<AnyView>) {
     let hosting: NSHostingView<AnyView> = acceptsMouse
       ? InteractiveHostingView(rootView: content)
       : NSHostingView(rootView: content)
     hosting.sizingOptions = [.intrinsicContentSize]
 
-    let panel = NSPanel(
-      contentRect: .zero,
-      styleMask: [.borderless, .nonactivatingPanel],
-      backing: .buffered,
-      defer: false
-    )
+    let panel: NSPanel = canBecomeKey
+      ? KeyablePanel(
+        contentRect: .zero,
+        styleMask: [.borderless, .nonactivatingPanel],
+        backing: .buffered,
+        defer: false
+      )
+      : NSPanel(
+        contentRect: .zero,
+        styleMask: [.borderless, .nonactivatingPanel],
+        backing: .buffered,
+        defer: false
+      )
     panel.contentView = hosting
     // Both overlays are glass over whatever is on screen, and glass resolves
     // against an appearance. Left to the system's it would be light while the
@@ -82,6 +101,17 @@ enum OverlayPanel {
     let size = panel.contentView?.fittingSize ?? CGSize(width: 200, height: 150)
     panel.setContentSize(size)
     panel.setFrameOrigin(place(screen.frame, size))
+  }
+
+  /// A panel that will accept the keyboard.
+  ///
+  /// `NSPanel` refuses by default when it is borderless — there is no title bar,
+  /// so AppKit assumes there is nothing to type into. Overriding is the only
+  /// way, and `canBecomeMain` stays false: this needs key events, not to be the
+  /// application's main window.
+  final class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
   }
 
   /// A hosting view that can be pointed at and clicked by a background app.

@@ -207,6 +207,10 @@ final class AppModel {
       MainActor.assumeIsolated {
         self?.refreshPermissions()
         self?.frontmostAppChanged(to: identifier)
+        // Three jobs on this observer now. The attention controller needs the
+        // same event for a different reason: to re-point its window observer at
+        // whichever application is now in front.
+        self?.attention.frontmostAppChanged()
       }
     }
     refreshPermissions()
@@ -215,9 +219,16 @@ final class AppModel {
 
     scheduleRunner.start()
     refreshSchedule()
+    attention.start()
   }
 
   func stop() {
+    // Both before the gamma teardown below, so what they put on comes off
+    // through the thing that put it there rather than being left for
+    // `clearAll` — which for a suspended display would mean quitting with our
+    // tables held back and nothing to resume them.
+    testPatterns.hide()
+    attention.stop()
     scheduleRunner.stop()
     builtinSource.stop()
     events.stop()
@@ -257,6 +268,10 @@ final class AppModel {
       display.sourceBrightness = { [weak self] in self?.builtinSource.current }
     }
     refreshFollowing()
+    // The set of displays is exactly what the veils are a function of, so a
+    // monitor arriving or leaving has to be re-answered. `pruneOffline` above
+    // drops what went; this puts the right thing on what is left.
+    attention.settingsChanged()
 
     activationTask?.cancel()
     activationTask = Task { [displays] in
@@ -609,6 +624,36 @@ final class AppModel {
   /// app passed through, and each would otherwise be a preset pushed down the
   /// I2C bus.
   @ObservationIgnored private let ruleDebouncer = Debouncer(delay: .milliseconds(200))
+
+  // MARK: - Attention
+
+  /// Pushes back the screens not being worked on. Off unless switched on, so
+  /// this is inert on a fresh installation.
+  ///
+  /// The candidate list is a closure rather than a snapshot because displays
+  /// come and go, and a stale one would leave a veil on a monitor that is no
+  /// longer there — or miss one that has just arrived.
+  @ObservationIgnored private lazy var attention = AttentionController(
+    preferences: preferences
+  ) { [weak self] in
+    (self?.displays ?? []).map {
+      AttentionPlan.Candidate(displayID: $0.displayID, participates: $0.settings.dimsWhenUnfocused)
+    }
+  }
+
+  /// Re-evaluates the veils after something other than focus changed the
+  /// answer: the switch itself, the amount, or a display opting out.
+  func attentionSettingsChanged() {
+    attention.settingsChanged()
+  }
+
+  // MARK: - Test patterns
+
+  @ObservationIgnored private let testPatterns = TestPatternController()
+
+  func showTestPatterns(on display: DisplayViewModel) {
+    testPatterns.show(on: display.displayID, named: display.name)
+  }
 
   func saveAppRule(_ rule: AppRule) {
     appRules.save(rule)

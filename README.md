@@ -31,6 +31,16 @@ Requires macOS 26 (Tahoe) on Apple Silicon.
   could keep. The relationship is taught rather than configured — adjust the
   display by hand while it is following and it remembers that for that light
   level. See [Following](#following-the-built-in-panel).
+- **Attention**, off until switched on: the screen holding the window you are
+  working in stays where you set it, and the others sink back until you move to
+  them. Done in the colour tables rather than the backlight, so the brightness
+  slider does not move and nothing goes down the DDC bus when you change window.
+  See [Attention, and why it does not fade](#attention-and-why-it-does-not-fade).
+- **Test patterns** per display — solid colours for dead pixels, a grey ramp for
+  banding, near-black and near-white steps for clipping, flat fields for
+  backlight bleed, a one-pixel checkerboard for scaling. The app's own colour
+  tables come off that display while one is up, so what you are looking at is
+  the panel.
 - **Scroll over the menu bar icon** to change brightness.
 - **One slider for every display**, keeping the differences between them.
 - **Presets** carrying brightness, contrast, warmth, finish and volume —
@@ -634,6 +644,51 @@ compose by multiplication, so the order they are asked for makes no difference.
 is running — `CBBlueLightClient` is private and is not used here — so the app
 counts how often its own tables are reset in a burst and says what it sees. It
 cannot win that fight, and it does not pretend to.
+
+## Attention, and why it does not fade
+
+Off by default, like the schedule and like following, and for a sharper version
+of the same reason: this one moves the light every time you change window.
+
+It is a **fourth term in the gamma table**, multiplied in beside dimming, warmth
+and the finish — not a second use of the dimming one. That is not tidiness.
+`BrightnessController` reads `GammaDimmer.dimming(for:)` back to answer what a
+gamma-dimmed display is currently set to, so a veil written there would move the
+brightness slider every time you switched window, and a preset captured while a
+screen happened to be unfocused would record the sunk value as that display's
+brightness. Kept apart, the veil is invisible to everything that asks what a
+display is set to, which is exactly what it should be.
+
+Three things fall out of that, and they are what make it cheap enough to fire on
+every window switch: no DDC round trip, no movement in any slider, and no change
+to native brightness — so a display following the built-in panel does not chase
+the veil around. Routing this through the backlight instead would have dimmed
+every follower whenever the laptop screen lost focus.
+
+On the built-in panel a gamma veil is a grey film over a backlight still running
+at full. It costs contrast and saves no power. That is the honest trade for not
+touching the value everything else reads, and the settings card says so.
+
+**Two event sources, no timer.** `NSWorkspace.didActivateApplicationNotification`
+covers moving between applications; an `AXObserver` on the frontmost process
+covers moving between two windows of the same one, which on a two-monitor desk
+is the ordinary case. Not `kAXWindowMovedNotification`, which fires continuously
+through a drag. Not the pointer, even though the keys can be aimed that way — a
+global mouse-moved monitor fires whenever the mouse moves at all, which is an
+idle drain in the shape of a feature.
+
+**It does not fade.** Animating a gamma veil means rewriting the table many
+times a second, and unlike the overlays' `alphaValue` there is nothing on the
+window server's side to hand the animation to. A 120 ms debounce is what stops
+the step from reading as a flicker: holding ⌘-Tab settles once on the app you
+landed on rather than strobing through everything you passed.
+
+The decision itself — which display sinks, given what is known — lives in
+`AttentionPlan` in the UI-free core, so the three cases that matter are tested
+without Accessibility, a window server or a second monitor: **nobody focused
+veils nothing** (nil is a normal answer, and veiling every screen because nobody
+could be found is the failure where you cannot see what to click), **one display
+veils nothing**, and a display can opt out on its own page.
 
 ## A finish is not a coating
 

@@ -77,4 +77,50 @@ struct OverlayPanelTests {
     }
     #expect(ours.count == 1)
   }
+
+  /// The app is never the active one on purpose, so a panel that takes the
+  /// keyboard is an exception rather than a default — and the one place it is
+  /// right is a full-screen test pattern, where Escape is the way out.
+  @Test("Only a panel that asks for it takes the keyboard")
+  func keyAcceptance() {
+    #expect(!made(acceptsMouse: true).panel.canBecomeKey)
+    #expect(!made(acceptsMouse: false).panel.canBecomeKey)
+
+    let pattern = OverlayPanel.make(
+      content: AnyView(Color.clear), acceptsMouse: true, canBecomeKey: true
+    )
+    #expect(pattern.panel.canBecomeKey)
+    // Key, not main. It needs the keystrokes, not to become the application's
+    // main window.
+    #expect(!pattern.panel.canBecomeMain)
+  }
+}
+
+/// The patterns themselves.
+///
+/// A test pattern nobody can interpret is a coloured screen, so the thing worth
+/// pinning is that every one of them says what it is asking you to look for.
+@Suite("Test patterns")
+struct TestPatternTests {
+  @Test("Every pattern says what it is and what to look for")
+  func everyPatternIsExplained() {
+    for pattern in TestPattern.allCases {
+      #expect(!pattern.title.isEmpty)
+      #expect(!pattern.purpose.isEmpty)
+    }
+  }
+
+  /// The solids come first: a dead pixel makes everything below it moot, and
+  /// finding one is what most people open this for.
+  @Test("The solids lead")
+  func solidsComeFirst() {
+    #expect(TestPattern.allCases.prefix(5) == [.white, .black, .red, .green, .blue])
+  }
+
+  @Test("Cycling is a loop, so neither end is a dead stop")
+  func namesAreUnique() {
+    let titles = TestPattern.allCases.map(\.title)
+    #expect(Set(titles).count == titles.count)
+    #expect(TestPattern.allCases.count > 1)
+  }
 }

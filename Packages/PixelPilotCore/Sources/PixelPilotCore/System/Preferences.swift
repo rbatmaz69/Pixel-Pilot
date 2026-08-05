@@ -43,6 +43,15 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
   /// Whether the brightness keys act on this display.
   public var respondsToMediaKeys: Bool = true
 
+  /// Whether this display sinks back when it is not the one being worked on.
+  ///
+  /// On by default, but only ever consulted when `GlobalSettings.attention` is
+  /// switched on at all — so a fresh installation still does nothing. The
+  /// opt-out is per panel because the reason to want one is per panel: a screen
+  /// showing something to somebody else, or one being watched rather than
+  /// worked on, should stay where it was put.
+  public var dimsWhenUnfocused: Bool = true
+
   /// Whether this display tracks the built-in panel's brightness.
   ///
   /// Off by default, and for the same reason the schedule is: an app that
@@ -106,6 +115,8 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
       ?? fallback.extraDimmingEnabled
     respondsToMediaKeys = try container.decodeIfPresent(Bool.self, forKey: .respondsToMediaKeys)
       ?? fallback.respondsToMediaKeys
+    dimsWhenUnfocused = try container.decodeIfPresent(Bool.self, forKey: .dimsWhenUnfocused)
+      ?? fallback.dimsWhenUnfocused
     followsBuiltinBrightness = try container.decodeIfPresent(
       Bool.self, forKey: .followsBuiltinBrightness
     ) ?? fallback.followsBuiltinBrightness
@@ -304,6 +315,13 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   public var latitude: Double?
   public var longitude: Double?
 
+  /// Whether the screens you are not working on are pushed back, and how far.
+  ///
+  /// Off by default for the same reason the schedule above is: this one moves
+  /// the light on every window switch, so starting it unasked would be the most
+  /// startling thing in the app.
+  public var attention: AttentionSettings = .init()
+
   /// Whether the trackpad taps back at end stops, detents and confirmations.
   ///
   /// On by default, and deliberately *not* tied to Reduce Motion. That setting
@@ -381,6 +399,12 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
     schedule = (try? container.decodeIfPresent(DaySchedule.self, forKey: .schedule)) ?? fallback.schedule
     latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
     longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
+    // Wrapped like the schedule above, and for the same reason: a composite
+    // written by a build whose shape differed still throws past
+    // `decodeIfPresent`, and losing this one setting is a far smaller loss than
+    // losing every other setting in the same blob.
+    attention = (try? container.decodeIfPresent(AttentionSettings.self, forKey: .attention))
+      ?? fallback.attention
     // Absent means an existing installation, which has plainly already got
     // past the first run — so the default when decoding is the opposite of the
     // default for a fresh one.

@@ -17,7 +17,19 @@ private final class RecordingBackend: GammaDimmer.Backend, @unchecked Sendable {
     var isNeutral: Bool { red == green && green == blue }
   }
 
+  /// Writes and restores in the order they happened.
+  ///
+  /// The separate `applied` and `restored` lists cannot answer the question
+  /// that matters once a restore is global: *which came last*. A veil written
+  /// and then wiped by somebody else's restore looks identical, in those two
+  /// lists, to a veil written after one.
+  struct Event {
+    var display: CGDirectDisplayID
+    var isRestore: Bool
+  }
+
   private let lock = NSLock()
+  private var _events: [Event] = []
   private var _applied: [(display: CGDirectDisplayID, peaks: Peaks)] = []
   /// The *bottom* of each ramp, recorded alongside the top. A tone curve is the
   /// first thing here that moves the floor, and a peak alone cannot tell a
@@ -28,6 +40,7 @@ private final class RecordingBackend: GammaDimmer.Backend, @unchecked Sendable {
   private var _restoreAllCount = 0
 
   var applied: [(display: CGDirectDisplayID, peaks: Peaks)] { lock.withLock { _applied } }
+  var events: [Event] { lock.withLock { _events } }
   var restored: [CGDirectDisplayID] { lock.withLock { _restored } }
   var restoreAllCount: Int { lock.withLock { _restoreAllCount } }
 
@@ -67,11 +80,15 @@ private final class RecordingBackend: GammaDimmer.Backend, @unchecked Sendable {
         blue: Double(blue.first ?? 0)
       )))
       _ramps.append((displayID, red))
+      _events.append(Event(display: displayID, isRestore: false))
     }
   }
 
   func restore(_ displayID: CGDirectDisplayID) {
-    lock.withLock { _restored.append(displayID) }
+    lock.withLock {
+      _restored.append(displayID)
+      _events.append(Event(display: displayID, isRestore: true))
+    }
   }
 
   func restoreAll() {
@@ -489,5 +506,231 @@ struct GammaDimmerTests {
     let peak = backend.peak(for: displayA) ?? 0
     #expect(peak >= GammaRamp.minimumFraction * ToneCurve.ceilingRange.lowerBound - 0.001)
     #expect(peak > 0)
+  }
+
+  // MARK: - Veil
+
+  @Test("A veil of 1 changes nothing about the ramps")
+  func fullVeilMatchesPlainDimming() {
+    let plain = GammaRamp.channels(luminance: 0.6, whitePoint: warm, tone: .paper)
+    let explicit = GammaRamp.channels(luminance: 0.6, whitePoint: warm, tone: .paper, veil: 1.0)
+
+    #expect(plain.red == explicit.red)
+    #expect(plain.green == explicit.green)
+    #expect(plain.blue == explicit.blue)
+  }
+
+  /// The whole reason the veil is a separate dictionary. `BrightnessController`
+  /// reads `dimming(for:)` back to answer what a gamma-dimmed display is set
+  /// to; if the veil landed there, the brightness slider would move every time
+  /// the user changed window and a preset would capture the veiled value.
+  @Test("A veil is invisible to everything that asks what the display is set to")
+  func veilDoesNotMoveTheBrightness() {
+    let dimmer = GammaDimmer(backend: RecordingBackend())
+    dimmer.setDimming(0.5, for: displayA)
+
+    dimmer.setVeil(0.6, for: displayA)
+
+    #expect(dimmer.dimming(for: displayA) == 0.5, "the veil is not dimming")
+    #expect(dimmer.dimmedDisplays == [displayA])
+    #expect(dimmer.veiledDisplays == [displayA])
+  }
+
+  @Test("A veil alone is a write, not a restore")
+  func veilAloneWrites() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+
+    dimmer.setVeil(0.65, for: displayA)
+
+    #expect(dimmer.veiledDisplays == [displayA])
+    #expect(abs((backend.peak(for: displayA) ?? 0) - 0.65) < 0.001)
+    #expect(backend.restored.isEmpty)
+  }
+
+  @Test("Dimming, warmth, finish and veil compose in any order")
+  func allFourCompose() {
+    let one = RecordingBackend()
+    let a = GammaDimmer(backend: one)
+    a.setDimming(0.7, for: displayA)
+    a.setWhitePoint(warm, for: displayA)
+    a.setTone(.paper, for: displayA)
+    a.setVeil(0.6, for: displayA)
+
+    let other = RecordingBackend()
+    let b = GammaDimmer(backend: other)
+    b.setVeil(0.6, for: displayA)
+    b.setTone(.paper, for: displayA)
+    b.setDimming(0.7, for: displayA)
+    b.setWhitePoint(warm, for: displayA)
+
+    #expect(one.redRamp(for: displayA) == other.redRamp(for: displayA))
+  }
+
+  @Test("Lifting the veil leaves everything else alone")
+  func liftingVeilKeepsTheRest() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+    dimmer.setDimming(0.5, for: displayA)
+    dimmer.setTone(.matte, for: displayA)
+    dimmer.setVeil(0.6, for: displayA)
+
+    dimmer.setVeil(1.0, for: displayA)
+
+    #expect(dimmer.veiledDisplays.isEmpty)
+    #expect(dimmer.dimmedDisplays == [displayA])
+    #expect(dimmer.finishedDisplays == [displayA])
+    #expect(abs((backend.peak(for: displayA) ?? 0) - 0.5 * ToneCurve.matte.whiteCeiling) < 0.001)
+  }
+
+  @Test("Reasserting restores the veil with everything else")
+  func reassertRestoresVeil() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+    dimmer.setDimming(0.7, for: displayA)
+    dimmer.setVeil(0.5, for: displayA)
+    let before = backend.redRamp(for: displayA)
+
+    dimmer.reassertAll()
+
+    #expect(backend.redRamp(for: displayA) == before)
+  }
+
+  @Test("Pruning and quitting drop veils too")
+  func pruningAndClearingDropVeils() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+    dimmer.setVeil(0.5, for: displayA)
+    dimmer.setVeil(0.5, for: displayB)
+
+    dimmer.pruneOffline(onlineDisplayIDs: [displayA])
+    #expect(dimmer.veiledDisplays == [displayA])
+
+    dimmer.clearAll()
+    #expect(dimmer.veiledDisplays.isEmpty)
+    #expect(backend.restored.contains(displayA))
+  }
+
+  /// The floor has to cover the two together. Flooring the luminance on its own
+  /// and multiplying the veil in afterwards would put a display at minimum
+  /// brightness below the level that floor exists to guarantee — the veil would
+  /// have quietly reopened the lockout.
+  @Test("A veil cannot take a dimmed display below the floor")
+  func veilRespectsTheFloor() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+
+    dimmer.setDimming(0, for: displayA)
+    dimmer.setVeil(0.3, for: displayA)
+
+    let peak = backend.peak(for: displayA) ?? 0
+    #expect(peak >= GammaRamp.minimumFraction - 0.001)
+    #expect(peak > 0)
+  }
+
+  // MARK: - Suspending
+
+  @Test("A suspended display is handed back without being forgotten")
+  func suspendHandsBack() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+    dimmer.setDimming(0.5, for: displayA)
+    dimmer.setTone(.paper, for: displayA)
+    let before = backend.redRamp(for: displayA)
+
+    dimmer.suspend(displayA)
+    #expect(dimmer.isSuspended(displayA))
+    #expect(backend.restored.contains(displayA))
+    #expect(dimmer.dimmedDisplays == [displayA], "suspending is not forgetting")
+    #expect(dimmer.finishedDisplays == [displayA])
+
+    dimmer.resume(displayA)
+    #expect(!dimmer.isSuspended(displayA))
+    #expect(backend.redRamp(for: displayA) == before)
+  }
+
+  /// A wake or a colour-profile change does not stop happening because a test
+  /// pattern is up, so reassertion has to keep handing the table back rather
+  /// than writing over the pattern.
+  @Test("Reasserting a suspended display keeps it suspended")
+  func reassertRespectsSuspension() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+    dimmer.setDimming(0.5, for: displayA)
+    dimmer.suspend(displayA)
+    let writesBefore = backend.applied.count
+
+    dimmer.reassertAll()
+
+    #expect(backend.applied.count == writesBefore, "nothing may be written to a suspended display")
+  }
+
+  /// The bug that made attention look broken, and was latent in warmth long
+  /// before that.
+  ///
+  /// `CGDisplayRestoreColorSyncSettings` has no per-display form, so handing
+  /// one display back hands *all* of them back. Clearing one display and
+  /// setting another happens in one pass over a dictionary, whose order is
+  /// unspecified — so when the clear landed second it erased what had just been
+  /// written to the other screen, and the feature worked or did not depending
+  /// on a hash seed that changes every launch.
+  @Test("Clearing one display puts back what the others are holding")
+  func clearingOneDisplayDoesNotWipeAnother() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+
+    // The order that used to lose: write first, then clear the other one.
+    dimmer.setVeil(0.3, for: displayA)
+    dimmer.setVeil(1.0, for: displayB)
+
+    // Whatever the global restore wiped must have been written again *after* it.
+    let lastRestore = backend.events.lastIndex { $0.isRestore }
+    let lastWriteToA = backend.events.lastIndex { $0.display == displayA && !$0.isRestore }
+    #expect(lastRestore != nil)
+    #expect(lastWriteToA != nil)
+    #expect((lastWriteToA ?? 0) > (lastRestore ?? 0),
+            "display A's veil must be re-written after the global restore wiped it")
+    #expect(abs((backend.peak(for: displayA) ?? 0) - 0.3) < 0.001)
+  }
+
+  @Test("Warmth on one display survives another being cleared")
+  func clearingOneDisplayDoesNotWipeWarmth() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+
+    dimmer.setWhitePoint(warm, for: displayA)
+    dimmer.setWhitePoint(.neutral, for: displayB)
+
+    let lastRestore = backend.events.lastIndex { $0.isRestore }
+    let lastWriteToA = backend.events.lastIndex { $0.display == displayA && !$0.isRestore }
+    #expect((lastWriteToA ?? 0) > (lastRestore ?? 0))
+  }
+
+  /// A display showing the system's own profile on purpose must not be written
+  /// back over by another display's restore.
+  @Test("A suspended display is not resurrected by someone else's restore")
+  func suspendedDisplaySurvivesAnotherRestore() {
+    let backend = RecordingBackend()
+    let dimmer = GammaDimmer(backend: backend)
+    dimmer.setDimming(0.5, for: displayA)
+    dimmer.suspend(displayA)
+
+    let before = backend.events.count
+    dimmer.setVeil(1.0, for: displayB)
+
+    let after = backend.events.dropFirst(before)
+    #expect(!after.contains { $0.display == displayA && !$0.isRestore },
+            "nothing may be written to a suspended display")
+  }
+
+  @Test("Suspension does not survive the display going away")
+  func pruningDropsSuspension() {
+    let dimmer = GammaDimmer(backend: RecordingBackend())
+    dimmer.setDimming(0.5, for: displayA)
+    dimmer.suspend(displayA)
+
+    dimmer.pruneOffline(onlineDisplayIDs: [displayB])
+
+    #expect(!dimmer.isSuspended(displayA))
   }
 }

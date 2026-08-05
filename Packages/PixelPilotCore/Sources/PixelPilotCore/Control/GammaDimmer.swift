@@ -46,17 +46,23 @@ enum GammaRamp {
     min(1.0, max(minimumFraction, fraction))
   }
 
-  /// Luminance, colour and finish, in one set of ramps.
+  /// Luminance, colour, finish and veil, in one set of ramps.
   ///
   /// Composition falls out of multiplication, which is the whole reason
   /// warming and dimming can coexist without either fighting the other:
   /// dimming to 60 % at 3000 K is the 3000 K white point scaled by 0.6, and the
-  /// order the two were asked for makes no difference. The tone curve joins on
-  /// the same terms.
+  /// order the two were asked for makes no difference. The tone curve and the
+  /// veil join on the same terms.
   ///
-  /// A neutral white point and an identity tone curve reproduce `linear`
-  /// exactly, which is what lets the existing dimming tests keep pinning the
-  /// luminance behaviour unchanged.
+  /// A neutral white point, an identity tone curve and a veil of 1 reproduce
+  /// `linear` exactly, which is what lets the existing dimming tests keep
+  /// pinning the luminance behaviour unchanged.
+  ///
+  /// **The floor covers luminance and veil together.** Flooring the luminance
+  /// on its own and then multiplying the veil into it afterwards would put a
+  /// display at minimum brightness well below the level that floor exists to
+  /// guarantee — the veil would have quietly reopened the lockout the floor was
+  /// added to close.
   ///
   /// One consequence worth naming, because it looks like a bug and is not: the
   /// white point scales each channel differently, so a lifted black picks up
@@ -65,9 +71,9 @@ enum GammaRamp {
   /// a warm picture — is the thing that would look wrong.
   static func channels(
     luminance: Double, whitePoint: WhitePoint, tone: ToneCurve = .identity,
-    entries: Int = entryCount
+    veil: Double = 1.0, entries: Int = entryCount
   ) -> (red: [CGGammaValue], green: [CGGammaValue], blue: [CGGammaValue]) {
-    let scale = clampFraction(luminance)
+    let scale = clampFraction(luminance * min(1, max(0, veil)))
     return (
       red: ramp(scale: scale * whitePoint.red, tone: tone, entries: entries),
       green: ramp(scale: scale * whitePoint.green, tone: tone, entries: entries),
@@ -175,6 +181,19 @@ public final class GammaDimmer: @unchecked Sendable {
   /// set independently, and folding two of them together would mean one could
   /// not be changed without restating the other.
   private var tones: [CGDirectDisplayID: ToneCurve] = [:]
+  /// How far each display is pushed back for not being the one being worked on.
+  ///
+  /// A fourth dictionary and not a second use of `fractions`, and the reason is
+  /// load-bearing rather than tidiness: `BrightnessController` reads
+  /// `dimming(for:)` back out of here to answer what a gamma-dimmed display is
+  /// currently set to. Folding the veil in there would move the brightness
+  /// slider every time the user changed window, and a preset captured while a
+  /// screen happened to be unfocused would record the veiled value as that
+  /// display's brightness. Kept apart, the veil is invisible to everything that
+  /// asks what the display is set to — which is exactly what it should be.
+  private var veils: [CGDirectDisplayID: Double] = [:]
+  /// Displays whose tables are held back without being forgotten. See `suspend`.
+  private var suspended: Set<CGDirectDisplayID> = []
   private var safetyNetInstalled = false
 
   private let logger = Logger(subsystem: "dev.rb.pixelpilot", category: "gamma")
@@ -198,9 +217,14 @@ public final class GammaDimmer: @unchecked Sendable {
     lock.withLock { Set(tones.keys) }
   }
 
+  /// Displays currently pushed back for not being worked on.
+  public var veiledDisplays: Set<CGDirectDisplayID> {
+    lock.withLock { Set(veils.keys) }
+  }
+
   /// Every display this dimmer is holding something on, of any kind.
   private var touchedDisplaysLocked: Set<CGDirectDisplayID> {
-    Set(fractions.keys).union(whitePoints.keys).union(tones.keys)
+    Set(fractions.keys).union(whitePoints.keys).union(tones.keys).union(veils.keys)
   }
 
   /// `fraction` of 1.0 removes dimming; lower values darken. Values below the
@@ -267,19 +291,50 @@ public final class GammaDimmer: @unchecked Sendable {
     lock.withLock { whitePoints[displayID] ?? .neutral }
   }
 
+  /// `1.0` lifts the veil. Lower values push the display back.
+  ///
+  /// Separate from `setDimming` on purpose — see `veils`. It composes with
+  /// everything else by the same multiplication, so a veiled display keeps its
+  /// warmth, its finish and the brightness it was set to; it is simply further
+  /// away.
+  public func setVeil(_ fraction: Double, for displayID: CGDirectDisplayID) {
+    let clamped = min(1, max(0, fraction))
+
+    lock.lock()
+    if clamped >= 1.0 {
+      veils.removeValue(forKey: displayID)
+    } else {
+      veils[displayID] = clamped
+      installSafetyNetLocked()
+    }
+    let state = stateLocked(for: displayID)
+    lock.unlock()
+
+    apply(state, to: displayID)
+  }
+
   public func tone(for displayID: CGDirectDisplayID) -> ToneCurve {
     lock.withLock { tones[displayID] ?? .identity }
   }
 
-  /// Drops the dimming, the cast and the finish for one display.
+  public func veil(for displayID: CGDirectDisplayID) -> Double {
+    lock.withLock { veils[displayID] ?? 1.0 }
+  }
+
+  /// Drops everything this dimmer is holding on one display.
   public func clear(_ displayID: CGDirectDisplayID) {
     lock.lock()
     fractions.removeValue(forKey: displayID)
     whitePoints.removeValue(forKey: displayID)
     tones.removeValue(forKey: displayID)
+    veils.removeValue(forKey: displayID)
+    suspended.remove(displayID)
     lock.unlock()
 
-    apply((luminance: 1.0, whitePoint: .neutral, tone: .identity), to: displayID)
+    apply(
+      (luminance: 1.0, whitePoint: .neutral, tone: .identity, veil: 1.0, isSuspended: false),
+      to: displayID
+    )
   }
 
   /// Restores every display we touched. Called on quit, and safe to call when
@@ -290,10 +345,15 @@ public final class GammaDimmer: @unchecked Sendable {
     fractions.removeAll()
     whitePoints.removeAll()
     tones.removeAll()
+    veils.removeAll()
+    suspended.removeAll()
     lock.unlock()
 
     for displayID in displays {
-      apply((luminance: 1.0, whitePoint: .neutral, tone: .identity), to: displayID)
+      apply(
+        (luminance: 1.0, whitePoint: .neutral, tone: .identity, veil: 1.0, isSuspended: false),
+        to: displayID
+      )
     }
     backend.restoreAll()
   }
@@ -314,6 +374,41 @@ public final class GammaDimmer: @unchecked Sendable {
     logger.debug("Reasserted gamma on \(states.count, privacy: .public) display(s)")
   }
 
+  // MARK: - Suspending
+
+  /// Takes our tables off a display without forgetting what they were.
+  ///
+  /// For showing the panel as macOS hands it over — a test pattern looked at
+  /// through a lifted tone curve is a lie about the panel, not a measurement of
+  /// it. `clear(_:)` is the wrong tool: it would take the user's warmth and
+  /// finish with it and there would be nothing to put back.
+  ///
+  /// A suspended display is still reasserted *through* — `reassertAll` runs the
+  /// same `apply`, which sees the suspension and hands the table back again.
+  /// That matters because the events reassertion answers, a wake or a colour
+  /// profile change, do not stop happening because a test pattern is up.
+  public func suspend(_ displayID: CGDirectDisplayID) {
+    lock.lock()
+    suspended.insert(displayID)
+    let state = stateLocked(for: displayID)
+    lock.unlock()
+
+    apply(state, to: displayID)
+  }
+
+  public func resume(_ displayID: CGDirectDisplayID) {
+    lock.lock()
+    suspended.remove(displayID)
+    let state = stateLocked(for: displayID)
+    lock.unlock()
+
+    apply(state, to: displayID)
+  }
+
+  public func isSuspended(_ displayID: CGDirectDisplayID) -> Bool {
+    lock.withLock { suspended.contains(displayID) }
+  }
+
   /// Drops displays that are no longer online, so a disconnected monitor does
   /// not keep a stale entry alive forever.
   public func pruneOffline(onlineDisplayIDs: Set<CGDirectDisplayID>) {
@@ -321,34 +416,87 @@ public final class GammaDimmer: @unchecked Sendable {
       fractions = fractions.filter { onlineDisplayIDs.contains($0.key) }
       whitePoints = whitePoints.filter { onlineDisplayIDs.contains($0.key) }
       tones = tones.filter { onlineDisplayIDs.contains($0.key) }
+      veils = veils.filter { onlineDisplayIDs.contains($0.key) }
+      suspended = suspended.filter { onlineDisplayIDs.contains($0) }
     }
   }
 
   // MARK: - Applying
 
-  private typealias GammaState = (luminance: Double, whitePoint: WhitePoint, tone: ToneCurve)
+  private typealias GammaState = (
+    luminance: Double, whitePoint: WhitePoint, tone: ToneCurve, veil: Double, isSuspended: Bool
+  )
 
   /// Caller must hold `lock`.
   private func stateLocked(for displayID: CGDirectDisplayID) -> GammaState {
-    (fractions[displayID] ?? 1.0, whitePoints[displayID] ?? .neutral, tones[displayID] ?? .identity)
+    (
+      fractions[displayID] ?? 1.0,
+      whitePoints[displayID] ?? .neutral,
+      tones[displayID] ?? .identity,
+      veils[displayID] ?? 1.0,
+      suspended.contains(displayID)
+    )
   }
 
   private func apply(_ state: GammaState, to displayID: CGDirectDisplayID) {
     // Nothing to hold means hand the table back rather than writing an identity
     // ramp over it — the system's own profile is not necessarily linear, and
-    // "restore" is the only way to return whatever it really was.
+    // "restore" is the only way to return whatever it really was. A suspended
+    // display takes the same path for the same reason: it is being shown as
+    // macOS hands it over, which is what "restore" means.
     //
-    // All three conditions, not two: a display carrying only a finish is a
-    // display holding something, and leaving the tone out here would restore
-    // the system profile over it on every single write.
-    guard state.luminance < 1.0 || !state.whitePoint.isNeutral || !state.tone.isIdentity else {
+    // All four conditions, not three: a display carrying only a veil is a
+    // display holding something, and leaving one of these out restores the
+    // system profile over it on every single write — which fails as "the
+    // setting does nothing" rather than as anything anyone could debug.
+    guard !state.isSuspended,
+          state.luminance < 1.0 || !state.whitePoint.isNeutral || !state.tone.isIdentity
+          || state.veil < 1.0
+    else {
       backend.restore(displayID)
+      // `CGDisplayRestoreColorSyncSettings` has no per-display form — the
+      // backend says so itself — so that call just handed *every* display back,
+      // not the one asked for. Anything still being held elsewhere has this
+      // instant been wiped off the screen and has to be put back.
+      //
+      // This is the bug that made attention look broken. Clearing one display's
+      // veil and setting another's happens in the same pass, dictionary order
+      // is unspecified, and when the clear landed second it erased the veil
+      // written a microsecond earlier — so the feature worked or did not
+      // depending on a hash seed that changes every launch. It was always
+      // latent: warming one display and un-warming another had the same race,
+      // just far too rarely to catch.
+      reassertOthers(excluding: displayID)
       return
     }
+    write(state, to: displayID)
+  }
+
+  private func write(_ state: GammaState, to displayID: CGDirectDisplayID) {
     let ramps = GammaRamp.channels(
-      luminance: state.luminance, whitePoint: state.whitePoint, tone: state.tone
+      luminance: state.luminance, whitePoint: state.whitePoint, tone: state.tone, veil: state.veil
     )
     backend.applyRamps(red: ramps.red, green: ramps.green, blue: ramps.blue, to: displayID)
+  }
+
+  /// Re-writes every other display we are holding something on.
+  ///
+  /// Writes directly rather than going back through `apply`, which cannot
+  /// recurse into another restore — every display in `touchedDisplays` holds
+  /// something by construction, since the setters drop the key when a value
+  /// becomes the identity — but going straight to the write says so rather than
+  /// relying on it.
+  private func reassertOthers(excluding displayID: CGDirectDisplayID) {
+    let states: [(CGDirectDisplayID, GammaState)] = lock.withLock {
+      touchedDisplaysLocked
+        .filter { $0 != displayID }
+        .map { ($0, stateLocked(for: $0)) }
+    }
+    // A suspended display is deliberately showing the system's own profile, and
+    // the global restore has just given it exactly that. Leave it alone.
+    for (id, state) in states where !state.isSuspended {
+      write(state, to: id)
+    }
   }
 
   // MARK: - Safety net

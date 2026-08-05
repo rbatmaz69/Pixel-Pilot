@@ -11,6 +11,7 @@ struct KeySettings: View {
   let model: AppModel
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
 
   @State private var global = Preferences.shared.global
   @State private var isLearningKey = false
@@ -18,8 +19,9 @@ struct KeySettings: View {
   var body: some View {
     CardStack {
       keysCard.entrance(index: 0)
-      permissionsCard.entrance(index: 1)
-      detectionCard.entrance(index: 2)
+      attentionCard.entrance(index: 1)
+      permissionsCard.entrance(index: 2)
+      detectionCard.entrance(index: 3)
     }
     .animation(motion.spatialDefault, value: model.needsRelaunchForPermissions)
     // Re-check on appearance as well as on activation: opening this page is
@@ -84,6 +86,61 @@ struct KeySettings: View {
           + "drives, so that slider appears the first time a key is pressed. The global "
           + "shortcuts follow this setting too.")
       }
+    }
+  }
+
+  /// On this page rather than under General, because this page is already about
+  /// where input is aimed — `keyTarget` is three rows up. This asks the same
+  /// question of attention instead of keystrokes, and answers it from the same
+  /// Accessibility grant listed below.
+  private var attentionCard: some View {
+    PanelCard(title: "Attention", systemImage: "rectangle.inset.filled.on.rectangle") {
+      VStack(alignment: .leading, spacing: Layout.normal) {
+        Toggle("Push back the screens you're not working on", isOn: $global.attention.isEnabled)
+          .onChange(of: global.attention.isEnabled) { _, _ in apply() }
+
+        if global.attention.isEnabled {
+          amountSlider.transition(.blurReplace.combined(with: .scale(0.97, anchor: .top)))
+        }
+
+        CardFooter(global.attention.isEnabled
+          ? "The screen holding the window you're working in stays where you set it; the "
+            + "others sink back and return the moment you move to them. It's done in the "
+            + "colour tables, not the backlight — so the brightness slider doesn't move, a "
+            + "preset captured now records what you set rather than what you're looking at, "
+            + "and nothing goes down the DDC bus when you change window. On the built-in "
+            + "panel that means a grey film over a backlight still running at full: it costs "
+            + "contrast and saves no power. It doesn't fade, because fading a colour table "
+            + "means rewriting it many times a second. A display can sit this out on its own "
+            + "page under Displays."
+          : "Off. Nothing sinks, and the app asks nothing about which window you're in.")
+      }
+      .animation(motion.spatialDefault, value: global.attention.isEnabled)
+    }
+  }
+
+  private var amountSlider: some View {
+    VStack(alignment: .leading, spacing: Layout.tight) {
+      HStack(alignment: .firstTextBaseline) {
+        Text("How far they sink")
+          .font(TypeScale.rowTitle)
+          .foregroundStyle(.secondary)
+        Spacer()
+        Text("\(Int((global.attention.amount * 100).rounded()))%")
+          .font(TypeScale.readout)
+          .contentTransition(.numericText(value: global.attention.amount))
+          .animation(motion.effectFast, value: global.attention.amount)
+      }
+
+      ExpressiveSlider(
+        value: $global.attention.amount,
+        range: AttentionSettings.amountRange,
+        accent: theme.tone,
+        // Not the quarters: this track starts at 10 % and ends at 70 %, so a
+        // mark at "half of the track" would sit at 40 % and mean nothing.
+        detents: [],
+        onCommit: { _ in apply() }
+      )
     }
   }
 
@@ -232,5 +289,8 @@ struct KeySettings: View {
   private func apply() {
     Preferences.shared.updateGlobal { $0 = global }
     model.startMediaKeys()
+    // Straight through rather than waiting for the next window change: someone
+    // who just moved this slider is looking at the screens while they do it.
+    model.attentionSettingsChanged()
   }
 }

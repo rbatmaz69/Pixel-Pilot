@@ -18,10 +18,23 @@ import CoreGraphics
 /// of key repeats is answered from memory rather than from six round trips a
 /// second.
 enum FocusedWindowScreen {
+  /// The budget for a caller sitting inside the event tap.
+  ///
   /// Long enough for any application that is going to answer, short enough that
-  /// one that is not cannot cost the event tap its life. The system default is
-  /// six seconds, which in this position would be a hang.
-  private static let messagingTimeout: Float = 0.05
+  /// one that is not cannot cost the tap its life. The system default is six
+  /// seconds, which in this position would be a hang.
+  static let tapTimeout: Float = 0.05
+
+  /// The budget for a caller that is merely on the main actor.
+  ///
+  /// Five times the above, because the reason for the small number does not
+  /// apply: nothing here is holding up the keyboard. Fifty milliseconds is a
+  /// real budget to blow — a browser mid-layout or an Electron app answering
+  /// its own main thread routinely takes longer — and a caller that treats the
+  /// timeout as "no window" gets a wrong answer *intermittently*, which is the
+  /// worst way to be wrong. Paired with `frame(forProcessIdentifier:timeout:)`
+  /// being run off the main actor, so waiting costs nobody anything.
+  static let relaxedTimeout: Float = 0.25
 
   /// The display holding the frontmost application's focused window, or nil if
   /// that cannot be established.
@@ -35,8 +48,20 @@ enum FocusedWindowScreen {
   }
 
   static func displayID(forProcessIdentifier pid: pid_t) -> CGDirectDisplayID? {
+    guard let frame = frame(forProcessIdentifier: pid, timeout: tapTimeout) else { return nil }
+    return displayID(containing: frame)
+  }
+
+  /// The focused window's frame, in Accessibility's coordinates.
+  ///
+  /// `nonisolated` and free of AppKit on purpose: this is the half that blocks,
+  /// and it is an inter-process read with no main-thread requirement, so a
+  /// caller that can afford to wait can run it off the main actor and simply
+  /// wait. Resolving *which screen* that frame is on needs `NSScreen` and stays
+  /// where `NSScreen` belongs.
+  nonisolated static func frame(forProcessIdentifier pid: pid_t, timeout: Float) -> CGRect? {
     let application = AXUIElementCreateApplication(pid)
-    AXUIElementSetMessagingTimeout(application, messagingTimeout)
+    AXUIElementSetMessagingTimeout(application, timeout)
 
     guard let window = copy(AXUIElement.self, from: application, attribute: kAXFocusedWindowAttribute)
       // A focused window is the precise answer; the main one is the reasonable
@@ -49,7 +74,11 @@ enum FocusedWindowScreen {
           let size = size(from: window, attribute: kAXSizeAttribute)
     else { return nil }
 
-    return screen(containing: origin, size: size)?.displayID
+    return CGRect(origin: origin, size: size)
+  }
+
+  static func displayID(containing frame: CGRect) -> CGDirectDisplayID? {
+    screen(containing: frame.origin, size: frame.size)?.displayID
   }
 
   // MARK: - Reading
