@@ -6,6 +6,33 @@ indicator, built to cost nothing while idle.
 
 Requires macOS 26 (Tahoe) on Apple Silicon.
 
+## Install
+
+Download the disk image from
+[the latest release](https://github.com/rbatmaz69/Pixel-Pilot/releases/latest),
+open it, and drag Pixel Pilot onto the Applications folder.
+
+The first launch is refused: macOS cannot verify the app. It is signed, but not
+notarised — notarisation needs the paid Apple developer program, and this is not
+in it. Open **System Settings → Privacy & Security**, find the line about Pixel
+Pilot near the bottom, and press **Open Anyway**. Right-clicking the app and
+choosing Open stopped being a way around this in macOS 15.
+
+Then Pixel Pilot asks for Accessibility permission, which is what lets it act on
+the brightness and volume keys — it reads them through a `CGEventTap`. There is
+no Dock icon; the app is in the menu bar.
+
+**After an update, the Accessibility permission has to be granted again.** The
+released build is signed ad-hoc, so its signature changes with every release,
+and macOS ties that grant to the signature rather than to the app's name or
+path. Remove Pixel Pilot from System Settings → Privacy & Security →
+Accessibility and add it back. See
+[Code signing and the Accessibility permission](#code-signing-and-the-accessibility-permission)
+for why that is, and why building it yourself does not have the problem.
+
+To build and install from source instead, see [Building](#building) —
+`Scripts/install.sh` does it in one step.
+
 ## What it does
 
 - **Brightness, contrast and volume** per display, over DDC/CI, with software
@@ -431,6 +458,13 @@ Tests:
 
 ```bash
 ./Scripts/test.sh
+```
+
+Cutting a release — builds ad-hoc signed, packages a disk image, tags and
+publishes it. `--dry-run` stops after the disk image:
+
+```bash
+./Scripts/release.sh 0.2.0 --dry-run
 ```
 
 The CLI, for checking what a monitor actually supports:
