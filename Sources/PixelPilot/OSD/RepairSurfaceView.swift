@@ -305,7 +305,7 @@ struct RepairView: View {
 
       HStack(spacing: Layout.snug) {
         Button("Stop", action: onStop)
-          .buttonStyle(.soft)
+          .buttonStyle(PlateButtonStyle(ink: .primary))
         Text("or esc")
           .font(TypeScale.detail)
           .foregroundStyle(.secondary)

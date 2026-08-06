@@ -54,7 +54,6 @@ struct TestPatternView: View {
         } else {
           plate
             .padding(Layout.loose)
-            .opacity(plateOpacity)
         }
       }
       .background(Color.black)
@@ -275,11 +274,26 @@ struct TestPatternView: View {
       RoundedRectangle(cornerRadius: Layout.radiusCard)
         .strokeBorder(.separator, lineWidth: 1)
     }
-    // The plate covers pixels, and on a solid-colour pattern those are exactly
-    // the pixels being inspected. Holding the pointer over it moves it out of
-    // the way rather than making it disappear, so it can always be found again.
-    .onHover { isHovered = $0 }
-    .animation(.easeOut(duration: 0.15), value: isHovered)
+    // **No hover fade, and that is a fix rather than a removal.**
+    //
+    // It used to drop to 0.08 while the pointer was over it, so it got out of
+    // the way of the pixels underneath. Two things were wrong with that.
+    //
+    // It flickered. `OverlayPanel` says why in its own comment: a tracking area
+    // is live only while its application is active unless it asks for
+    // `.activeAlways`, and SwiftUI's `.onHover` does not ask — which is the
+    // entire reason `InteractiveHostingView` exists and why the HUD reads hover
+    // through `onHoverChanged` instead. Used here it half-worked, and the half
+    // that worked fed back: hovering changed the opacity, the opacity relaid the
+    // view, the relayout ran `updateTrackingAreas`, which removes and re-adds
+    // the area under the pointer and so sends another exit and enter. Round
+    // again, several times a second.
+    //
+    // And it had become hostile anyway. The plate now holds the buttons, so
+    // fading it to nearly nothing exactly as the pointer moves toward it means
+    // the controls are unreadable at the moment they are being aimed at.
+    // "Get out of the way" is now Hide, which is deliberate, reversible, and
+    // does not depend on where the pointer happens to be.
     .accessibilityElement(children: .contain)
     .accessibilityLabel("\(pattern.title). \(pattern.purpose)")
   }
@@ -293,22 +307,14 @@ struct TestPatternView: View {
   /// was no way into it but `M`.
   private var buttons: some View {
     HStack(spacing: Layout.tight) {
-      if mode == .marking {
-        Button("Done marking", action: onToggleMarking)
-          .buttonStyle(.soft)
-      } else {
-        Button("Mark bad pixels", action: onToggleMarking)
-          .buttonStyle(.soft)
-      }
+      Button(mode == .marking ? "Done marking" : "Mark bad pixels", action: onToggleMarking)
 
       Button("Hide", action: onTogglePlate)
-        .buttonStyle(.soft)
-        .help("Puts this corner back on the screen so you can see what is under it")
+        .help("Takes this corner off the screen so you can see what is under it")
 
       Button("Close", action: onClose)
-        .buttonStyle(.soft)
     }
-    .font(TypeScale.detail.weight(.medium))
+    .buttonStyle(PlateButtonStyle(ink: .primary))
   }
 
   /// What is left when the plate is hidden.
@@ -322,40 +328,15 @@ struct TestPatternView: View {
   /// pattern somebody is most likely to hide the plate on. A door nobody can
   /// see is the door not being there.
   private var showChip: some View {
-    Button(action: onTogglePlate) {
-      Text("Show controls")
-        .font(TypeScale.detail.weight(.medium))
-        .padding(.horizontal, Layout.snug)
-        .padding(.vertical, Layout.tight)
-        .foregroundStyle(chipInk)
-        .overlay {
-          RoundedRectangle(cornerRadius: Layout.radiusControl)
-            .strokeBorder(chipInk, lineWidth: 1)
-        }
-    }
-    .buttonStyle(.plain)
-    .opacity(0.55)
+    Button("Show controls", action: onTogglePlate)
+      .buttonStyle(PlateButtonStyle(ink: chipInk))
+      .opacity(0.55)
   }
 
   private var chipInk: Color {
     switch pattern.ink {
     case .dark: .black
     case .light: .white
-    }
-  }
-
-  /// While marking, the plate stays fully legible and Hide is the way to move it
-  /// out of the way.
-  ///
-  /// A first attempt dimmed it to a fixed 0.35 instead, which had it least
-  /// readable in the mode where it matters most: what it holds while marking is
-  /// how to mark, and the whole feature is unusable without it. So it is
-  /// legible by default and gone entirely on one click, rather than permanently
-  /// half of both.
-  private var plateOpacity: Double {
-    switch mode {
-    case .marking: 1
-    default: isHovered ? 0.08 : 1
     }
   }
 
@@ -385,7 +366,6 @@ struct TestPatternView: View {
   /// The panel's own backing scale. A checkerboard or a mark sized against the
   /// main screen's would be wrong on every display but one.
   @Environment(\.displayScale) private var scale
-  @State private var isHovered = false
   @State private var draft: CGRect?
 }
 

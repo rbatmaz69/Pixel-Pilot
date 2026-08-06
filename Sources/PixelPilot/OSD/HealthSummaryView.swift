@@ -56,7 +56,7 @@ struct HealthSummaryView: View {
 
         HStack {
           Button("Done", action: onClose)
-            .buttonStyle(.soft)
+            .buttonStyle(PlateButtonStyle(ink: .primary))
           Text("esc, or click anywhere")
             .font(TypeScale.detail)
             .foregroundStyle(.secondary)
