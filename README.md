@@ -69,11 +69,14 @@ To build and install from source instead, see [Building](#building) —
   tables come off that display while one is up, so what you are looking at is
   the panel.
 - **A health check**, which walks those patterns in order and asks one question
-  of each, and **marking**: click the bad pixel while it is on screen and it is
-  remembered for that monitor — as a fraction of the screen, so it still points
-  at the same glass after a resolution change. The result is a verdict rather
-  than a score, and it distinguishes a fault in the panel from how the panel
-  behaves from a display that is simply not being driven at its own resolution.
+  of each, and **marking**: drag a box round a bad pixel while it is on screen
+  and it is remembered for that monitor — as a fraction of the screen, so it
+  still points at the same glass after a resolution change. A drag marks in any
+  mode, because nobody drags a box meaning "next picture"; per-pixel work has
+  its own mode, reachable from a button on the plate as well as `M`. The result
+  is a verdict rather than a score, and it distinguishes a fault in the panel
+  from how the panel behaves from a display that is simply not being driven at
+  its own resolution.
 - **Reanimating stuck pixels**, working the marked spots or the whole screen.
   Full-screen defaults to colour noise rather than the flashing the repair
   websites use: every sub-pixel swings just as hard, but uncorrelated cells

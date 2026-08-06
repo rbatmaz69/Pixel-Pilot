@@ -21,6 +21,8 @@ struct TestPatternView: View {
   let onPrevious: () -> Void
   let onMark: (CGPoint, CGSize, CGFloat) -> Void
   let onMarkRegion: (CGRect, CGSize) -> Void
+  let onToggleMarking: () -> Void
+  let onTogglePlate: () -> Void
   let onClose: () -> Void
 
   /// Anything shorter than this is a click. Told apart afterwards by how far
@@ -41,14 +43,17 @@ struct TestPatternView: View {
           PixelMarkerOverlay(defects: defects, draft: draft, ink: pattern.ink)
         }
 
-        if !isPlateHidden {
+        // The plate keeps the pointer in every mode now, including marking,
+        // because it holds the buttons that make this workable without the
+        // keyboard. The objection that used to make it refuse — a pixel
+        // underneath something that swallows clicks can never be marked — is
+        // answered by "Hide", which is one click away and puts the whole
+        // corner back.
+        if isPlateHidden {
+          showChip.padding(Layout.loose)
+        } else {
           plate
             .padding(Layout.loose)
-            // In browse mode the plate can afford the pointer, because hovering
-            // it is how it gets out of the way. While marking it cannot: a
-            // pixel underneath something that swallows clicks is a pixel that
-            // can never be marked.
-            .allowsHitTesting(mode != .marking)
             .opacity(plateOpacity)
         }
       }
@@ -56,33 +61,42 @@ struct TestPatternView: View {
     }
   }
 
-  /// One gesture at a time, swapped by mode rather than layered.
+  /// Click and drag mean different things, and that is what lets marking need
+  /// no mode at all.
   ///
-  /// Browsing keeps what this overlay has always done — the whole surface is
-  /// "next", because a test pattern you have to aim at to advance is one you
-  /// are hunting a button on while trying to look at the pixels. Marking needs
-  /// the same surface for something else entirely, so it takes it outright and
-  /// the plate says which mode is on.
+  /// **A drag is never "next".** Nobody drags a box across a screen meaning
+  /// *show me the following picture*, so dragging one round a bad pixel can
+  /// mark it in every mode without ever colliding with what a click does. That
+  /// is the whole reason marking is reachable with the mouse alone: the first
+  /// version put it behind `M`, which is fine once you know and invisible until
+  /// you do.
+  ///
+  /// **A click still advances**, which is what this overlay has always done and
+  /// is worth keeping — a test pattern you have to aim at to advance is one you
+  /// are hunting a button on while trying to look at the pixels. Inside mark
+  /// mode a click means the spot instead, because there the pointer is being
+  /// aimed at something anyway.
+  ///
+  /// The two are told apart by how far the pointer travelled, not by two
+  /// gestures racing: `.simultaneously(with:)` gives a click that also draws a
+  /// zero-size region and a drag that also turns the page.
   private func surfaceGesture(size: CGSize) -> some Gesture {
     DragGesture(minimumDistance: 0, coordinateSpace: .local)
       .onChanged { value in
-        guard mode == .marking else { return }
         guard travel(value) >= Self.clickSlop else { return }
         draft = CGRect(from: value.startLocation, to: value.location)
       }
       .onEnded { value in
         defer { draft = nil }
-        guard mode == .marking else {
+        if travel(value) >= Self.clickSlop {
+          onMarkRegion(CGRect(from: value.startLocation, to: value.location), size)
+        } else if mode == .marking {
+          onMark(value.location, size, scale)
+        } else {
           // A click anywhere advances, in browse and during a check alike —
           // during a check that is "looks right", which is the same thing the
           // space bar says.
           onNext()
-          return
-        }
-        if travel(value) < Self.clickSlop {
-          onMark(value.location, size, scale)
-        } else {
-          onMarkRegion(CGRect(from: value.startLocation, to: value.location), size)
         }
       }
   }
@@ -246,7 +260,15 @@ struct TestPatternView: View {
         .foregroundStyle(.tertiary)
         .frame(maxWidth: 320, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
+
+      buttons
+        .padding(.top, Layout.hair)
     }
+    // Held to the width of its own text. Without this the `Divider` takes every
+    // point on offer and the plate spans the whole screen — which was survivable
+    // when the only thing under it was a pattern to look at, and is not now that
+    // what is under it is pixels somebody is trying to click.
+    .frame(width: 320, alignment: .leading)
     .padding(Layout.normal)
     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Layout.radiusCard))
     .overlay {
@@ -262,15 +284,74 @@ struct TestPatternView: View {
     .accessibilityLabel("\(pattern.title). \(pattern.purpose)")
   }
 
-  /// While marking, the plate stays fully legible and H is the way to move it
+  /// Everything the overlay can do, reachable without touching the keyboard.
+  ///
+  /// The keys all still work and are still listed above; these exist because a
+  /// feature whose only door is a letter key is a feature most people never
+  /// find. Marking especially: dragging a box needs no mode at all now, but the
+  /// per-pixel work — click to place, click again to remove — does, and there
+  /// was no way into it but `M`.
+  private var buttons: some View {
+    HStack(spacing: Layout.tight) {
+      if mode == .marking {
+        Button("Done marking", action: onToggleMarking)
+          .buttonStyle(.soft)
+      } else {
+        Button("Mark bad pixels", action: onToggleMarking)
+          .buttonStyle(.soft)
+      }
+
+      Button("Hide", action: onTogglePlate)
+        .buttonStyle(.soft)
+        .help("Puts this corner back on the screen so you can see what is under it")
+
+      Button("Close", action: onClose)
+        .buttonStyle(.soft)
+    }
+    .font(TypeScale.detail.weight(.medium))
+  }
+
+  /// What is left when the plate is hidden.
+  ///
+  /// Small, in the same corner, and the only thing on screen that is not the
+  /// pattern. Without it, hiding the plate with the mouse would be a one-way
+  /// door — the way back was `H`, which is the keyboard again.
+  ///
+  /// Inked against the pattern rather than styled, and that is not neatness: a
+  /// `.soft` button at low opacity is invisible on black, which is exactly the
+  /// pattern somebody is most likely to hide the plate on. A door nobody can
+  /// see is the door not being there.
+  private var showChip: some View {
+    Button(action: onTogglePlate) {
+      Text("Show controls")
+        .font(TypeScale.detail.weight(.medium))
+        .padding(.horizontal, Layout.snug)
+        .padding(.vertical, Layout.tight)
+        .foregroundStyle(chipInk)
+        .overlay {
+          RoundedRectangle(cornerRadius: Layout.radiusControl)
+            .strokeBorder(chipInk, lineWidth: 1)
+        }
+    }
+    .buttonStyle(.plain)
+    .opacity(0.55)
+  }
+
+  private var chipInk: Color {
+    switch pattern.ink {
+    case .dark: .black
+    case .light: .white
+    }
+  }
+
+  /// While marking, the plate stays fully legible and Hide is the way to move it
   /// out of the way.
   ///
-  /// It cannot fade on hover here, because it is not taking the pointer — and
-  /// a first attempt that dimmed it to a fixed 0.35 instead had it least
+  /// A first attempt dimmed it to a fixed 0.35 instead, which had it least
   /// readable in the mode where it matters most: what it holds while marking is
-  /// the key map, and the whole feature is unusable without it. So it is
-  /// legible by default and gone entirely on one keystroke, rather than
-  /// permanently half of both.
+  /// how to mark, and the whole feature is unusable without it. So it is
+  /// legible by default and gone entirely on one click, rather than permanently
+  /// half of both.
   private var plateOpacity: Double {
     switch mode {
     case .marking: 1
@@ -278,17 +359,21 @@ struct TestPatternView: View {
     }
   }
 
+  /// Leads with the mouse in every mode, because that is what somebody standing
+  /// in front of a screen full of pixels reaches for. The keys follow.
   private var keyHint: String {
     switch mode {
     case .marking:
       "Click a bad pixel to mark it, or drag a box round a patch. "
         + "Click a mark again to remove it · arrows nudge the last one · "
-        + "S stuck · D dead · ⌫ removes · H hides this · M or ↩ done · esc leaves"
+        + "S stuck · D dead · ⌫ removes · esc leaves"
     case .check:
-      "Space or Y if it looks right · N if something's wrong · ← to go back · esc to leave"
+      "Drag a box round anything wrong to mark it. "
+        + "Click, space or Y if it looks right · N if something's wrong · "
+        + "← to go back · esc to leave"
     default:
-      "\(index + 1) of \(total) · click or → for the next · ← to go back · "
-        + "M to mark a bad pixel · esc to leave"
+      "\(index + 1) of \(total) · drag a box round a bad pixel to mark it · "
+        + "click or → for the next · ← to go back · esc to leave"
     }
   }
 

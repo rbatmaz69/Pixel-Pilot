@@ -183,6 +183,102 @@ struct DisplayHealthTests {
     #expect(abs(mark.region.height - 0.25) < 1e-9)
   }
 
+  /// **Marking has to be reachable with the mouse alone.** The first version put
+  /// it entirely behind `M`, which is fine once you know and invisible until
+  /// you do — and "I want to mark the bad pixels with the mouse" was the first
+  /// thing asked for after using it.
+  ///
+  /// A drag is the answer because nobody drags a box across a screen meaning
+  /// *show me the next picture*, so it can mean "mark this" in every mode
+  /// without ever colliding with what a click does.
+  @Test("A drag marks in every mode, without entering one")
+  func dragMarksWithoutAMode() throws {
+    let id = try #require(screenID)
+    let size = CGSize(width: 1000, height: 800)
+
+    for open in [openers[0], openers[1]] {
+      let (health, _) = controller()
+      var reported: [PixelDefect] = []
+      health.onDefectsChanged = { reported = $0 }
+      open(health, id)
+
+      #expect(health.mode != .marking, "this is meant to work without the mode")
+      health.markRegion(CGRect(x: 100, y: 200, width: 300, height: 200), viewSize: size)
+      #expect(reported.count == 1, "a drag in \(health.mode) marked nothing")
+      health.hide()
+    }
+  }
+
+  /// Drawing a box round something during a check *is* saying that pattern
+  /// looked wrong. Leaving somebody to mark a defect and then separately answer
+  /// that the screen looked fine would produce a report contradicting its own
+  /// marks.
+  @Test("Marking during a check records the problem, without moving on")
+  func markingDuringACheckIsAnAnswer() throws {
+    let id = try #require(screenID)
+    let (health, _) = controller()
+
+    var report: HealthReport?
+    health.onReport = { report = $0 }
+    health.runHealthCheck(on: id, named: "Probe", defects: [])
+    health.handle(keyCode: 49)
+    #expect(health.pattern == .black)
+
+    health.markRegion(
+      CGRect(x: 10, y: 10, width: 50, height: 50), viewSize: CGSize(width: 1000, height: 800)
+    )
+    // Still on the same pattern: the marking and the answer happen on one screen.
+    #expect(health.pattern == .black)
+
+    health.handle(keyCode: 53)
+    let partial = try #require(report)
+    #expect(partial[.black] == .problem)
+    #expect(partial.defectCount == 1)
+    #expect(partial.overall == .faults)
+  }
+
+  /// The buttons on the plate do the same as `M` and `H`, because a feature
+  /// whose only door is a letter key is one most people never find.
+  @Test("The plate's buttons reach marking and the plate itself")
+  func buttonsMatchTheKeys() throws {
+    let id = try #require(screenID)
+    let (health, _) = controller()
+    defer { health.hide() }
+
+    health.showPatterns(on: id, named: "Probe")
+    health.toggleMarking()
+    #expect(health.mode == .marking)
+    health.toggleMarking()
+    #expect(health.mode == .browse)
+
+    // Hiding the plate with the mouse and only being able to bring it back with
+    // a key would be a one-way door.
+    health.togglePlate()
+    health.togglePlate()
+    #expect(health.isShowing)
+  }
+
+  /// A drag during a repair or over the summary is not a mark. There is no
+  /// pattern under it to have found anything on.
+  @Test("A drag marks nothing where there is nothing to mark")
+  func dragIsInertWhereItShouldBe() throws {
+    let id = try #require(screenID)
+    let (health, _) = controller()
+    defer { health.hide() }
+
+    var reported: [PixelDefect] = []
+    health.onDefectsChanged = { reported = $0 }
+    health.startRepair(
+      on: id, named: "Probe",
+      settings: .init(style: .noise, intensity: .gentle, duration: .tenMinutes, regions: [])
+    )
+    health.markRegion(
+      CGRect(x: 10, y: 10, width: 50, height: 50), viewSize: CGSize(width: 1000, height: 800)
+    )
+    #expect(reported.isEmpty)
+    #expect(health.mode == .repairing)
+  }
+
   @Test("S and D correct the last mark's kind, and backspace removes it")
   func correctingAndRemoving() throws {
     let id = try #require(screenID)
@@ -433,6 +529,15 @@ struct DisplayHealthTests {
 /// Both halves are pinned here, because either one alone is satisfied by a bug:
 /// a pattern that renders nothing costs no memory, and a pattern that costs no
 /// memory may be drawing nothing.
+private struct QuietBackend: GammaDimmer.Backend {
+  func applyRamps(
+    red: [CGGammaValue], green: [CGGammaValue], blue: [CGGammaValue],
+    to displayID: CGDirectDisplayID
+  ) {}
+  func restore(_ displayID: CGDirectDisplayID) {}
+  func restoreAll() {}
+}
+
 @Suite("Patterns as pixels")
 @MainActor
 struct TestPatternRenderTests {
@@ -441,7 +546,7 @@ struct TestPatternRenderTests {
       pattern: pattern, displayName: "Probe", index: 0, total: 11,
       mode: .browse, defects: [], isPlateHidden: true, checkProgress: nil,
       onNext: {}, onPrevious: {}, onMark: { _, _, _ in }, onMarkRegion: { _, _ in },
-      onClose: {}
+      onToggleMarking: {}, onTogglePlate: {}, onClose: {}
     )
     .frame(width: points, height: points)
     .environment(\.displayScale, scale)
@@ -510,36 +615,63 @@ struct TestPatternRenderTests {
     }
   }
 
-  /// The regression itself, in the units the bug was reported in.
+  /// The regression, measured the way the app actually meets it: a real panel
+  /// on the checkerboard, with marks placed one after another.
   ///
-  /// Rendered at the size of a real 4K panel, which is where 4.1 million paths
-  /// came from. Ten renders, because the original leaked a fresh gigabyte on
-  /// each one and a single render would understate it.
-  @Test("Rendering the patterns at 4K costs almost nothing")
-  func renderingIsCheap() throws {
-    // Warm up, so one-off allocations are not counted as the leak.
-    _ = image(.checkerboard, points: 100, scale: 2)
+  /// This is what the person who hit it was doing — finishing a walk, which
+  /// ends on the checkerboard, and then looking around and marking. Every mark
+  /// re-renders the overlay, and the original leaked a gigabyte on each one.
+  /// Measures about **1 MB for sixty marks**.
+  @Test("Marking on the checkerboard does not grow the app")
+  func liveMarkingIsCheap() throws {
+    let id = try #require((NSScreen.main ?? NSScreen.screens.first)?.displayID)
+    let live = DisplayHealthController(gamma: GammaDimmer(backend: QuietBackend()))
+    defer { live.hide() }
+
+    live.startMarking(on: id, named: "Probe", pattern: .checkerboard, defects: [])
+    RunLoop.main.run(until: Date().addingTimeInterval(0.3))
 
     let before = footprintMB()
-    for _ in 0 ..< 10 {
-      _ = image(.checkerboard, points: 1920, scale: 2)
+    for step in 0 ..< 60 {
+      live.mark(
+        at: CGPoint(x: 10 + Double(step) * 7, y: 40),
+        viewSize: CGSize(width: 1000, height: 800),
+        scale: 2
+      )
+      RunLoop.main.run(until: Date().addingTimeInterval(0.01))
     }
     let growth = footprintMB() - before
 
-    // The original measured +1088 MB for one render. A hundred is generous and
-    // still two orders of magnitude away from the bug.
-    #expect(growth < 100, "ten 4K renders grew the footprint by \(Int(growth)) MB")
+    #expect(growth < 60, "sixty marks grew the footprint by \(Int(growth)) MB")
   }
 
-  /// The other patterns were never suspect, but they are the control: if the
-  /// harness above measured nothing, this would pass too.
-  @Test("A solid and a ramp are cheap, as they always were")
-  func othersStayCheap() throws {
-    for pattern in [TestPattern.white, .greyRamp, .shadowSteps] {
-      let before = footprintMB()
-      _ = image(pattern, points: 1920, scale: 2)
-      #expect(footprintMB() - before < 100, "\(pattern.rawValue) is expensive to draw")
-    }
+  /// The same claim from the other side, and stated as a ratio on purpose.
+  ///
+  /// Rendering to a fresh bitmap at 4K allocates on every pass whatever is
+  /// being drawn — about 15 MB a render here, all of it the harness rather than
+  /// the app, which is why the absolute number is worthless as a threshold and
+  /// why the test above measures the live path instead. What *is* worth
+  /// asserting is that the checkerboard costs no more than a flat colour. With
+  /// the bug it cost 1088 MB against 15, so this fails by seventy times over
+  /// rather than by a few percent.
+  @Test("The checkerboard costs no more to draw than a solid colour")
+  func checkerboardIsNoWorseThanASolid() throws {
+    // Warm up on both, so first-render setup lands outside the measurement.
+    _ = image(.white, points: 1920, scale: 2)
+    _ = image(.checkerboard, points: 1920, scale: 2)
+
+    let beforeSolid = footprintMB()
+    for _ in 0 ..< 10 { _ = image(.white, points: 1920, scale: 2) }
+    let solid = footprintMB() - beforeSolid
+
+    let beforeChecker = footprintMB()
+    for _ in 0 ..< 10 { _ = image(.checkerboard, points: 1920, scale: 2) }
+    let checker = footprintMB() - beforeChecker
+
+    #expect(
+      checker < max(solid, 20) * 3,
+      "the checkerboard cost \(Int(checker)) MB against a solid colour's \(Int(solid))"
+    )
   }
 }
 

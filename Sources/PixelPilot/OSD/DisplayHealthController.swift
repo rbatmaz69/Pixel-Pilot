@@ -268,6 +268,7 @@ final class DisplayHealthController {
     case Key.left: step(-1); return true
     case Key.right, Key.space: step(1); return true
     case Key.m: enterMarking(); return true
+    case Key.h: togglePlate(); return true
     default: return false
     }
   }
@@ -288,7 +289,7 @@ final class DisplayHealthController {
     case Key.s: reclassifyLast(.stuck); return true
     case Key.d: reclassifyLast(.dead); return true
     case Key.delete: removeLast(); return true
-    case Key.h: isPlateHidden.toggle(); render(); return true
+    case Key.h: togglePlate(); return true
     case Key.m, Key.enter: leaveMarking(); return true
     default: return false
     }
@@ -304,6 +305,8 @@ final class DisplayHealthController {
       enterMarking()
       return true
     case Key.left: goBack(); return true
+    case Key.m: enterMarking(); return true
+    case Key.h: togglePlate(); return true
     default: return false
     }
   }
@@ -443,8 +446,22 @@ final class DisplayHealthController {
 
   /// A drag: a region rather than a spot, for backlight bleed and clouding —
   /// which are not one pixel and cannot honestly be marked as one.
+  ///
+  /// Accepted in **every** mode, which is what makes marking reachable with the
+  /// mouse alone: nobody drags a box across a screen meaning "show me the next
+  /// picture", so this can never collide with what a click does.
   func markRegion(_ rect: CGRect, viewSize: CGSize) {
     guard viewSize.width > 0, viewSize.height > 0 else { return }
+    guard mode != .repairing, mode != .summary else { return }
+
+    // Drawing a box round something during a check *is* saying that pattern
+    // looked wrong, so it is recorded as such rather than leaving somebody to
+    // mark a defect and then separately answer that the screen looked fine.
+    // Without advancing: the marking and the answer happen on the same screen.
+    if mode == .check {
+      session?.flagCurrent()
+    }
+
     defects.append(
       PixelDefect(
         region: .normalising(rect, in: viewSize),
@@ -453,6 +470,29 @@ final class DisplayHealthController {
       )
     )
     commitDefects()
+  }
+
+  /// Into and out of per-pixel marking, for the buttons on the plate.
+  ///
+  /// The same thing `M` does. It exists because a feature whose only door is a
+  /// letter key is one most people never find — dragging a box needs no mode,
+  /// but placing and removing single pixels does.
+  func toggleMarking() {
+    guard isShowing, mode != .repairing, mode != .summary else { return }
+    if mode == .marking {
+      leaveMarking()
+    } else {
+      enterMarking()
+    }
+  }
+
+  /// Hides the plate, or brings it back. The same thing `H` does, and it needs
+  /// a mouse route for the same reason — hiding it with a click and only being
+  /// able to bring it back with a key is a one-way door.
+  func togglePlate() {
+    guard isShowing else { return }
+    isPlateHidden.toggle()
+    render()
   }
 
   private func nudgeLast(dx: Double, dy: Double) {
@@ -579,7 +619,12 @@ final class DisplayHealthController {
           self?.mark(at: point, viewSize: size, scale: scale)
         },
         onMarkRegion: { [weak self] rect, size in self?.markRegion(rect, viewSize: size) },
-        onClose: { [weak self] in self?.hide() }
+        onToggleMarking: { [weak self] in self?.toggleMarking() },
+        onTogglePlate: { [weak self] in self?.togglePlate() },
+        onClose: { [weak self] in
+          self?.finishCheckEarly()
+          self?.hide()
+        }
       )
       // No theme, unlike every other overlay. A test pattern tinted by the
       // app's accent colour would be testing the app.
