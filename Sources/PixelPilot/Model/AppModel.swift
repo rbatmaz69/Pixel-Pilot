@@ -227,7 +227,7 @@ final class AppModel {
     // through the thing that put it there rather than being left for
     // `clearAll` — which for a suspended display would mean quitting with our
     // tables held back and nothing to resume them.
-    testPatterns.hide()
+    health.hide()
     attention.stop()
     scheduleRunner.stop()
     builtinSource.stop()
@@ -257,9 +257,12 @@ final class AppModel {
     screenLayoutTick += 1
     let discovered = discovery.discoverDisplays(log: log)
 
-    gamma.pruneOffline(
-      onlineDisplayIDs: Set(discovered.map(\.displayID))
-    )
+    let online = Set(discovered.map(\.displayID))
+    gamma.pruneOffline(onlineDisplayIDs: online)
+    // A full-screen overlay on a display that has just gone is a panel
+    // positioned on a screen that no longer exists — and, during a repair pass,
+    // a sleep assertion held for a monitor nobody can see.
+    health.displaysChanged(online: online)
 
     displays = discovered.map {
       DisplayViewModel(display: $0, preferences: preferences, log: log)
@@ -647,12 +650,88 @@ final class AppModel {
     attention.settingsChanged()
   }
 
-  // MARK: - Test patterns
+  // MARK: - Test patterns, health and repair
 
-  @ObservationIgnored private let testPatterns = TestPatternController()
+  @ObservationIgnored private let health = DisplayHealthController()
 
   func showTestPatterns(on display: DisplayViewModel) {
-    testPatterns.show(on: display.displayID, named: display.name)
+    health.showPatterns(
+      on: display.displayID, named: display.name, defects: display.pixelDefects
+    )
+    wire(health, to: display)
+  }
+
+  func runHealthCheck(on display: DisplayViewModel) {
+    Haptics.confirm()
+    health.runHealthCheck(
+      on: display.displayID, named: display.name, defects: display.pixelDefects
+    )
+    wire(health, to: display)
+  }
+
+  /// Reopens the overlay on the pattern most of the marks were found on — crop
+  /// marks around nothing on a white screen would be a worse answer than not
+  /// showing them.
+  func showMarks(on display: DisplayViewModel) {
+    health.startMarking(
+      on: display.displayID,
+      named: display.name,
+      pattern: PixelDefects.mostCommonPattern(display.pixelDefects) ?? .black,
+      defects: display.pixelDefects
+    )
+    wire(health, to: display)
+  }
+
+  func startRepair(
+    on display: DisplayViewModel,
+    style: RepairPlan.Style,
+    intensity: RepairPlan.Intensity,
+    duration: RepairPlan.Duration
+  ) {
+    Haptics.confirm()
+    let size = pixelSize(of: display.displayID)
+    // Grown here rather than in the controller because this is where the
+    // display's pixel size is known, and a mark six pixels across is not worth
+    // handing to Core Animation as its own layer.
+    let regions = PixelDefects.worthExercising(display.pixelDefects)
+      .map { $0.region.grown(toAtLeastPixels: 12, in: size) }
+    health.startRepair(
+      on: display.displayID,
+      named: display.name,
+      settings: .init(
+        style: style, intensity: intensity, duration: duration, regions: regions
+      )
+    )
+    wire(health, to: display)
+  }
+
+  func clearMarks(on display: DisplayViewModel) {
+    display.clearPixelDefects()
+  }
+
+  /// Points the controller's callbacks at the view model that is on screen now.
+  ///
+  /// Rewired on every open rather than once at construction, and that is
+  /// necessary rather than tidy: `refresh()` recreates every `DisplayViewModel`,
+  /// so a closure captured when the controller was built would be writing marks
+  /// into a dead object by the second time a monitor was unplugged.
+  private func wire(_ controller: DisplayHealthController, to display: DisplayViewModel) {
+    controller.onDefectsChanged = { [weak display] defects in
+      display?.setPixelDefects(defects)
+    }
+    controller.onReport = { [weak display] report in
+      display?.setHealthReport(report)
+    }
+  }
+
+  private func pixelSize(of displayID: CGDirectDisplayID) -> CGSize {
+    guard let screen = NSScreen.screens.first(where: { $0.displayID == displayID }) else {
+      return CGSize(width: 1920, height: 1080)
+    }
+    let scale = screen.backingScaleFactor
+    return CGSize(
+      width: screen.frame.width * scale, height: screen.frame.height * scale
+    )
   }
 
   func saveAppRule(_ rule: AppRule) {

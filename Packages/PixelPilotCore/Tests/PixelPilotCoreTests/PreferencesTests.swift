@@ -162,6 +162,59 @@ struct PreferencesTests {
     #expect(!restored.extraDimmingEnabled)
     #expect(restored.toneCurve == nil, "a display that predates the finish has none")
     #expect(restored.dimsWhenUnfocused, "and it takes part in attention by default")
+    #expect(restored.pixelDefects.isEmpty, "a display that predates marking has none")
+    #expect(restored.healthReport == nil, "and has never been checked")
+  }
+
+  // MARK: - Marks and health
+
+  @Test("Marks and a health report survive a relaunch")
+  func healthRoundTrips() {
+    let defaults = makeDefaults()
+
+    let first = Preferences(defaults: defaults)
+    first.update(key) {
+      $0.pixelDefects = [
+        PixelDefect(
+          region: NormalisedRect(x: 0.25, y: 0.5, width: 0.002, height: 0.004),
+          kind: .stuck,
+          spottedOn: .black
+        )
+      ]
+      $0.healthReport = HealthReport(
+        verdicts: [TestPattern.black.rawValue: .problem], defectCount: 1
+      )
+    }
+
+    let restored = Preferences(defaults: defaults).settings(for: key)
+    #expect(restored.pixelDefects.count == 1)
+    #expect(restored.pixelDefects.first?.kind == .stuck)
+    #expect(restored.pixelDefects.first?.pattern == .black)
+    // The fraction is the thing that has to survive, not the pixel.
+    #expect(abs((restored.pixelDefects.first?.region.x ?? 0) - 0.25) < 1e-9)
+    #expect(restored.healthReport?.overall == .faults)
+  }
+
+  /// The decision `try?` makes, tested. A mark list this build cannot read must
+  /// cost the marks and nothing else — losing the strategy would leave a display
+  /// with no controls, and losing the capability cache is six DDC round trips.
+  @Test("An unreadable mark list costs only the marks")
+  func malformedDefectsLoseOnlyTheMarks() {
+    let defaults = makeDefaults()
+    defaults.set(
+      Data(
+        #"""
+        {"4485219c2d511fb4":{"lastKnownName":"U32T1","brightnessStrategy":"ddc",
+        "extraDimmingEnabled":true,"pixelDefects":[{"kind":"stuck"}]}}
+        """#.utf8),
+      forKey: "displays"
+    )
+
+    let restored = Preferences(defaults: defaults).settings(for: key)
+    #expect(restored.pixelDefects.isEmpty, "the unreadable marks are gone")
+    #expect(restored.lastKnownName == "U32T1", "and nothing else is")
+    #expect(restored.brightnessStrategy == .ddc)
+    #expect(restored.extraDimmingEnabled)
   }
 
   /// Off until asked for, like the schedule — and this one moves the light on

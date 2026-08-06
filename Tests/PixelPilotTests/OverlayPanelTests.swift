@@ -96,31 +96,6 @@ struct OverlayPanelTests {
   }
 }
 
-/// The patterns themselves.
-///
-/// A test pattern nobody can interpret is a coloured screen, so the thing worth
-/// pinning is that every one of them says what it is asking you to look for.
-@Suite("Test patterns")
-struct TestPatternTests {
-  @Test("Every pattern says what it is and what to look for")
-  func everyPatternIsExplained() {
-    for pattern in TestPattern.allCases {
-      #expect(!pattern.title.isEmpty)
-      #expect(!pattern.purpose.isEmpty)
-    }
-  }
-
-  /// The solids come first: a dead pixel makes everything below it moot, and
-  /// finding one is what most people open this for.
-  @Test("The solids lead")
-  func solidsComeFirst() {
-    #expect(TestPattern.allCases.prefix(5) == [.white, .black, .red, .green, .blue])
-  }
-
-  @Test("Cycling is a loop, so neither end is a dead stop")
-  func namesAreUnique() {
-    let titles = TestPattern.allCases.map(\.title)
-    #expect(Set(titles).count == titles.count)
-    #expect(TestPattern.allCases.count > 1)
-  }
-}
+// The patterns themselves moved to `PixelPilotCoreTests/HealthReportTests.swift`
+// when `TestPattern` moved into the package — a health report has to be able to
+// name the patterns it holds verdicts for, and the report is persisted.

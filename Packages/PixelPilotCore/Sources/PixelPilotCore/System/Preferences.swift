@@ -88,6 +88,18 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
   /// what the diagnostics view shows when a panel reports something odd.
   public var capabilityString: String?
 
+  /// Spots on this panel somebody has marked as bad pixels.
+  ///
+  /// Held as fractions of the display's frame rather than as points, so they
+  /// still point at the same piece of glass after a resolution change — see
+  /// `NormalisedRect` for what that survives and what it does not.
+  public var pixelDefects: [PixelDefect] = []
+
+  /// The last walk through the test patterns. `nil` means never checked, which
+  /// the Health card says outright rather than showing a clean result nobody
+  /// earned.
+  public var healthReport: HealthReport?
+
   public init() {}
 
   /// Written by hand rather than synthesised, for the reason spelled out on
@@ -138,6 +150,16 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
     colorCapabilities = try? container.decodeIfPresent(
       DisplayCapabilities.self, forKey: .colorCapabilities
     )
+    // `try?` for both, the same reasoning as `timing` and `toneCurve` above.
+    // These are composites, and a mark list written by a build whose *nested*
+    // shape differed still throws past `decodeIfPresent` — which would
+    // otherwise take this display's brightness strategy, timing and capability
+    // cache down with it. Degrading is clearly right here: re-marking a panel
+    // is a two-minute job with the overlay open, where re-probing is six DDC
+    // round trips and losing the strategy is a display with no controls.
+    pixelDefects = (try? container.decodeIfPresent([PixelDefect].self, forKey: .pixelDefects))
+      ?? fallback.pixelDefects
+    healthReport = try? container.decodeIfPresent(HealthReport.self, forKey: .healthReport)
   }
 
   /// Whether this configuration delivers *brightness* through the gamma table.

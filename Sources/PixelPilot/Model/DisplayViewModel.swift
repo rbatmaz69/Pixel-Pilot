@@ -41,6 +41,19 @@ final class DisplayViewModel: Identifiable {
 
   private(set) var accent: Color
 
+  /// Marks and the last health check, mirrored out of `Preferences`.
+  ///
+  /// Mirrored rather than read through `settings` because that property is a
+  /// computed read of a store which is not `@Observable` — a view reading
+  /// `settings.pixelDefects` establishes no dependency and never redraws when a
+  /// mark is placed. Every other card on the settings page gets away with it by
+  /// accident: `updateSettings` reassigns `accent` on every call and the whole
+  /// page reads `accent`. That is not a mechanism to hang a card on, least of
+  /// all one whose whole job is to reflect something changing on another
+  /// screen.
+  private(set) var pixelDefects: [PixelDefect]
+  private(set) var healthReport: HealthReport?
+
   /// Contrast has no strategy layer: it is DDC or it is nothing. Cached because
   /// panels do not all use 100 as the maximum.
   private var contrastMaximum: UInt16 = 100
@@ -81,6 +94,8 @@ final class DisplayViewModel: Identifiable {
     self.colorTemperatureKelvin = settings.colorTemperatureKelvin
     self.toneCurve = settings.toneCurve
     self.colorCapabilities = settings.colorCapabilities
+    self.pixelDefects = settings.pixelDefects
+    self.healthReport = settings.healthReport
 
     let queue = display.transport.map {
       DDCQueue(transport: $0, timing: settings.timing, log: log)
@@ -557,6 +572,25 @@ final class DisplayViewModel: Identifiable {
   }
 
   var settings: DisplaySettings { preferences.settings(for: key) }
+
+  // MARK: - Health
+
+  /// Marks are written the instant they are placed rather than on leaving the
+  /// overlay, and that is what makes escape safe: the way out of a full-screen
+  /// overlay must never be the way to lose what was just done in it.
+  func setPixelDefects(_ defects: [PixelDefect]) {
+    updateSettings { $0.pixelDefects = defects }
+    pixelDefects = defects
+  }
+
+  func clearPixelDefects() {
+    setPixelDefects([])
+  }
+
+  func setHealthReport(_ report: HealthReport) {
+    updateSettings { $0.healthReport = report }
+    healthReport = report
+  }
 
   /// How long after our own write the cached value is trusted without asking.
   ///
