@@ -64,7 +64,7 @@ targets:
         # The product name has a space, and the module name is derived from it —
         # which would make the module "Pixel_Pilot" and unimportable from tests.
         PRODUCT_MODULE_NAME: PixelPilot
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "0.2.0"
         CURRENT_PROJECT_VERSION: "1"
 
         SWIFT_VERSION: "6.0"
