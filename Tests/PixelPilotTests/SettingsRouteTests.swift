@@ -67,6 +67,22 @@ struct SettingsRouteTests {
     #expect(router.route == .remembered)
   }
 
+  /// `appSection` is written out by hand so that a page added later cannot go
+  /// quietly missing from the sidebar. This is what makes that true — with a
+  /// `filter` at the call site there would be nothing here to fail.
+  @Test("The sidebar shows every page there is")
+  func sidebarCoversEveryPage() {
+    #expect(Set(AppPage.appSection + [.overview]) == Set(AppPage.allCases))
+    #expect(AppPage.appSection.count == AppPage.allCases.count - 1)
+  }
+
+  /// The window opens on the one page that answers "is everything alright"
+  /// without being asked a narrower question first.
+  @Test("A fresh router lands on the overview")
+  func startsOnOverview() {
+    #expect(SettingsRouter().route == .app(.overview))
+  }
+
   /// Every page in the sidebar has to say what it holds — that line is the
   /// whole reason the window has a sidebar rather than a row of tabs.
   @Test("Every app page carries a title, a summary and a symbol")

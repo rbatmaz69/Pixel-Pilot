@@ -66,7 +66,7 @@ struct HealthSection: View {
 
   private var neverChecked: some View {
     StatusRow(
-      symbol: "questionmark.circle",
+      symbol: HealthVerdictAppearance.neverCheckedSymbol,
       title: "Never checked",
       detail: "Walking the test patterns takes a couple of minutes and says whether this "
         + "panel has dead or stuck pixels, banding, backlight bleed — or is simply not "
@@ -74,32 +74,17 @@ struct HealthSection: View {
     )
   }
 
+  /// The symbol and tint come from `HealthVerdictAppearance` rather than from a
+  /// switch here, because the overview board draws the same verdict and the two
+  /// must not disagree about what a fault looks like.
   private func verdict(_ report: HealthReport) -> some View {
     StatusRow(
-      symbol: symbol(for: report.overall),
-      tint: tint(for: report.overall),
+      symbol: report.overall.symbolName,
+      tint: report.overall.tint,
       title: report.overall.displayName,
       detail: "\(report.headline) · checked "
         + report.date.formatted(date: .abbreviated, time: .omitted)
     )
-  }
-
-  private func symbol(for verdict: HealthReport.Verdict) -> String {
-    switch verdict {
-    case .clean: "checkmark.circle.fill"
-    case .characteristics: "info.circle.fill"
-    case .faults: "exclamationmark.triangle.fill"
-    case .incomplete: "clock.badge.questionmark"
-    }
-  }
-
-  private func tint(for verdict: HealthReport.Verdict) -> Color? {
-    switch verdict {
-    case .clean: Status.ok
-    case .characteristics: Status.info
-    case .faults: Status.warn
-    case .incomplete: nil
-    }
   }
 
   private var actions: some View {

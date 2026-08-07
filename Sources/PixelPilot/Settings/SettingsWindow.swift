@@ -20,10 +20,22 @@ enum SettingsRoute: Hashable {
 /// it is the difference between a list of six words and a list that says what
 /// is behind each of them without being opened.
 enum AppPage: String, CaseIterable, Hashable {
-  case general, updates, keys, presets, schedule, apps, shortcuts
+  case overview, general, updates, keys, presets, schedule, apps, shortcuts
+
+  /// The pages that belong in the sidebar's "App" section.
+  ///
+  /// Everything except `overview`, which is drawn on its own above both
+  /// sections because it is about both of them. Written as a list rather than
+  /// as a filter at the call site so that a page added later cannot quietly go
+  /// missing from the sidebar — `SettingsRouteTests` checks this against
+  /// `allCases`, which a `filter` would have made unfalsifiable.
+  static let appSection: [AppPage] = [
+    .general, .updates, .keys, .presets, .schedule, .apps, .shortcuts,
+  ]
 
   var title: String {
     switch self {
+    case .overview: "Overview"
     case .general: "General"
     case .updates: "Updates"
     case .keys: "Keys"
@@ -36,6 +48,7 @@ enum AppPage: String, CaseIterable, Hashable {
 
   var summary: String {
     switch self {
+    case .overview: "Everything, in one place"
     case .general: "Colour, style, open at login"
     case .updates: "New versions, and what they cost"
     case .keys: "Media keys, permissions, detection"
@@ -48,6 +61,7 @@ enum AppPage: String, CaseIterable, Hashable {
 
   var symbolName: String {
     switch self {
+    case .overview: "square.grid.2x2"
     case .general: "paintpalette"
     case .updates: "arrow.trianglehead.2.clockwise.rotate.90"
     case .keys: "keyboard"
@@ -69,7 +83,9 @@ enum AppPage: String, CaseIterable, Hashable {
 @MainActor
 @Observable
 final class SettingsRouter {
-  var route: SettingsRoute = .app(.general)
+  /// Opens on the overview, which is the one page that answers "is everything
+  /// alright" without being asked a narrower question first.
+  var route: SettingsRoute = .app(.overview)
 
   /// A display was unplugged or replaced; do not leave a dead selection.
   ///
@@ -103,6 +119,21 @@ struct SettingsWindow: View {
 
   @Environment(\.motion) private var motion
 
+  /// What is being searched for, if anything. `@State` rather than on the
+  /// router: unlike the selected page, a half-typed query is not somewhere to
+  /// come back to, and a window reopening into somebody's abandoned search
+  /// would be a sidebar that had gone missing.
+  @State private var query = ""
+  @FocusState private var isSearchFocused: Bool
+
+  private var results: [SearchEntry<SettingsRoute>] {
+    // Built only while there is something to match against, which is the whole
+    // of what keeps this off the idle budget: with an empty field nothing is
+    // allocated and nothing is ranked.
+    guard !query.isEmpty else { return [] }
+    return SettingsSearch.rank(query, in: SettingsSearchIndex.entries(model: model))
+  }
+
   var body: some View {
     NavigationSplitView {
       sidebar
@@ -112,6 +143,12 @@ struct SettingsWindow: View {
     .onAppear { router.repair(against: model.displays.map(\.id)) }
     .onChange(of: model.displays.map(\.id)) { _, ids in
       router.repair(against: ids)
+    }
+    // Choosing a result puts the sidebar back rather than leaving a filtered
+    // one behind the page it just took you to.
+    .onChange(of: router.route) { _, _ in
+      query = ""
+      isSearchFocused = false
     }
   }
 
@@ -123,7 +160,21 @@ struct SettingsWindow: View {
     // navigation of the sidebar, which is not a trade worth making for a
     // highlight.
     VStack(spacing: 0) {
-      if model.displays.count > 1 {
+      // At the top, where the eye starts, and above the things it filters.
+      SettingsSearchField(query: $query, isFocused: $isSearchFocused)
+        .padding(.horizontal, Layout.snug)
+        .padding(.top, Layout.snug)
+
+      // ⌘F, as a button with no size. `.hidden()` is not usable here: a hidden
+      // view does not take part in key equivalents, so the shortcut would
+      // simply never fire.
+      Button("Search") { isSearchFocused = true }
+        .keyboardShortcut("f", modifiers: .command)
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
+
+      if model.displays.count > 1, query.isEmpty {
         // Only with more than one. A map of a single display is a rectangle
         // saying what the row below it already says.
         DisplayMap(
@@ -145,39 +196,10 @@ struct SettingsWindow: View {
       }
 
       List(selection: listSelection) {
-        Section("Displays") {
-          ForEach(model.displays) { display in
-            SidebarRow(
-              title: display.name,
-              summary: display.isBuiltin ? "Built-in" : display.routeDescription
-            ) {
-              // The dot rather than a symbol: this row is the one place the
-              // display's own colour has to be recognisable, because it is what
-              // ties the sidebar to the map above it and to the cards on the
-              // right.
-              AccentDot(accent: display.accent, isReady: display.isReady, size: 9)
-                .frame(width: 22)
-            }
-            .tag(SettingsRoute.display(display.id))
-          }
-
-          SidebarRow(
-            title: "Remembered",
-            summary: "Displays seen before, connected or not",
-            symbolName: "externaldrive.badge.checkmark"
-          )
-          .tag(SettingsRoute.remembered)
-        }
-
-        Section("App") {
-          ForEach(AppPage.allCases, id: \.self) { app in
-            SidebarRow(
-              title: app.title,
-              summary: app.summary,
-              symbolName: app.symbolName
-            )
-            .tag(SettingsRoute.app(app))
-          }
+        if query.isEmpty {
+          sections
+        } else {
+          resultRows
         }
       }
       // A `List` paints the system's sidebar material over whatever is behind
@@ -185,8 +207,96 @@ struct SettingsWindow: View {
       // sidebar the same colour as the rest of the window.
       .scrollContentBackground(.hidden)
       .animation(motion.spatialDefault, value: model.displays.map(\.id))
+      // Escape gets out of a search without going anywhere. Landing somewhere
+      // you did not choose is what a cancelled search must not do.
+      .onExitCommand {
+        query = ""
+        isSearchFocused = false
+      }
     }
     .navigationSplitViewColumnWidth(min: 240, ideal: 260)
+  }
+
+  /// The sidebar as it normally is.
+  @ViewBuilder
+  private var sections: some View {
+    Group {
+      // Before the first `Section`, which a macOS sidebar list renders as its
+      // own ungrouped block at the top — exactly the right reading. This row
+      // is in neither group because it is about both.
+      SidebarRow(
+        title: AppPage.overview.title,
+        summary: AppPage.overview.summary,
+        symbolName: AppPage.overview.symbolName
+      )
+      .tag(SettingsRoute.app(.overview))
+
+      Section("Displays") {
+        ForEach(model.displays) { display in
+          SidebarRow(
+            title: display.name,
+            summary: display.isBuiltin ? "Built-in" : display.routeDescription
+          ) {
+            // The dot rather than a symbol: this row is the one place the
+            // display's own colour has to be recognisable, because it is what
+            // ties the sidebar to the map above it and to the cards on the
+            // right.
+            AccentDot(accent: display.accent, isReady: display.isReady, size: 9)
+              .frame(width: 22)
+          }
+          .tag(SettingsRoute.display(display.id))
+        }
+
+        SidebarRow(
+          title: "Remembered",
+          summary: "Displays seen before, connected or not",
+          symbolName: "externaldrive.badge.checkmark"
+        )
+        .tag(SettingsRoute.remembered)
+      }
+
+      Section("App") {
+        ForEach(AppPage.appSection, id: \.self) { app in
+          SidebarRow(
+            title: app.title,
+            summary: app.summary,
+            symbolName: app.symbolName
+          )
+          .tag(SettingsRoute.app(app))
+        }
+      }
+    }
+  }
+
+  /// What was typed, answered.
+  ///
+  /// Results **instead of** the sections rather than above them. A sidebar
+  /// showing eight matches and then the fifteen ordinary rows underneath is a
+  /// scroll, and the whole point of typing was to stop scrolling.
+  ///
+  /// The same `SidebarRow`, the same `List` and the same selection binding as
+  /// the sections, which is what makes ↑/↓ and Return work here with no extra
+  /// code at all — the same argument the comment above makes for keeping a
+  /// `List` in the first place.
+  @ViewBuilder
+  private var resultRows: some View {
+    if results.isEmpty {
+      Text("Nothing matches “\(query)”.")
+        .font(TypeScale.detail)
+        .foregroundStyle(.secondary)
+        .padding(.vertical, Layout.tight)
+    } else {
+      Section("Results") {
+        ForEach(results) { entry in
+          SidebarRow(
+            title: entry.title,
+            summary: entry.context,
+            symbolName: "arrow.turn.down.right"
+          )
+          .tag(entry.target)
+        }
+      }
+    }
   }
 
   /// The list's selection, which is optional where the router's is not.
@@ -244,6 +354,7 @@ struct SettingsWindow: View {
   @ViewBuilder
   private func appPage(_ app: AppPage) -> some View {
     switch app {
+    case .overview: OverviewPage(model: model, router: router)
     case .general: GeneralSettings(model: model)
     case .updates: UpdateSettings(model: model)
     case .keys: KeySettings(model: model)

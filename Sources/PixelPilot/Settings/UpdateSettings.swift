@@ -51,11 +51,14 @@ struct UpdateSettings: View {
   private var versionCard: some View {
     PanelCard(title: "This version", systemImage: "shippingbox") {
       VStack(alignment: .leading, spacing: Layout.normal) {
+        // Built rather than switched over here: the overview board shows the
+        // same row, and `UpdateStatus` is where the two agree.
+        let status = UpdateStatus(updater: updater)
         StatusRow(
-          symbol: statusSymbol,
-          tint: statusTint,
-          title: statusTitle,
-          detail: statusDetail
+          symbol: status.symbol,
+          tint: status.tint,
+          title: status.title,
+          detail: status.detail
         )
 
         if case let .downloading(_, fraction) = updater.phase {
@@ -123,68 +126,6 @@ struct UpdateSettings: View {
         }
         .buttonStyle(.soft)
       }
-    }
-  }
-
-  private var statusSymbol: String {
-    switch updater.phase {
-    case .idle, .checking: "shippingbox"
-    case .upToDate: "checkmark.circle.fill"
-    case .available: "arrow.down.circle.fill"
-    case .downloading, .verifying, .installing: "arrow.down.circle"
-    case .readyToInstall: "checkmark.seal.fill"
-    case .failed: "exclamationmark.triangle.fill"
-    }
-  }
-
-  private var statusTint: Color? {
-    switch updater.phase {
-    case .upToDate, .readyToInstall: Status.ok
-    case .available: Status.info
-    case .failed: Status.warn
-    default: nil
-    }
-  }
-
-  private var statusTitle: String {
-    switch updater.phase {
-    case .checking: "Asking GitHub…"
-    case let .available(release):
-      "\(SemanticVersion(release.tag)?.description ?? release.tag) is available"
-    case .downloading: "Downloading…"
-    case .verifying: "Checking what arrived…"
-    case .readyToInstall: "Ready to install"
-    case .installing: "Installing…"
-    case .upToDate: "Up to date"
-    case .failed: "Could not check for updates"
-    case .idle: "Version \(Updater.currentVersionString)"
-    }
-  }
-
-  private var statusDetail: String {
-    switch updater.phase {
-    case let .failed(message):
-      return message
-
-    case .readyToInstall:
-      return "Downloaded and checked against the checksum GitHub published for it. "
-        + "Installing quits the app and opens the new one."
-
-    case let .available(release):
-      let published = release.publishedAt.map {
-        " Published \($0.formatted(date: .abbreviated, time: .omitted))."
-      } ?? ""
-      let blocked = updater.installCapability == .notWritable
-        ? " This copy is not somewhere it can replace itself — it is at "
-          + "\(Bundle.main.bundleURL.deletingLastPathComponent().path), which this app cannot "
-          + "write to. Download it from the releases page and put it in Applications by hand."
-        : ""
-      return "You have \(Updater.currentVersionString)." + published + blocked
-
-    default:
-      let version = "Version \(Updater.currentVersionString) (build \(Updater.currentBuildString))."
-      guard let last = updater.lastCheck else { return version + " Not checked yet." }
-      return version + " Checked \(last.formatted(date: .abbreviated, time: .shortened))."
     }
   }
 
