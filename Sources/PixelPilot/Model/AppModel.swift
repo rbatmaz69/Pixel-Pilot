@@ -633,13 +633,23 @@ final class AppModel {
   private(set) var appRuleList: [AppRule] = []
   var fallbackPresetID: UUID? { appRules.fallbackPresetID }
 
-  /// The last bundle identifier a rule was applied for.
+  /// The app rule currently in force, if one is.
   ///
-  /// Guards against re-applying on every activation of the same app. Coming
-  /// back from a Finder window or a dialog is an activation too, and putting a
-  /// round of DDC writes behind each of those would make the whole machine feel
-  /// slow for no visible reason.
-  @ObservationIgnored private var lastRuleTarget: String?
+  /// This replaced a `@ObservationIgnored private var lastRuleTarget: String?`
+  /// holding a stringified preset id. That was enough to stop the same preset
+  /// being written twice and told the interface nothing at all — a preset could
+  /// be applied on every app switch without any surface in the app being able
+  /// to say so. This says which rule won and which application it won for.
+  ///
+  /// `ruleID == nil` means no rule matched and the fallback is what applied.
+  /// That is a different sentence and has to stay tellable apart.
+  struct ActiveRule: Equatable {
+    var presetID: UUID
+    var ruleID: UUID?
+    var appName: String?
+  }
+
+  private(set) var activeRule: ActiveRule?
 
   /// Rounds up bursts of app switching. ⌘-Tab held down sends one of these per
   /// app passed through, and each would otherwise be a preset pushed down the
@@ -776,6 +786,9 @@ final class AppModel {
   func deleteAppRule(id: UUID) {
     appRules.delete(id: id)
     syncAppRules()
+    // Nothing else will clear this until the next app switch, and until then
+    // every surface would go on naming a rule that no longer exists.
+    if activeRule?.ruleID == id { activeRule = nil }
   }
 
   func setFallbackPreset(_ id: UUID?) {
@@ -787,24 +800,41 @@ final class AppModel {
     appRuleList = appRules.rules
   }
 
-  private func frontmostAppChanged(to bundleIdentifier: String?) {
-    guard !appRuleList.isEmpty || fallbackPresetID != nil else { return }
+  /// Not private, so the tests can drive it. The only other way in is a real
+  /// application coming to the front, which a test cannot arrange — the same
+  /// reason `stepPreset(forward:)` is not private either.
+  func frontmostAppChanged(to bundleIdentifier: String?) {
+    guard !appRuleList.isEmpty || fallbackPresetID != nil else {
+      activeRule = nil
+      return
+    }
 
     // Which preset the new frontmost app calls for — its own rule, or the
     // fallback. Deciding this before the debounce keeps the comparison against
-    // `lastRuleTarget` honest when several apps flash past.
-    let target = bundleIdentifier.flatMap { appRules.rule(forBundleIdentifier: $0)?.presetID }
-      ?? fallbackPresetID
-    guard let target else { return }
+    // what is already in force honest when several apps flash past.
+    let rule = bundleIdentifier.flatMap { appRules.rule(forBundleIdentifier: $0) }
+    let target = rule?.presetID ?? fallbackPresetID
+    guard let target else {
+      activeRule = nil
+      return
+    }
 
-    let identity = "\(target)"
-    guard identity != lastRuleTarget else { return }
+    // What is in force is recorded straight away and unconditionally. It is a
+    // name and costs nothing, and moving to a second application that happens
+    // to use the same preset should still change what the panel says.
+    let needsApplying = activeRule?.presetID != target
+    activeRule = ActiveRule(presetID: target, ruleID: rule?.id, appName: rule?.name)
+
+    // The DDC writes keep the old guard. Coming back from a Finder window or a
+    // dialog is an activation too, and putting a round of DDC writes behind
+    // each of those would make the whole machine feel slow for no visible
+    // reason.
+    guard needsApplying else { return }
 
     Task { [weak self] in
       await self?.ruleDebouncer.trigger {
         await MainActor.run {
           guard let self, let preset = self.presets.preset(id: target) else { return }
-          self.lastRuleTarget = identity
           self.log.record(.info("Applying '\(preset.name)' for the frontmost app"))
           self.apply(preset)
         }
@@ -820,6 +850,37 @@ final class AppModel {
 
   /// When the next scheduled change is due, for the settings UI.
   var nextScheduledChange: Date? { scheduleRunner.nextFire }
+
+  /// And what it will do when it gets there.
+  var nextScheduledStop: ScheduleStop? { scheduleRunner.nextStop }
+
+  /// A stop in one line: what it does, in the order it does it.
+  ///
+  /// This was private to `ScheduleSettings`. The menu bar panel and the overview
+  /// board now want the same sentence, and only something that can see
+  /// `presetList` can name a preset stop — which is this object.
+  func summary(of stop: ScheduleStop) -> String {
+    if let id = stop.presetID {
+      // Named rather than unrolled into numbers. What a preset will do is a
+      // question about the preset — the answer is on the Presets page, where
+      // resting on one shows every display it touches.
+      guard let preset = presetList.first(where: { $0.id == id }) else {
+        return "a preset that no longer exists"
+      }
+      return "the “\(preset.name)” preset"
+    }
+
+    var parts: [String] = []
+    if let brightness = stop.brightness {
+      parts.append("\(Int((brightness * 100).rounded()))%")
+    }
+    if let kelvin = stop.kelvin {
+      parts.append("\(Int(kelvin.rounded())) K")
+    }
+    // A stop is allowed to carry neither — `ScheduleAction.values` makes both
+    // optional on purpose — and "nothing" is a better answer than an empty line.
+    return parts.isEmpty ? "no change" : parts.joined(separator: ", ")
+  }
 
   func updateSchedule(_ mutate: (inout DaySchedule) -> Void) {
     preferences.updateGlobal { mutate(&$0.schedule) }
@@ -1054,10 +1115,18 @@ final class AppModel {
 
   /// The preset most recently applied, whoever applied it.
   ///
-  /// Only "next preset" and "previous preset" read it. It is not a claim that
-  /// the displays are still in that state — a slider moved afterwards makes it
-  /// stale immediately — only a note of where stepping should carry on from.
+  /// It is not a claim that the displays are still in that state — a slider
+  /// moved afterwards makes it stale immediately — only a note of where
+  /// stepping should carry on from.
   private(set) var lastAppliedPresetID: UUID?
+
+  /// The same, resolved.
+  ///
+  /// Every surface that draws this says "applied last" rather than "current",
+  /// and that wording is load-bearing: the caveat above is the whole truth
+  /// about this value, and a label reading "Current preset" would quietly
+  /// upgrade it into a claim the app cannot make.
+  var activePreset: Preset? { presetList.first { $0.id == lastAppliedPresetID } }
 
   /// Opens or closes the menu bar panel.
   ///
@@ -1225,6 +1294,10 @@ final class AppModel {
     // Otherwise "next preset" would step on from a preset that no longer has a
     // place in the list, and land somewhere arbitrary.
     if lastAppliedPresetID == id { lastAppliedPresetID = nil }
+    // And the same for what the app rules are currently doing — `activeRule`
+    // names a preset, and `pruneMissingPresets` below is about to take the
+    // rule that pointed at it.
+    if activeRule?.presetID == id { activeRule = nil }
     let existing = Set(presets.presets.map(\.id))
     hotkeys.pruneMissingPresets(existing: existing)
     // A rule aimed at a deleted preset is the worst kind of broken: still

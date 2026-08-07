@@ -161,8 +161,22 @@ struct PresetSettings: View {
         detail: summary(for: preset)
       ) {
         HStack(spacing: Layout.tight) {
+          // Filled when this is the one applied last — the same signal the
+          // menu bar panel gives, so the two surfaces agree about which
+          // preset is in play.
+          //
+          // The label stays "Apply" rather than becoming "Applied": swapping
+          // the word would change the button's width and shuffle every row in
+          // the column whenever the active preset changed, and `listHeight`
+          // below assumes a fixed row height that a re-wrapped row would
+          // silently overflow.
           Button("Apply") { model.apply(preset) }
-            .buttonStyle(.soft)
+            .buttonStyle(
+              SoftButtonStyle(isProminent: preset.id == model.lastAppliedPresetID)
+            )
+            .help(preset.id == model.lastAppliedPresetID
+              ? "Applied last — the displays may have moved since"
+              : "Apply \(preset.name)")
 
           // Re-capture rather than edit-the-numbers, for the reason at the top
           // of this file: the way anyone arrives at a preset is by setting the

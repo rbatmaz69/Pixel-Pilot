@@ -54,22 +54,34 @@ struct MenuBarPanel: View {
       SystemVolumeRow(audio: model.systemAudio)
         .padding(.horizontal, Layout.tight)
         .padding(.top, Layout.tight)
-        .entrance(index: trailingIndex)
+        .entrance(index: volumeIndex)
 
       if !model.presetList.isEmpty {
         presetRow
-          .entrance(index: trailingIndex + 1)
+          .entrance(index: presetIndex)
+      }
+
+      if let rule = model.activeRule {
+        ruleCaption(rule)
+          .transition(.blurReplace)
+          .entrance(index: ruleIndex)
       }
 
       if model.needsAccessibilityPermission {
         permissionNotice
           .transition(.blurReplace.combined(with: .scale(0.96, anchor: .top)))
-          .entrance(index: trailingIndex + 2)
+          .entrance(index: permissionIndex)
+      }
+
+      if let date = model.nextScheduledChange {
+        scheduleCaption(date)
+          .transition(.blurReplace)
+          .entrance(index: scheduleIndex)
       }
 
       Divider().padding(.top, Layout.tight)
       footer
-        .entrance(index: trailingIndex + 3)
+        .entrance(index: footerIndex)
     }
     .padding(Layout.normal)
     // Wider than before to absorb the card padding without the sliders getting
@@ -111,9 +123,31 @@ struct MenuBarPanel: View {
     }
   }
 
-  /// Where the cascade has got to by the time the per-display cards are done.
-  private var trailingIndex: Int {
+  // MARK: - Where the cascade has got to
+  //
+  // A chain rather than a base index with `+1`, `+2`, `+3` hung off it. Four of
+  // the rows below the display cards are conditional, and fixed offsets meant
+  // that a panel with no presets played the footer on beat three with nothing
+  // on beats one and two — a stagger with holes in it, which reads as the
+  // animation having stuck rather than as rows arriving. Each of these adds one
+  // only if the row before it is actually there.
+
+  private var volumeIndex: Int {
     model.displays.count + (model.canSyncBrightness ? 1 : 0)
+  }
+
+  private var presetIndex: Int { volumeIndex + 1 }
+
+  private var ruleIndex: Int { presetIndex + (model.presetList.isEmpty ? 0 : 1) }
+
+  private var permissionIndex: Int { ruleIndex + (model.activeRule == nil ? 0 : 1) }
+
+  private var scheduleIndex: Int {
+    permissionIndex + (model.needsAccessibilityPermission ? 1 : 0)
+  }
+
+  private var footerIndex: Int {
+    scheduleIndex + (model.nextScheduledChange == nil ? 0 : 1)
   }
 
   /// One slider for every display at once.
@@ -211,9 +245,22 @@ struct MenuBarPanel: View {
   /// at all. The master row deliberately gets no ghost: a preset holds a value
   /// per display and no master value, so any handle drawn there would be a
   /// number this app invented and then did not set.
+  /// The preset applied last is filled rather than tinted.
+  ///
+  /// `lastAppliedPresetID` has been recorded since presets existed and was
+  /// shown nowhere, so the row of buttons looked identical whether one had just
+  /// been applied or none ever had. Filling is what `SoftButtonStyle`'s own
+  /// documentation reserves for the one action a surface is about, and it costs
+  /// no height at all — which is the whole reason it is a fill and not a tick,
+  /// a label change or a row of its own.
+  ///
+  /// "Applied last", never "current". The value is explicitly not a claim that
+  /// the displays are still in that state, and a word like "current" would
+  /// quietly upgrade it into one.
   private var presetRow: some View {
     HStack(spacing: Layout.tight) {
       ForEach(model.presetList) { preset in
+        let isActive = preset.id == model.lastAppliedPresetID
         Button {
           model.apply(preset)
         } label: {
@@ -221,12 +268,62 @@ struct MenuBarPanel: View {
             .labelStyle(.titleAndIcon)
             .font(TypeScale.detail.weight(.medium))
         }
-        .buttonStyle(.soft)
-        .help("Apply \(preset.name)")
+        .buttonStyle(SoftButtonStyle(accent: theme.tone, isProminent: isActive))
+        .help(isActive
+          ? "Applied last — the displays may have moved since"
+          : "Apply \(preset.name)")
         .onHover { preview($0 ? preset : nil) }
       }
       Spacer(minLength: 0)
     }
+    .padding(.top, Layout.tight)
+    .animation(motion.effectDefault, value: model.lastAppliedPresetID)
+  }
+
+  /// Which app rule is currently in force.
+  ///
+  /// A preset applying itself when an application comes to the front is the one
+  /// thing in this app that changes the screens with nobody touching anything,
+  /// and until now it did so silently — the sliders moved and the panel offered
+  /// no account of why. One line, and only when a rule is actually in force.
+  private func ruleCaption(_ rule: AppModel.ActiveRule) -> some View {
+    let preset = model.presetList.first { $0.id == rule.presetID }?.name ?? "a deleted preset"
+    return HStack(spacing: Layout.tight) {
+      Image(systemName: "app.badge")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      // "Fallback" rather than an application's name when nothing matched:
+      // the two are different facts, and the second one is the answer to
+      // "why did nothing happen when I switched to this app".
+      Text("\(rule.appName ?? "Fallback") → \(preset)")
+        .font(TypeScale.detail)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, Layout.tight)
+  }
+
+  /// What the schedule will do next.
+  ///
+  /// **Absolute, and computed once as the panel is built.** "21:00" is right
+  /// for as long as the panel is open and needs nothing running to stay right;
+  /// "in three hours" would be wrong within a minute and would need a tick to
+  /// keep, which is the one thing this app will not spend.
+  private func scheduleCaption(_ date: Date) -> some View {
+    let time = date.formatted(date: .omitted, time: .shortened)
+    let what = model.nextScheduledStop.map { " · \(model.summary(of: $0))" } ?? ""
+    return HStack(spacing: Layout.tight) {
+      Image(systemName: "clock")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      Text("Next change \(time)\(what)")
+        .font(TypeScale.detail)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, Layout.tight)
     .padding(.top, Layout.tight)
   }
 
@@ -321,6 +418,7 @@ private struct DisplayControlGroup: View {
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
       header
+      caption
 
       ExpressiveSlider(
         value: Binding(
@@ -386,6 +484,9 @@ private struct DisplayControlGroup: View {
     // quietest signal there is, and an opacity rather than anything that moves.
     .opacity(isUnaffected ? 0.5 : 1)
     .animation(motion.effectDefault, value: isUnaffected)
+    // A display finishing its probe while the panel is open should read as the
+    // caption going away, not as the card jumping under the pointer.
+    .animation(motion.spatialDefault, value: display.brightnessBlock)
   }
 
   private var header: some View {
@@ -428,6 +529,46 @@ private struct DisplayControlGroup: View {
       }
     }
     .animation(motion.effectDefault, value: previewEntry)
+  }
+
+  /// Why this card is not doing what it looks like it should — when it is not.
+  ///
+  /// **The one thing the panel could never say.** A display that has not
+  /// finished probing draws both its sliders greyed out, and a greyed-out
+  /// control with no explanation is indistinguishable from a broken app.
+  /// `!isReady` is the only thing that disables them, and `brightnessBlock`
+  /// is exactly the sentence for it.
+  ///
+  /// Its own line under the header rather than a second line inside it,
+  /// indented past the accent dot the way `permissionNotice` indents past its
+  /// symbol. Folding it into the header would mean the "following the built-in"
+  /// glyph, the warmth swatch and the readout all aligning against a two-line
+  /// block, and none of them have a baseline to do it with.
+  ///
+  /// **Costs nothing in the ordinary case.** A healthy DDC monitor produces no
+  /// block and therefore no row — which is the rule this whole surface is held
+  /// to, because a line that is always there is paid for on every open, for
+  /// every display, forever.
+  ///
+  /// What deliberately does *not* get a line here: a display with no speakers.
+  /// It has no volume slider and says nothing about it, and that stays. The
+  /// system output row is forty points below and is where that volume went, so
+  /// a permanent "no volume here" under every such monitor would be spending
+  /// height to say "look down". `SystemVolumeRow` already speaks for the case
+  /// where there is genuinely nothing to drive, and the display's own page has
+  /// the full explanation. Contrast is the same: the panel has never had a
+  /// contrast slider and is not gaining an apology for one.
+  @ViewBuilder
+  private var caption: some View {
+    if let block = display.brightnessBlock {
+      Text(block.short)
+        .font(TypeScale.detail)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        // Clears the accent dot, so the caption starts under the name.
+        .padding(.leading, 14)
+        .transition(.blurReplace)
+    }
   }
 
   /// What the previewed preset would do to this display's white point.

@@ -14,17 +14,37 @@ import PixelPilotCore
 /// location permission. Neither turned out to be true: a single scheduled sleep
 /// is not a timer, and the location is optional, asked for once, and rounded
 /// until it is barely a location at all.
+///
+/// `@Observable` for the sake of `nextFire` and `nextStop`, which the menu bar
+/// panel and the overview board both read. Observation is pull-based — nothing
+/// is scheduled by the macro, and no notification is posted when nothing is
+/// looking — so the one sleeping task above is still the whole of what this
+/// costs while idle.
 @MainActor
+@Observable
 final class ScheduleRunner {
   private let apply: (ScheduleStop) -> Void
-  private var task: Task<Void, Never>?
-  private var observers: [any NSObjectProtocol] = []
 
-  private var schedule: DaySchedule = .init()
-  private var coordinate: (latitude: Double, longitude: Double)?
+  // The machinery is ignored by observation, and has to be: `deinit` cancels
+  // the task, and a `@Observable` stored property becomes a computed one that a
+  // nonisolated deinit cannot reach. Nothing looks at any of these anyway — the
+  // two things a view wants are `nextFire` and `nextStop` below.
+  @ObservationIgnored private var task: Task<Void, Never>?
+  @ObservationIgnored private var observers: [any NSObjectProtocol] = []
+
+  @ObservationIgnored private var schedule: DaySchedule = .init()
+  @ObservationIgnored private var coordinate: (latitude: Double, longitude: Double)?
 
   /// When the next stop is due, for the settings UI to show.
   private(set) var nextFire: Date?
+
+  /// And what it will do when it gets there.
+  ///
+  /// Kept beside the date rather than looked up again from the schedule at the
+  /// point of display: the two are decided together in `reschedule`, and a
+  /// second lookup against a schedule that has since been edited would name a
+  /// stop that is not the one the sleeping task is waiting for.
+  private(set) var nextStop: ScheduleStop?
 
   init(apply: @escaping (ScheduleStop) -> Void) {
     self.apply = apply
@@ -74,6 +94,7 @@ final class ScheduleRunner {
     task?.cancel()
     task = nil
     nextFire = nil
+    nextStop = nil
 
     guard schedule.isEnabled else { return }
 
@@ -83,6 +104,7 @@ final class ScheduleRunner {
 
     guard let next = schedule.nextTransition(after: Date(), solar: solarTimes) else { return }
     nextFire = next.date
+    nextStop = next.stop
 
     task = Task { [weak self] in
       let delay = next.date.timeIntervalSinceNow

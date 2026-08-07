@@ -289,6 +289,84 @@ final class DisplayViewModel: Identifiable {
     return parts.joined(separator: " · ")
   }
 
+  // MARK: - Why a control is not doing what it looks like it should
+
+  /// Whether there is a DDC channel to this display at all.
+  ///
+  /// `queue` stays private. This is the one bit of it any view needs, and it is
+  /// a fact about the display rather than a handle on the bus.
+  var hasDDCChannel: Bool { queue != nil }
+
+  /// Why the brightness slider is disabled or behaving unusually, if it is.
+  ///
+  /// `!isReady` is the only thing that disables the slider, so this is also the
+  /// sentence that explains a greyed-out control — which the panel had no way
+  /// of saying at all before.
+  var brightnessBlock: ControlBlock? {
+    ControlAvailability.brightness(
+      isReady: isReady,
+      isProbing: isProbing,
+      hasDDCChannel: hasDDCChannel,
+      isBuiltin: isBuiltin,
+      strategy: brightnessStrategy
+    )
+  }
+
+  var contrastBlock: ControlBlock? {
+    ControlAvailability.contrast(capabilities: capabilities)
+  }
+
+  /// Note the wording difference from `volumeUnavailableReason` above, which is
+  /// deliberate and stays: that one names the current output device, which only
+  /// the app can ask about, and is the right answer when there is room for it.
+  /// This is the same fact with no room.
+  var volumeBlock: ControlBlock? {
+    ControlAvailability.volume(route: volumeRoute)
+  }
+
+  // MARK: - The display in one glance
+
+  /// The worst thing currently true about this display.
+  ///
+  /// Read by the overview board, which shows every display at once and cannot
+  /// give each one four lines. An ordering rather than a count, because three
+  /// notes and one fault is a fault.
+  ///
+  /// Every input here is a stored property on this observable class, so this
+  /// tracks. `settings` is deliberately *not* consulted: it reads `Preferences`,
+  /// which is not observable, and a board built on it would go stale in place.
+  var statusLevel: StatusLevel {
+    var level = brightnessBlock?.level ?? .ok
+    if healthReport?.overall == .faults { level = max(level, .warn) }
+    if isFightingSomethingOverColor { level = max(level, .warn) }
+    if currentInputIsUnlisted { level = max(level, .warn) }
+    return level
+  }
+
+  /// This display in one line, for a board that shows several.
+  ///
+  /// The route first, because it is what differs between two monitors that
+  /// otherwise look the same; then the health verdict; then at most one thing
+  /// that is wrong. Capped at three clauses on purpose — a board whose rows
+  /// wrap has become a list of paragraphs, and the display's own page is one
+  /// click away and has the full sentences.
+  ///
+  /// `routeDescription` is reused rather than re-derived: the sidebar already
+  /// shows it under the display's name, and the two must not disagree.
+  ///
+  /// Worth knowing about `currentInputIsUnlisted`, which feeds `statusLevel`
+  /// above: it depends on `capabilityString`, which is only read on demand from
+  /// the Input and power card. On a display whose page has never been opened it
+  /// is nil and the answer is false. That is correct rather than a bug — do not
+  /// "fix" it by probing from the overview, which would be a dozen DDC round
+  /// trips per display every time the window opens.
+  var statusHeadline: String {
+    var parts = [routeDescription]
+    parts.append(healthReport?.overall.displayName ?? "Never checked")
+    if let block = brightnessBlock { parts.append(block.short) }
+    return parts.joined(separator: " · ")
+  }
+
   // MARK: - Actions
 
   /// Continuous updates during a drag. Cheap: the DDC write is coalesced.

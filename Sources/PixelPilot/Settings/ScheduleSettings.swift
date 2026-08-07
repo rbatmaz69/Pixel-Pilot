@@ -114,29 +114,9 @@ struct ScheduleSettings: View {
     }
   }
 
-  /// A stop in one line: what it does, in the order it does it.
-  private func summary(of stop: ScheduleStop) -> String {
-    if let id = stop.presetID {
-      // Named rather than unrolled into numbers. What a preset will do is a
-      // question about the preset — the answer is on the Presets page, where
-      // resting on one shows every display it touches.
-      guard let preset = model.presetList.first(where: { $0.id == id }) else {
-        return "a preset that no longer exists"
-      }
-      return "the “\(preset.name)” preset"
-    }
-
-    var parts: [String] = []
-    if let brightness = stop.brightness {
-      parts.append("\(Int((brightness * 100).rounded()))%")
-    }
-    if let kelvin = stop.kelvin {
-      parts.append("\(Int(kelvin.rounded())) K")
-    }
-    // A stop is allowed to carry neither — `ScheduleAction.values` makes both
-    // optional on purpose — and "nothing" is a better answer than an empty line.
-    return parts.isEmpty ? "no change" : parts.joined(separator: ", ")
-  }
+  /// A stop in one line. Lives on `AppModel` now — the panel and the overview
+  /// board show the same sentence, and there must be only one of it.
+  private func summary(of stop: ScheduleStop) -> String { model.summary(of: stop) }
 
   // MARK: - Stops
 

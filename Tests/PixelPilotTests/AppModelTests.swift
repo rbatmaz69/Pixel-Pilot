@@ -320,4 +320,135 @@ struct AppModelTests {
 
     #expect(model.keyBindingList.isEmpty)
   }
+
+  // MARK: - What rule is in force
+
+  /// This used to be a stringified UUID nothing could see. The panel and the
+  /// overview both name it now, so what it holds and when it is cleared are
+  /// worth pinning down.
+  ///
+  /// `frontmostAppChanged(to:)` is internal for exactly these: the only other
+  /// way in is a real application coming to the front.
+
+  @Test("With no rules and no fallback, nothing is in force")
+  func noRulesMeansNoActiveRule() {
+    let model = makeModelWithRules()
+
+    model.frontmostAppChanged(to: "com.apple.Safari")
+
+    #expect(model.activeRule == nil)
+  }
+
+  @Test("A matching rule names the app and the rule it came from")
+  func matchingRuleIsRecorded() {
+    let model = makeModelWithRules()
+    let preset = model.captureCurrentState(name: "Night", symbolName: "moon")
+    let rule = AppRule(bundleIdentifier: "com.apple.Safari", name: "Safari", presetID: preset.id)
+    model.saveAppRule(rule)
+
+    model.frontmostAppChanged(to: "com.apple.Safari")
+
+    #expect(model.activeRule?.presetID == preset.id)
+    #expect(model.activeRule?.ruleID == rule.id)
+    #expect(model.activeRule?.appName == "Safari")
+  }
+
+  /// The fallback and a rule are different facts, and the interface says them
+  /// differently — "Safari → Night" against "Fallback → Night". A nil `ruleID`
+  /// is what tells them apart.
+  @Test("The fallback is recorded with no rule behind it")
+  func fallbackIsRecordedWithoutARule() {
+    let model = makeModelWithRules()
+    let preset = model.captureCurrentState(name: "Day", symbolName: "sun.max")
+    model.setFallbackPreset(preset.id)
+
+    model.frontmostAppChanged(to: "com.example.Unknown")
+
+    #expect(model.activeRule?.presetID == preset.id)
+    #expect(model.activeRule?.ruleID == nil)
+    #expect(model.activeRule?.appName == nil)
+  }
+
+  /// Moving between two applications that share a preset still changes what is
+  /// in force, because the sentence names the app and the app changed. The
+  /// guard that stops the DDC writes repeating is a separate thing.
+  @Test("A second app on the same preset still updates what is shown")
+  func sameSourcePresetStillRenamesTheApp() {
+    let model = makeModelWithRules()
+    let preset = model.captureCurrentState(name: "Night", symbolName: "moon")
+    model.saveAppRule(
+      AppRule(bundleIdentifier: "com.apple.Safari", name: "Safari", presetID: preset.id)
+    )
+    model.saveAppRule(
+      AppRule(bundleIdentifier: "com.apple.Mail", name: "Mail", presetID: preset.id)
+    )
+
+    model.frontmostAppChanged(to: "com.apple.Safari")
+    #expect(model.activeRule?.appName == "Safari")
+
+    model.frontmostAppChanged(to: "com.apple.Mail")
+    #expect(model.activeRule?.appName == "Mail")
+  }
+
+  @Test("Deleting the rule in force clears it")
+  func deletingTheRuleClearsIt() {
+    let model = makeModelWithRules()
+    let preset = model.captureCurrentState(name: "Night", symbolName: "moon")
+    let rule = AppRule(bundleIdentifier: "com.apple.Safari", name: "Safari", presetID: preset.id)
+    model.saveAppRule(rule)
+    model.frontmostAppChanged(to: "com.apple.Safari")
+    #expect(model.activeRule != nil)
+
+    model.deleteAppRule(id: rule.id)
+
+    #expect(model.activeRule == nil)
+  }
+
+  /// Deleting the preset takes the rule with it — `pruneMissingPresets` sees to
+  /// that — so what is in force has to go too, or the panel names a preset that
+  /// no longer exists.
+  @Test("Deleting the preset behind the rule clears it")
+  func deletingThePresetClearsIt() {
+    let model = makeModelWithRules()
+    let preset = model.captureCurrentState(name: "Night", symbolName: "moon")
+    model.saveAppRule(
+      AppRule(bundleIdentifier: "com.apple.Safari", name: "Safari", presetID: preset.id)
+    )
+    model.frontmostAppChanged(to: "com.apple.Safari")
+    #expect(model.activeRule != nil)
+
+    model.deletePreset(id: preset.id)
+
+    #expect(model.activeRule == nil)
+  }
+
+  /// `lastAppliedPresetID` has been recorded since presets existed and was
+  /// never shown. Both new surfaces resolve it through this.
+  @Test("The preset applied last resolves to the preset")
+  func activePresetResolves() {
+    let model = makeModelWithRules()
+    #expect(model.activePreset == nil)
+
+    let preset = model.captureCurrentState(name: "Night", symbolName: "moon")
+    model.apply(preset)
+
+    #expect(model.activePreset?.id == preset.id)
+    #expect(model.activePreset?.name == "Night")
+  }
+}
+
+/// A model with its own throwaway rule store as well, which the preset factory
+/// above does not give out.
+@MainActor
+private func makeModelWithRules() -> AppModel {
+  let model = AppModel(
+    discovery: StubDiscovery(),
+    gamma: GammaDimmer(),
+    preferences: makePreferences(),
+    presets: PresetStore(defaults: makeDefaults()),
+    keyBindings: KeyBindingStore(defaults: makeDefaults()),
+    appRules: AppRuleStore(defaults: makeDefaults())
+  )
+  model.refresh()
+  return model
 }
