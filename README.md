@@ -68,6 +68,24 @@ To build and install from source instead, see [Building](#building) —
   backlight bleed, a one-pixel checkerboard for scaling. The app's own colour
   tables come off that display while one is up, so what you are looking at is
   the panel.
+- **A health check**, which walks those patterns in order and asks one question
+  of each, and **marking**: drag a box round a bad pixel while it is on screen
+  and it is remembered for that monitor — as a fraction of the screen, so it
+  still points at the same glass after a resolution change. A drag marks in any
+  mode, because nobody drags a box meaning "next picture"; per-pixel work has
+  its own mode, reachable from a button on the plate as well as `M`. The result
+  is a verdict rather than a score, and it distinguishes a fault in the panel
+  from how the panel behaves from a display that is simply not being driven at
+  its own resolution.
+- **Reanimating stuck pixels**, working the marked spots or the whole screen.
+  What flashes is exactly the rectangle the crop marks were drawn around — the
+  same function, the same units — and those crop marks stay on screen during the
+  pass, so you can see that the spot you marked is the spot being worked.
+  Full-screen defaults to colour noise rather than the flashing the repair
+  websites use: every sub-pixel swings just as hard, but uncorrelated cells
+  leave the screen's average brightness flat, so there is no screen-sized flash.
+  The familiar cycle is still there as a choice. See
+  [Reanimating is folk practice](#reanimating-is-folk-practice).
 - **Scroll over the menu bar icon** to change brightness.
 - **One slider for every display**, keeping the differences between them.
 - **Presets** carrying brightness, contrast, warmth, finish and volume —
@@ -426,6 +444,7 @@ Packages/PixelPilotCore/   UI-free core, unit tested
     DDC/                   Packet construction, transport, coalescing queue
     Displays/              EDID, registry, capability probing
     Control/               Brightness, gamma dimming, volume
+    Health/                Test patterns, marks, reports, the repair cycle
     System/                Preferences, diagnostics log
   Sources/ppctl/           CLI for verifying against real hardware
 Sources/PixelPilot/        The app
@@ -752,6 +771,30 @@ It is deliberately not a warmth control. Someone who wants paper *and* warm has
 both, one card apart; a finish that quietly also moved the Kelvin would be two
 things on one control with the second one unlabelled.
 
+## A checkerboard is two pixels, not four million
+
+The one-pixel checkerboard was drawn as a `Canvas` filling one `Path` per device
+pixel. On a 4K panel that is 2160 rows of 1920 squares — 4.1 million path
+allocations into a display list that is then retained. It measured **1.1 GB for
+a single render**, and every re-render after it (a hover, a mark, a change of
+mode) added another gigabyte. It is the last pattern in the walk, so finishing a
+health check and looking around was enough to take the machine to tens of
+gigabytes.
+
+It is now a 2×2 device-pixel image handed to `Image` at the display's scale and
+tiled, so its natural size is one point and it repeats exactly on the pixel
+grid. Sixteen bytes, and the same picture — in fact a more accurate one, because
+the old loop accumulated a float and drifted. `TestPatternRenderTests` pins both
+halves, because either alone is satisfied by a bug: a pattern that draws nothing
+costs no memory, and a pattern that costs no memory may be drawing nothing. So
+the test reads the pixels back and requires exact single-pixel alternation with
+no value between black and white, *and* renders ten times at 4K and requires the
+footprint not to move.
+
+The general shape is worth remembering: in this app, anything that loops per
+device pixel is a bug, and a `Canvas` display list is retained rather than
+drawn and discarded.
+
 ## Panels lie
 
 Monitors answer DDC queries for features they do not have. The Samsung U32T1
@@ -763,6 +806,44 @@ Taking those at face value produces sliders that move and do nothing. So every
 panel is probed once, the answers are sanity-checked, and controls that fail the
 check are not drawn at all. `ppctl probe` shows the verdict per feature, and the
 display's Diagnostics fold lists the reason a control is missing.
+
+## Reanimating is folk practice
+
+A stuck pixel is one whose liquid crystal is not relaxing to the voltage it is
+being given, so it sits lit in the wrong colour. Swinging that voltage hard
+between extremes, many times a second, sometimes frees it. There is no
+manufacturer behind this and no study; it works often enough to be worth ten
+minutes and not often enough to promise anything. The app says so on the card,
+in the sheet, and in the source, rather than letting a button called "repair"
+imply otherwise.
+
+It does nothing at all for a **dead** pixel. That is a transistor that is not
+switching, and no picture on the screen reaches a transistor. Marks are
+classified as stuck or dead from the pattern they were spotted on — something
+lit on black is stuck, something dark on white or a primary is dead — which is
+a guess rather than a diagnosis, and is why `S` and `D` are there to correct it.
+
+**Why the full-screen pass is noise.** Cycling the whole screen red → green →
+blue at speed is what the stuck-pixel websites do, and it is also a textbook
+photosensitive-seizure stimulus: a large-area, high-contrast, saturated flash in
+the band that matters. You cannot both swing every sub-pixel across the whole
+panel and avoid a large-area flash — those are the same event described twice.
+Noise resolves it. Each pixel still spends half its time at zero and half at
+full on every channel, so the exercise is identical, but because neighbouring
+blocks are uncorrelated the screen's average luminance stays flat and there is
+no coherent flash. The classic cycle is offered, never as the default, and never
+without the warning. Reduce Motion forces the gentle rate — three changes a
+second, the line WCAG 2.3.1 draws — and says that it has, because half-honouring
+an accessibility setting looks like a broken setting.
+
+**Nothing runs per frame.** The flashing is a discrete `CAKeyframeAnimation`
+handed to the render server: 32 noise fields rendered once at 480×270, or the
+eight corners of the RGB cube per marked region with neighbours out of phase.
+The one line that decides whether any of it works is
+`magnificationFilter = .nearest` — bilinear would average the noise back toward
+mid grey and exercise nothing. A ten-minute session holds one sleep assertion
+and one sleeping task, and both are released in the same teardown that puts the
+display's own colour tables back.
 
 ## Acknowledgements
 

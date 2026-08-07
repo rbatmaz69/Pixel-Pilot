@@ -24,13 +24,17 @@ struct DisplayPage: View {
       VStack(alignment: .leading, spacing: Layout.section) {
         card(0) { controls }
           .accentWave(index: 0, trigger: groupChangeTick, accent: display.accent)
+        // Second, under Controls: the card above answers "what do I want this
+        // screen to do", this one answers "is this screen alright", and
+        // everything below is configuration.
+        card(1) { HealthSection(model: model, display: display) }
         if !display.isBuiltin {
-          card(1) { InputAndPowerSection(display: display) }
+          card(2) { InputAndPowerSection(display: display) }
         }
-        card(2) { ColorSection(display: display) }
-        card(3) { FinishSection(display: display) }
-        card(4) { configuration }
-        card(5) { diagnostics }
+        card(3) { ColorSection(display: display) }
+        card(4) { FinishSection(display: display) }
+        card(5) { configuration }
+        card(6) { diagnostics }
       }
       .padding(Layout.loose)
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -395,7 +399,9 @@ struct DisplayPage: View {
     VStack(alignment: .leading, spacing: Layout.tight) {
       Text("Test patterns").font(TypeScale.rowTitle)
       Text("Fills this screen with images for finding dead pixels, banding, backlight "
-        + "bleed and scaling. Click or press → to move through them, esc to leave.")
+        + "bleed and scaling. Click or press → to move through them, M to mark a bad "
+        + "pixel, esc to leave. The Health card at the top of this page walks them in "
+        + "order and records what you found.")
         .font(TypeScale.detail)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)

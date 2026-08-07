@@ -241,7 +241,7 @@ struct SettingsWindow: View {
   @ViewBuilder
   private func appPage(_ app: AppPage) -> some View {
     switch app {
-    case .general: GeneralSettings()
+    case .general: GeneralSettings(model: model)
     case .keys: KeySettings(model: model)
     case .presets: PresetSettings(model: model)
     case .schedule: ScheduleSettings(model: model)

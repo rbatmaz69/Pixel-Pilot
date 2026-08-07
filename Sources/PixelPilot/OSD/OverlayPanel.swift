@@ -191,3 +191,38 @@ enum OverlayPanel {
     }
   }
 }
+
+/// The overlay's own button: a border, a label, and nothing else.
+///
+/// Not `.soft`, and the two reasons are the same two this whole file already
+/// argues elsewhere.
+///
+/// **It must not react to hover.** `.soft` animates a fill on `.onHover`, and
+/// inside `OverlayPanel`'s hosting view that is a feedback loop: the hover
+/// changes the fill, the fill relays out the view, the relayout runs
+/// `updateTrackingAreas`, and re-adding an area under the pointer sends another
+/// enter. Round again, several times a second — which is what "it flickers when
+/// I move onto it" was. Pressing is shown by opacity alone, because opacity is
+/// the one change that cannot move a tracking area.
+///
+/// **It must not be themed.** `.soft` resolves its fill against
+/// `@Environment(\.theme)`, and this overlay deliberately refuses the app theme
+/// — a test pattern tinted by the app's accent colour would be testing the app.
+/// A themed button sitting on it was that rule broken by accident.
+struct PlateButtonStyle: ButtonStyle {
+  let ink: Color
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(TypeScale.detail.weight(.medium))
+      .padding(.horizontal, Layout.snug)
+      .padding(.vertical, Layout.tight)
+      .foregroundStyle(ink)
+      .overlay {
+        RoundedRectangle(cornerRadius: Layout.radiusControl)
+          .strokeBorder(ink.opacity(0.45), lineWidth: 1)
+      }
+      .opacity(configuration.isPressed ? 0.5 : 1)
+      .contentShape(.rect)
+  }
+}

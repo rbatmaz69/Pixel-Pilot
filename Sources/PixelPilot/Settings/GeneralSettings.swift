@@ -10,6 +10,8 @@ import SwiftUI
 /// displays. The theme is a store of its own and login registration is
 /// `SMAppService`'s business.
 struct GeneralSettings: View {
+  let model: AppModel
+
   @Environment(\.motion) private var motion
 
   /// The store rather than `\.theme`: this card writes to it, and the resolved
@@ -23,6 +25,32 @@ struct GeneralSettings: View {
     CardStack {
       themeCard.entrance(index: 0)
       startupCard.entrance(index: 1)
+      welcomeCard.entrance(index: 2)
+    }
+  }
+
+  /// A way back to the welcome guide.
+  ///
+  /// It exists because there was none, and the consequence was worse than a
+  /// missing convenience: the guide is shown once, on the first launch, and
+  /// records that it has been. Deleting the app does not take that record with
+  /// it — preferences live in the user's Library, not in the bundle — so
+  /// reinstalling could not bring the guide back either, and somebody who
+  /// dismissed it without reading it had no way to ever see it again.
+  ///
+  /// The card says that, rather than leaving the reinstall that does not work
+  /// as the obvious thing to try.
+  private var welcomeCard: some View {
+    PanelCard(title: "Welcome guide", systemImage: "sparkles") {
+      VStack(alignment: .leading, spacing: Layout.normal) {
+        Button("Show the welcome guide") { model.showWelcome() }
+          .buttonStyle(.soft)
+
+        CardFooter("What the app showed you the first time it ran: the permissions it "
+          + "needs and why, and what the menu bar icon does. Reinstalling will not bring "
+          + "it back on its own — it is shown once and remembers that, and what it "
+          + "remembers is kept with your settings rather than inside the app.")
+      }
     }
   }
 

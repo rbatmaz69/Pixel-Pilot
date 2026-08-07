@@ -227,7 +227,7 @@ final class AppModel {
     // through the thing that put it there rather than being left for
     // `clearAll` — which for a suspended display would mean quitting with our
     // tables held back and nothing to resume them.
-    testPatterns.hide()
+    health.hide()
     attention.stop()
     scheduleRunner.stop()
     builtinSource.stop()
@@ -257,9 +257,12 @@ final class AppModel {
     screenLayoutTick += 1
     let discovered = discovery.discoverDisplays(log: log)
 
-    gamma.pruneOffline(
-      onlineDisplayIDs: Set(discovered.map(\.displayID))
-    )
+    let online = Set(discovered.map(\.displayID))
+    gamma.pruneOffline(onlineDisplayIDs: online)
+    // A full-screen overlay on a display that has just gone is a panel
+    // positioned on a screen that no longer exists — and, during a repair pass,
+    // a sleep assertion held for a monitor nobody can see.
+    health.displaysChanged(online: online)
 
     displays = discovered.map {
       DisplayViewModel(display: $0, preferences: preferences, log: log)
@@ -647,12 +650,93 @@ final class AppModel {
     attention.settingsChanged()
   }
 
-  // MARK: - Test patterns
+  // MARK: - The welcome guide
 
-  @ObservationIgnored private let testPatterns = TestPatternController()
+  /// Set by `WindowCoordinator`, which is the only thing that owns windows.
+  ///
+  /// A closure rather than a reference back to it, for the reason the whole
+  /// arrangement rests on: the coordinator holds the model, and a model holding
+  /// the coordinator would be a cycle. This is the same shape
+  /// `AttentionController` uses for its candidate list.
+  @ObservationIgnored var onShowWelcome: (() -> Void)?
+
+  func showWelcome() {
+    Haptics.confirm()
+    onShowWelcome?()
+  }
+
+  // MARK: - Test patterns, health and repair
+
+  @ObservationIgnored private let health = DisplayHealthController()
 
   func showTestPatterns(on display: DisplayViewModel) {
-    testPatterns.show(on: display.displayID, named: display.name)
+    health.showPatterns(
+      on: display.displayID, named: display.name, defects: display.pixelDefects
+    )
+    wire(health, to: display)
+  }
+
+  func runHealthCheck(on display: DisplayViewModel) {
+    Haptics.confirm()
+    health.runHealthCheck(
+      on: display.displayID, named: display.name, defects: display.pixelDefects
+    )
+    wire(health, to: display)
+  }
+
+  /// Reopens the overlay on the pattern most of the marks were found on — crop
+  /// marks around nothing on a white screen would be a worse answer than not
+  /// showing them.
+  func showMarks(on display: DisplayViewModel) {
+    health.startMarking(
+      on: display.displayID,
+      named: display.name,
+      pattern: PixelDefects.mostCommonPattern(display.pixelDefects) ?? .black,
+      defects: display.pixelDefects
+    )
+    wire(health, to: display)
+  }
+
+  func startRepair(
+    on display: DisplayViewModel,
+    style: RepairPlan.Style,
+    intensity: RepairPlan.Intensity,
+    duration: RepairPlan.Duration
+  ) {
+    Haptics.confirm()
+    // Handed over exactly as stored. Opening a tiny mark up to something worth
+    // animating is `MarkGeometry`'s job, done in the view that knows its own
+    // size — which is what makes the flashing rectangle the same one the crop
+    // marks were drawn around. Doing it here, against the display's pixel size,
+    // is how the two came to disagree in the first place.
+    let regions = PixelDefects.worthExercising(display.pixelDefects).map(\.region)
+    health.startRepair(
+      on: display.displayID,
+      named: display.name,
+      settings: .init(
+        style: style, intensity: intensity, duration: duration, regions: regions
+      )
+    )
+    wire(health, to: display)
+  }
+
+  func clearMarks(on display: DisplayViewModel) {
+    display.clearPixelDefects()
+  }
+
+  /// Points the controller's callbacks at the view model that is on screen now.
+  ///
+  /// Rewired on every open rather than once at construction, and that is
+  /// necessary rather than tidy: `refresh()` recreates every `DisplayViewModel`,
+  /// so a closure captured when the controller was built would be writing marks
+  /// into a dead object by the second time a monitor was unplugged.
+  private func wire(_ controller: DisplayHealthController, to display: DisplayViewModel) {
+    controller.onDefectsChanged = { [weak display] defects in
+      display?.setPixelDefects(defects)
+    }
+    controller.onReport = { [weak display] report in
+      display?.setHealthReport(report)
+    }
   }
 
   func saveAppRule(_ rule: AppRule) {
