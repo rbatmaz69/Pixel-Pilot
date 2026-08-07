@@ -751,8 +751,8 @@ struct RepairSurfaceTests {
   @Test("Marked regions get one layer each, out of phase with each other")
   func regionsAreOutOfPhase() throws {
     let regions = [
-      NormalisedRect(x: 0.2, y: 0.3, width: 0.05, height: 0.05),
-      NormalisedRect(x: 0.6, y: 0.5, width: 0.05, height: 0.05),
+      NormalisedRect(x: 0.2, y: 0.3, width: 0.2, height: 0.2),
+      NormalisedRect(x: 0.6, y: 0.5, width: 0.2, height: 0.2),
     ]
     let layers = try #require(view(regions: regions).layer?.sublayers)
     #expect(layers.count == 2)
@@ -767,6 +767,60 @@ struct RepairSurfaceTests {
     // And each one is where its mark is, rather than all at the origin.
     #expect(abs(layers[0].frame.minX - 0.2 * 800) < 1e-6)
     #expect(abs(layers[1].frame.minY - 0.5 * 500) < 1e-6)
+  }
+
+  /// **What is drawn is what is flashed.**
+  ///
+  /// These were two different rectangles: the crop marks opened a mark to a
+  /// minimum of 34 points, and the repair pass opened the same mark to 12
+  /// *device* pixels — six points on a Retina panel. A click mark was therefore
+  /// drawn almost six times larger than the area actually being worked, and the
+  /// honest complaint was that you could not tell whether the flashing had
+  /// covered the pixel you marked.
+  ///
+  /// Now both go through `MarkGeometry.region`. This pins that the layer really
+  /// lands there, since a correct helper called from only one of the two places
+  /// would still be the same bug.
+  @Test("The exercised rectangle is the one the crop marks were drawn around")
+  func flashedMatchesDrawn() throws {
+    let size = CGSize(width: 800, height: 500)
+
+    // A dragged box: worked at exactly the size it was dragged.
+    let dragged = NormalisedRect(x: 0.25, y: 0.25, width: 0.25, height: 0.25)
+    let draggedLayer = try #require(view(regions: [dragged]).layer?.sublayers?.first)
+    #expect(draggedLayer.frame == MarkGeometry.region(dragged, in: size))
+    #expect(abs(draggedLayer.frame.width - 200) < 1e-6, "a dragged box was resized")
+
+    // A click mark: far too small to see or to animate, so it is opened up —
+    // and opened to the same size in both places, centred on the same spot.
+    let clicked = NormalisedRect.around(
+      CGPoint(x: 800, y: 500), sidePixels: 6, in: CGSize(width: 1600, height: 1000)
+    )
+    let clickedLayer = try #require(view(regions: [clicked]).layer?.sublayers?.first)
+    let drawn = MarkGeometry.region(clicked, in: size)
+    #expect(clickedLayer.frame == drawn)
+    #expect(abs(drawn.width - MarkGeometry.minimumSide) < 1e-6)
+    // Still centred on the pixel that was clicked, which is the whole point of
+    // opening it up rather than moving it.
+    #expect(abs(drawn.midX - 400) < 0.5)
+    #expect(abs(drawn.midY - 250) < 0.5)
+  }
+
+  /// The brackets sit outside the region and never touch each other, however
+  /// small or oddly shaped it is — four ticks that meet are a box, and a box
+  /// hides the pixels the suspect one is compared against.
+  @Test("The crop marks stay outside the region and never close it in")
+  func bracketsStayOpen() {
+    for side in [MarkGeometry.minimumSide, 60, 200] as [CGFloat] {
+      let region = CGRect(x: 100, y: 100, width: side, height: side)
+      let path = MarkGeometry.brackets(around: region)
+      let bounds = path.boundingRect
+
+      #expect(bounds.minX < region.minX, "the brackets are inside the region")
+      #expect(bounds.maxX > region.maxX)
+      // Four separate corners, so the path is never one closed rectangle.
+      #expect(path.cgPath.subpathCount == 4)
+    }
   }
 
   @Test("Tearing down stops everything and leaves no layers")
@@ -844,5 +898,17 @@ struct MarkRegionTests {
   func zeroDrag() {
     let point = CGPoint(x: 50, y: 50)
     #expect(CGRect(from: point, to: point) == CGRect(x: 50, y: 50, width: 0, height: 0))
+  }
+}
+
+extension CGPath {
+  /// How many separate strokes a path is made of. Four means four corners
+  /// rather than one closed rectangle.
+  fileprivate var subpathCount: Int {
+    var count = 0
+    applyWithBlock { element in
+      if element.pointee.type == .moveToPoint { count += 1 }
+    }
+    return count
   }
 }

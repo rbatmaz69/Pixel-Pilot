@@ -105,8 +105,14 @@ final class RepairLayerView: NSView {
         // Out of phase with each other on purpose. Neighbouring regions
         // flashing in lockstep would be a small local flash, which is the one
         // thing this whole design is avoiding.
+        //
+        // Through `MarkGeometry` rather than straight to `denormalised`, so the
+        // rectangle that flashes is the rectangle the crop marks were drawn
+        // around — the same function, the same units, the same result. Growing
+        // it here rather than before it was handed over is what makes that
+        // possible: this is the only place that knows the view's own size.
         addColourLayer(
-          region.denormalised(in: bounds.size), phase: index, settings: settings,
+          MarkGeometry.region(region, in: bounds.size), phase: index, settings: settings,
           refreshHz: refreshHz
         )
       }
@@ -119,17 +125,23 @@ final class RepairLayerView: NSView {
     settings: DisplayHealthController.RepairSettings,
     refreshHz: Double
   ) {
+    let cycle = RepairPlan.sequence(for: settings.intensity)
+    let colours = (0 ..< cycle.count).map { tick -> CGColor in
+      let colour = RepairPlan.colour(at: tick, phase: phase, intensity: settings.intensity)
+      return CGColor(srgbRed: colour.red, green: colour.green, blue: colour.blue, alpha: 1)
+    }
+
     let cell = CALayer()
     cell.frame = frame
-    let cycle = RepairPlan.sequence(for: settings.intensity)
+    // The model value as well as the animation, the same way the noise layer
+    // sets `contents` before animating it. An animation only overrides what a
+    // layer already is, so without this the cell shows nothing until the first
+    // field lands — and nothing at all for good if the animation is ever
+    // dropped.
+    cell.backgroundColor = colours.first
 
     let animation = CAKeyframeAnimation(keyPath: "backgroundColor")
-    animation.values = (0 ..< cycle.count).map { tick in
-      let colour = RepairPlan.colour(at: tick, phase: phase, intensity: settings.intensity)
-      return CGColor(
-        srgbRed: colour.red, green: colour.green, blue: colour.blue, alpha: 1
-      )
-    }
+    animation.values = colours
     // Discrete, not interpolated: a cross-fade between two cube corners spends
     // most of its time in the middle, which is where a cell is not being worked
     // at all.
@@ -243,6 +255,23 @@ struct RepairView: View {
       } else {
         RepairSurfaceView(settings: settings, refreshHz: refreshHz)
           .ignoresSafeArea()
+      }
+
+      // The same crop marks the marking overlay drew, around the same
+      // rectangles, so you can see that what is flashing is what you marked.
+      // Shown during the count-in as well — that is when they are legible, and
+      // when knowing where to look is worth most.
+      if !settings.regions.isEmpty {
+        Canvas { context, size in
+          for region in settings.regions {
+            context.stroke(
+              MarkGeometry.brackets(around: MarkGeometry.region(region, in: size)),
+              with: .color(.white.opacity(0.5)),
+              style: StrokeStyle(lineWidth: 1, lineCap: .butt)
+            )
+          }
+        }
+        .allowsHitTesting(false)
       }
 
       if countdown > 0 {

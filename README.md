@@ -78,6 +78,9 @@ To build and install from source instead, see [Building](#building) —
   from how the panel behaves from a display that is simply not being driven at
   its own resolution.
 - **Reanimating stuck pixels**, working the marked spots or the whole screen.
+  What flashes is exactly the rectangle the crop marks were drawn around — the
+  same function, the same units — and those crop marks stay on screen during the
+  pass, so you can see that the spot you marked is the spot being worked.
   Full-screen defaults to colour noise rather than the flashing the repair
   websites use: every sub-pixel swings just as hard, but uncorrelated cells
   leave the screen's average brightness flat, so there is no screen-sized flash.

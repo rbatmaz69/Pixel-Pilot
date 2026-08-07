@@ -1,6 +1,87 @@
 import PixelPilotCore
 import SwiftUI
 
+/// Where a mark sits on screen — the one answer, used by everything.
+///
+/// **This exists because there used to be two of them.** The crop marks were
+/// drawn around the stored region held open to a minimum of 34 points, and the
+/// repair pass exercised the same region held open to a minimum of 12 *device*
+/// pixels — six points on a Retina panel. So a click mark was drawn nearly six
+/// times larger than the area actually being worked, and the honest complaint
+/// was that you could not tell whether the flashing had covered the pixel you
+/// marked at all.
+///
+/// Now there is one rectangle. What is drawn is what is exercised, in the same
+/// units, from the same function. A box dragged round a patch is worked at
+/// exactly the size it was dragged; a single click is worked at the smallest
+/// size that is still visible, and drawn at that size too.
+enum MarkGeometry {
+  /// The smallest a mark is ever drawn or exercised, in points.
+  ///
+  /// A stored click mark is a few device pixels — the right thing to *record*,
+  /// and far too small to see, to click again, or to hand to Core Animation as
+  /// its own layer. Everything downstream opens it to this.
+  static let minimumSide: CGFloat = 34
+  /// How far outside the region the crop marks sit, so they never cover it.
+  static let gap: CGFloat = 6
+  static let tick: CGFloat = 8
+
+  /// The region itself: what flashes, and what the crop marks are drawn around.
+  static func region(_ region: NormalisedRect, in size: CGSize) -> CGRect {
+    let stored = region.denormalised(in: size)
+    let width = max(stored.width, minimumSide)
+    let height = max(stored.height, minimumSide)
+    return CGRect(
+      x: stored.midX - width / 2,
+      y: stored.midY - height / 2,
+      width: width,
+      height: height
+    )
+  }
+
+  /// Four corner ticks around `region`, outside it.
+  ///
+  /// A ring would cover the pixels immediately surrounding the suspect one, and
+  /// those are exactly the ones it is being compared against — a speck only
+  /// reads as wrong next to the ones that are right.
+  static func brackets(around region: CGRect) -> Path {
+    let rect = region.insetBy(dx: -gap, dy: -gap)
+    // Never more than a third of a side, so the two ticks along an edge can
+    // never meet however small or oddly shaped the mark is. Four ticks that
+    // touch are a rectangle, which is the thing this is not.
+    let length = min(tick, min(rect.width, rect.height) / 3)
+
+    var path = Path()
+    for corner in [
+      (rect.minX, rect.minY, 1.0, 1.0),
+      (rect.maxX, rect.minY, -1.0, 1.0),
+      (rect.minX, rect.maxY, 1.0, -1.0),
+      (rect.maxX, rect.maxY, -1.0, -1.0),
+    ] {
+      let (x, y, dx, dy) = corner
+      path.move(to: CGPoint(x: x + dx * length, y: y))
+      path.addLine(to: CGPoint(x: x, y: y))
+      path.addLine(to: CGPoint(x: x, y: y + dy * length))
+    }
+    return path
+  }
+
+  /// The short stroke that says "dead" rather than "stuck".
+  ///
+  /// Outside the top-left corner rather than across it: a slash drawn over the
+  /// tick turns a corner into a scribble, and the shape is the only thing
+  /// telling the two apart — marks are never coloured, for the same reason
+  /// nothing else on this overlay is.
+  static func deadSlash(around region: CGRect) -> Path {
+    let rect = region.insetBy(dx: -gap, dy: -gap)
+    let length = min(tick, min(rect.width, rect.height) / 3)
+    var path = Path()
+    path.move(to: CGPoint(x: rect.minX - gap - length, y: rect.minY - gap))
+    path.addLine(to: CGPoint(x: rect.minX - gap, y: rect.minY - gap - length))
+    return path
+  }
+}
+
 /// The marks, drawn over the pattern they were found on.
 ///
 /// Every rule here is the answer to an obvious failure, so they are worth
@@ -27,19 +108,6 @@ struct PixelMarkerOverlay: View {
   let defects: [PixelDefect]
   let draft: CGRect?
   let ink: Ink
-
-  /// Far enough outside the mark to leave its surroundings clear, close enough
-  /// that four ticks still read as one thing.
-  private static let gap: CGFloat = 6
-  private static let tick: CGFloat = 8
-  /// What the four ticks are drawn around, however small the mark itself is.
-  ///
-  /// A stored mark is a handful of device pixels. Drawn at its own size, the
-  /// four ticks meet in the middle and become a closed box sitting on top of
-  /// the very pixel being inspected — which is the one thing this file says it
-  /// does not do. So the *drawn* frame has a floor even though the stored one
-  /// does not: store tight, draw generous.
-  private static let minimumDrawnSide: CGFloat = 34
 
   var body: some View {
     Canvas { context, size in
@@ -70,55 +138,14 @@ struct PixelMarkerOverlay: View {
   }
 
   private func draw(_ defect: PixelDefect, in context: inout GraphicsContext, size: CGSize) {
-    let rect = frame(for: defect, in: size)
+    // The same rectangle the repair pass will flash — see `MarkGeometry`, which
+    // exists because these were once two different numbers.
+    let region = MarkGeometry.region(defect.region, in: size)
     let stroke = StrokeStyle(lineWidth: 1, lineCap: .butt)
-    // Never more than a third of a side, so the two ticks along an edge can
-    // never meet however small or oddly shaped the mark is. Four ticks that
-    // touch are a rectangle, and a rectangle round a suspect pixel hides the
-    // pixels it is being compared against.
-    let tick = min(Self.tick, min(rect.width, rect.height) / 3)
 
-    var path = Path()
-    // Top left, top right, bottom left, bottom right — each an L of two
-    // strokes, so the corner reads as a corner rather than as two dashes.
-    for corner in corners(of: rect) {
-      path.move(to: CGPoint(x: corner.x + corner.dx * tick, y: corner.y))
-      path.addLine(to: CGPoint(x: corner.x, y: corner.y))
-      path.addLine(to: CGPoint(x: corner.x, y: corner.y + corner.dy * tick))
-    }
-    context.stroke(path, with: .color(colour), style: stroke)
+    context.stroke(MarkGeometry.brackets(around: region), with: .color(colour), style: stroke)
 
     guard defect.kind == .dead else { return }
-    // Outside the top-left corner rather than across it: a slash drawn over the
-    // tick turns a corner into a scribble, and the shape is the only thing
-    // telling stuck from dead — marks are never coloured, for the same reason
-    // nothing else on this overlay is.
-    var slash = Path()
-    slash.move(to: CGPoint(x: rect.minX - Self.gap - tick, y: rect.minY - Self.gap))
-    slash.addLine(to: CGPoint(x: rect.minX - Self.gap, y: rect.minY - Self.gap - tick))
-    context.stroke(slash, with: .color(colour), style: stroke)
-  }
-
-  /// Where the ticks go: the mark, held open to a legible minimum, plus the gap.
-  private func frame(for defect: PixelDefect, in size: CGSize) -> CGRect {
-    let stored = defect.region.denormalised(in: size)
-    let width = max(stored.width, Self.minimumDrawnSide)
-    let height = max(stored.height, Self.minimumDrawnSide)
-    return CGRect(
-      x: stored.midX - width / 2,
-      y: stored.midY - height / 2,
-      width: width,
-      height: height
-    )
-    .insetBy(dx: -Self.gap, dy: -Self.gap)
-  }
-
-  private func corners(of rect: CGRect) -> [(x: CGFloat, y: CGFloat, dx: CGFloat, dy: CGFloat)] {
-    [
-      (rect.minX, rect.minY, 1, 1),
-      (rect.maxX, rect.minY, -1, 1),
-      (rect.minX, rect.maxY, 1, -1),
-      (rect.maxX, rect.maxY, -1, -1),
-    ]
+    context.stroke(MarkGeometry.deadSlash(around: region), with: .color(colour), style: stroke)
   }
 }

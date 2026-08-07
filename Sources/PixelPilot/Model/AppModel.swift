@@ -689,12 +689,12 @@ final class AppModel {
     duration: RepairPlan.Duration
   ) {
     Haptics.confirm()
-    let size = pixelSize(of: display.displayID)
-    // Grown here rather than in the controller because this is where the
-    // display's pixel size is known, and a mark six pixels across is not worth
-    // handing to Core Animation as its own layer.
-    let regions = PixelDefects.worthExercising(display.pixelDefects)
-      .map { $0.region.grown(toAtLeastPixels: 12, in: size) }
+    // Handed over exactly as stored. Opening a tiny mark up to something worth
+    // animating is `MarkGeometry`'s job, done in the view that knows its own
+    // size — which is what makes the flashing rectangle the same one the crop
+    // marks were drawn around. Doing it here, against the display's pixel size,
+    // is how the two came to disagree in the first place.
+    let regions = PixelDefects.worthExercising(display.pixelDefects).map(\.region)
     health.startRepair(
       on: display.displayID,
       named: display.name,
@@ -722,16 +722,6 @@ final class AppModel {
     controller.onReport = { [weak display] report in
       display?.setHealthReport(report)
     }
-  }
-
-  private func pixelSize(of displayID: CGDirectDisplayID) -> CGSize {
-    guard let screen = NSScreen.screens.first(where: { $0.displayID == displayID }) else {
-      return CGSize(width: 1920, height: 1080)
-    }
-    let scale = screen.backingScaleFactor
-    return CGSize(
-      width: screen.frame.width * scale, height: screen.frame.height * scale
-    )
   }
 
   func saveAppRule(_ rule: AppRule) {
