@@ -31,6 +31,15 @@ final class PixelPilotMain: NSObject, NSApplicationDelegate {
   private static var retained: PixelPilotMain?
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    // Built once, up front, rather than when the first window opens. The menu
+    // bar only ever appears while the app is `.regular`, and an app that builds
+    // its menu at the moment it switches has a frame in which it is regular
+    // with nothing in the strip.
+    NSApp.mainMenu = MainMenu.make(
+      appName: "Pixel Pilot",
+      settingsAction: (target: self, selector: #selector(openSettings))
+    )
+
     model.start()
     statusItem.install()
     // After the status item exists, so the introduction can point at an icon
@@ -46,6 +55,10 @@ final class PixelPilotMain: NSObject, NSApplicationDelegate {
     // the same as having read it — see `WindowCoordinator.isQuitting`.
     windows.isQuitting = true
     model.stop()
+  }
+
+  @objc private func openSettings() {
+    windows.showSettings()
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

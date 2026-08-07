@@ -233,7 +233,34 @@ final class WindowCoordinator: NSObject {
   static func broughtOnScreenForTesting(_ frame: CGRect) -> CGRect? { broughtOnScreen(frame) }
   static func hasSavedFrameForTesting(_ name: String) -> Bool { hasSavedFrame(name) }
 
+  /// A Dock icon for as long as there is a window to go back to, and none the
+  /// rest of the time.
+  ///
+  /// The app is `LSUIElement`, which is right for what it is nearly all of the
+  /// time: it lives in the menu bar and a permanent Dock icon for something
+  /// with no windows is clutter. But an accessory app is also absent from the
+  /// Dock *and* from ⌘-Tab, so a settings window that slips behind something
+  /// else is a window with no way back to it — you have to go to the menu bar
+  /// and ask for it again, which is not where anyone looks for a window they
+  /// can see the edge of.
+  ///
+  /// So the policy follows the windows: `.regular` while one is open,
+  /// `.accessory` again once the last one closes. Only real windows count. The
+  /// menu bar panel and the full-screen overlays deliberately do not, because
+  /// an icon that appeared and vanished on every click of the status item would
+  /// be worse than never having one.
+  private func updateActivationPolicy() {
+    let wanted: NSApplication.ActivationPolicy =
+      (settingsWindow != nil || onboardingWindow != nil) ? .regular : .accessory
+    guard NSApp.activationPolicy() != wanted else { return }
+    NSApp.setActivationPolicy(wanted)
+  }
+
   private func present(_ window: NSWindow) {
+    // Before activating: becoming `.regular` is what puts the app in the Dock
+    // and in ⌘-Tab, and doing it afterwards means activating something that is
+    // still in neither.
+    updateActivationPolicy()
     // `LSUIElement` apps are not active by default, and a window ordered front
     // without activating would come up behind whatever the user is in.
     NSApp.activate(ignoringOtherApps: true)
@@ -276,6 +303,14 @@ extension WindowCoordinator: NSWindowDelegate {
         Preferences.shared.updateGlobal { $0.hasCompletedOnboarding = true }
       }
       onboardingWindow = nil
+    }
+
+    // After both have been cleared, so the last window closing takes the Dock
+    // icon with it. Not while quitting: changing the activation policy on the
+    // way out is work nobody sees, and it can bring the app forward for an
+    // instant as it goes.
+    if !isQuitting {
+      updateActivationPolicy()
     }
   }
 }

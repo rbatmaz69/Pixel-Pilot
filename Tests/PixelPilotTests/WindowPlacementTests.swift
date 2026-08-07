@@ -148,6 +148,74 @@ struct WindowPlacementTests {
     withExtendedLifetime(windows) {}
   }
 
+  /// A window you can see the edge of but cannot get back to is the problem
+  /// this solves: an accessory app is absent from the Dock *and* from ⌘-Tab, so
+  /// a settings window that slips behind something else can only be recovered
+  /// through the menu bar, which is not where anyone looks.
+  ///
+  /// The icon has to come back off again, too. A menu bar app that leaves a
+  /// Dock icon behind after its last window closes has quietly stopped being a
+  /// menu bar app.
+  @Test("The Dock icon appears with a window and goes when it closes")
+  func dockIconFollowsTheWindows() throws {
+    let original = NSApp.activationPolicy()
+    defer { NSApp.setActivationPolicy(original) }
+    NSApp.setActivationPolicy(.accessory)
+
+    let model = AppModel(
+      gamma: GammaDimmer(),
+      preferences: Preferences(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+    )
+    let windows = WindowCoordinator(model: model)
+
+    windows.showSettings()
+    #expect(NSApp.activationPolicy() == .regular, "no Dock icon while a window is open")
+
+    let window = try #require(
+      NSApp.windows.first { $0.identifier?.rawValue == "settings" },
+      "the settings window was never made"
+    )
+    window.close()
+
+    #expect(NSApp.activationPolicy() == .accessory, "the Dock icon outlived the window")
+    withExtendedLifetime(windows) {}
+  }
+
+  /// The menu bar only exists because the Dock icon does — an app that becomes
+  /// `.regular` gets one whether it built one or not, and an empty strip next
+  /// to the Apple menu looks like something failed to load.
+  ///
+  /// The Edit menu is not decoration. ⌘C and ⌘V in a text field are not built
+  /// into the field; they are key equivalents on menu items, matched through
+  /// the responder chain. Without them the shortcut recorder and the numeric
+  /// readouts are fields nothing can be pasted into, and nothing says so.
+  @Test("The menu bar carries the shortcuts a window needs")
+  func menuHasTheStandards() throws {
+    let menu = MainMenu.make(
+      appName: "Pixel Pilot",
+      settingsAction: (target: NSApp, selector: #selector(NSApplication.hide(_:)))
+    )
+
+    let titles = menu.items.compactMap(\.submenu?.title)
+    #expect(titles == ["Pixel Pilot", "Edit", "Window"])
+
+    let shortcuts = menu.items
+      .compactMap(\.submenu)
+      .flatMap(\.items)
+      .filter { !$0.keyEquivalent.isEmpty }
+      .map(\.keyEquivalent)
+
+    for expected in ["x", "c", "v", "a", "q", "w", ","] {
+      #expect(shortcuts.contains(expected), "no ⌘\(expected.uppercased()) anywhere")
+    }
+
+    // Paste has to reach whatever is focused rather than a fixed target, which
+    // is what a nil target means: send it down the responder chain.
+    let edit = try #require(menu.items.first { $0.submenu?.title == "Edit" }?.submenu)
+    let paste = try #require(edit.items.first { $0.keyEquivalent == "v" })
+    #expect(paste.target == nil)
+  }
+
   /// "Has this window ever been placed" has to be asked *before*
   /// `setFrameAutosaveName`, because that call is what creates the entry — ask
   /// afterwards and the answer is always yes, which is how a fresh window ends
