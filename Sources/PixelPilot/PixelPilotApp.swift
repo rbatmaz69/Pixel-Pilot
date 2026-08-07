@@ -41,6 +41,10 @@ final class PixelPilotMain: NSObject, NSApplicationDelegate {
   /// If the app quits while a display is dimmed via the gamma table, that
   /// display stays dark.
   func applicationWillTerminate(_ notification: Notification) {
+    // Before `stop()`, because quitting closes every window and the onboarding
+    // window records having been seen when it closes. Quitting the app is not
+    // the same as having read it — see `WindowCoordinator.isQuitting`.
+    windows.isQuitting = true
     model.stop()
   }
 
