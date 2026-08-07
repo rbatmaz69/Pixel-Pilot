@@ -234,25 +234,38 @@ echo "    $DMG ($SIZE)"
 
 NOTES_FILE="$(mktemp)"
 cat > "$NOTES_FILE" <<NOTES
-## Install
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/rbatmaz69/Pixel-Pilot/$TAG/Art/icon.png" width="96" alt="Pixel Pilot">
+
+**Brightness, contrast, colour temperature and volume for external displays on macOS — over DDC/CI, from the menu bar.**
+
+\`PixelPilot-$VERSION.dmg\` · macOS 26 (Tahoe) · Apple Silicon
+
+</div>
+
+## 📦 Install
 
 1. Download \`PixelPilot-$VERSION.dmg\` below and open it.
 2. Drag **Pixel Pilot** onto the Applications folder.
-3. The first launch is refused: macOS cannot verify the app, because it is not
-   notarised — that needs the paid Apple developer program, and this is not in
-   it. Open **System Settings → Privacy & Security**, find the message about
-   Pixel Pilot near the bottom, and press **Open Anyway**.
-4. Pixel Pilot asks for Accessibility permission. It needs it to act on the
-   brightness and volume keys, which it reads through an event tap.
+3. Launch it, clear the two prompts below, and look for the poppy in the menu
+   bar. There is no Dock icon.
 
-There is no Dock icon — the app lives in the menu bar.
+> [!IMPORTANT]
+> **The first launch is refused: macOS cannot verify the app**, because it is
+> not notarised — that needs the paid Apple developer program, and this is not
+> in it. Open **System Settings → Privacy & Security**, find the message about
+> Pixel Pilot near the bottom, and press **Open Anyway**.
 
-Requires macOS 26 (Tahoe) on Apple Silicon.
+> [!NOTE]
+> Pixel Pilot then asks for **Accessibility** permission. It needs it to act on
+> the brightness and volume keys, which it reads through an event tap.
 
-**Updating:** the app is signed ad-hoc, so its signature changes with every
-release, and macOS ties the Accessibility grant to that signature. After
-installing a new version, remove Pixel Pilot from System Settings → Privacy &
-Security → Accessibility and add it again.
+> [!WARNING]
+> **Updating:** the app is signed ad-hoc, so its signature changes with every
+> release, and macOS ties the Accessibility grant to that signature. After
+> installing a new version, remove Pixel Pilot from System Settings → Privacy &
+> Security → Accessibility and add it again.
 
 NOTES
 

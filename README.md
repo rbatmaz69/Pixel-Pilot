@@ -1,39 +1,136 @@
+<div align="center">
+
+<img src="Art/icon.png" width="132" alt="Pixel Pilot">
+
 # Pixel Pilot
 
-Brightness, contrast, colour temperature and volume control for external
-displays on macOS, over DDC/CI. A menu bar app with its own on-screen
-indicator, built to cost nothing while idle.
+**Brightness, contrast, colour temperature and volume for external displays on macOS — over DDC/CI, from the menu bar, with its own on-screen indicator.**
 
-Requires macOS 26 (Tahoe) on Apple Silicon.
+<a href="https://github.com/rbatmaz69/Pixel-Pilot/releases/latest"><img src="https://img.shields.io/github/v/release/rbatmaz69/Pixel-Pilot?style=flat-square&color=D93A2B&labelColor=1c1c1e&label=release" alt="Latest release"></a>
+<a href="https://github.com/rbatmaz69/Pixel-Pilot/releases"><img src="https://img.shields.io/github/downloads/rbatmaz69/Pixel-Pilot/total?style=flat-square&color=D93A2B&labelColor=1c1c1e&label=downloads" alt="Downloads"></a>
+<img src="https://img.shields.io/badge/macOS-26_Tahoe-D93A2B?style=flat-square&labelColor=1c1c1e" alt="macOS 26 Tahoe">
+<img src="https://img.shields.io/badge/chip-Apple_Silicon-D93A2B?style=flat-square&labelColor=1c1c1e" alt="Apple Silicon">
+<img src="https://img.shields.io/badge/Swift-6.0-D93A2B?style=flat-square&labelColor=1c1c1e" alt="Swift 6.0">
+<a href="LICENSE"><img src="https://img.shields.io/badge/licence-non--commercial-D93A2B?style=flat-square&labelColor=1c1c1e" alt="Custom Non-Commercial licence"></a>
 
-## Install
+<br>
 
-Download the disk image from
-[the latest release](https://github.com/rbatmaz69/Pixel-Pilot/releases/latest),
-open it, and drag Pixel Pilot onto the Applications folder.
+<a href="https://github.com/rbatmaz69/Pixel-Pilot/releases/latest"><img src="https://img.shields.io/badge/⬇%20%20Download%20the%20latest%20release-D93A2B?style=for-the-badge&labelColor=D93A2B" alt="Download"></a>
 
-The first launch is refused: macOS cannot verify the app. It is signed, but not
-notarised — notarisation needs the paid Apple developer program, and this is not
-in it. Open **System Settings → Privacy & Security**, find the line about Pixel
-Pilot near the bottom, and press **Open Anyway**. Right-clicking the app and
-choosing Open stopped being a way around this in macOS 15.
+<br>
 
-Then Pixel Pilot asks for Accessibility permission, which is what lets it act on
-the brightness and volume keys — it reads them through a `CGEventTap`. There is
-no Dock icon; the app is in the menu bar.
+[**Install**](#install) · [**Features**](#features) · [**Design notes**](#design-notes) · [**Behaviour**](#behaviour) · [**Build**](#building) · [**Internals**](#internals)
 
-**After an update, the Accessibility permission has to be granted again.** The
-released build is signed ad-hoc, so its signature changes with every release,
-and macOS ties that grant to the signature rather than to the app's name or
-path. Remove Pixel Pilot from System Settings → Privacy & Security →
-Accessibility and add it back. See
-[Code signing and the Accessibility permission](#code-signing-and-the-accessibility-permission)
-for why that is, and why building it yourself does not have the problem.
+</div>
+
+<br>
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+
+### 🪶<br>0.0 % CPU while idle
+
+No timers, no polling. Displays are read once when they connect; after that the app writes and never reads. Close every surface and it costs nothing at all.
+
+</td>
+<td width="33%" align="center" valign="top">
+
+### ⌨️<br>Your keys, your indicator
+
+The brightness and volume keys are intercepted and acted on — macOS 26 no longer renders third-party values in the system panel, so Pixel Pilot draws its own. And you can grab it.
+
+</td>
+<td width="33%" align="center" valign="top">
+
+### 🖥️🖥️<br>Every display, one slider
+
+Move all of them together and the differences you set between them survive. Or aim the keys at the screen under the pointer, or the one you are working on.
+
+</td>
+</tr>
+</table>
+
+<br>
+
+<a name="install"></a>
+
+## 📦 Install
+
+Requires **macOS 26 (Tahoe)** on **Apple Silicon**.
+
+1. Download the disk image from [the latest release](https://github.com/rbatmaz69/Pixel-Pilot/releases/latest).
+2. Open it and drag **Pixel Pilot** onto the Applications folder.
+3. Launch it, work through the two prompts below, and look for the poppy in the menu bar. There is no Dock icon.
+
+> [!IMPORTANT]
+> **The first launch is refused: macOS cannot verify the app.** It is signed, but
+> not notarised — notarisation needs the paid Apple developer program, and this
+> is not in it. Open **System Settings → Privacy & Security**, find the line
+> about Pixel Pilot near the bottom, and press **Open Anyway**. Right-clicking
+> the app and choosing Open stopped being a way around this in macOS 15.
+
+> [!NOTE]
+> Then Pixel Pilot asks for **Accessibility** permission, which is what lets it
+> act on the brightness and volume keys — it reads them through a `CGEventTap`.
+
+> [!WARNING]
+> **After an update, the Accessibility permission has to be granted again.** The
+> released build is signed ad-hoc, so its signature changes with every release,
+> and macOS ties that grant to the signature rather than to the app's name or
+> path. Remove Pixel Pilot from System Settings → Privacy & Security →
+> Accessibility and add it back. See
+> [Code signing and the Accessibility permission](#code-signing-and-the-accessibility-permission)
+> for why that is, and why building it yourself does not have the problem.
 
 To build and install from source instead, see [Building](#building) —
 `Scripts/install.sh` does it in one step.
 
-## What it does
+<br>
+
+<a name="features"></a>
+
+## ✨ Features
+
+### 🎚️ Light and colour
+
+- **Brightness, contrast and volume** per display, over DDC/CI, with software gamma dimming as a fallback and for going below the backlight minimum.
+- **Colour temperature** per display, applied through the gamma table.
+- **A paper finish** — Paper, Matte or Ink — which lifts the blacks and brings the white down, the way a matte coating and printed ink both do.
+- **One slider for every display**, keeping the differences between them.
+- **Typing an exact figure**, for the times a slider is the wrong instrument.
+
+### ⌨️ Keys and shortcuts
+
+- **The keyboard's brightness and volume keys**, intercepted and acted on, with an indicator of the app's own.
+- **Fifteen global shortcuts** for everything the keys cannot reach: contrast, warmth, stepping through presets, identifying the displays, opening the panel.
+- **A heads-up display you can grab** — the indicator is a real slider, and pointing at it stops it counting down.
+- **Scroll over the menu bar icon** to change brightness.
+
+### 🌅 Automation
+
+- **Presets** carrying brightness, contrast, warmth, finish and volume — applied by hand, by shortcut, by system appearance, on a schedule, or by which application is in front.
+- **A schedule** following the clock or the sun, drawn as an arc you can point along to see what it will do at nine in the evening.
+- **Following the built-in panel**, so an external display tracks the light in the room — taught by adjusting it, not configured.
+- **Attention** (off until switched on): the screen holding the window you are working in stays put, and the others sink back.
+- **Dropping an application on the menu bar icon** to give it a preset.
+
+### 🩺 Panel health
+
+- **Test patterns** per display — solid colours, a grey ramp, near-black and near-white steps, flat fields, a one-pixel checkerboard.
+- **A health check** that walks those patterns in order and asks one question of each, ending in a verdict rather than a score.
+- **Marking**: drag a box round a bad pixel and it is remembered for that monitor, as a fraction of the screen.
+- **Reanimating stuck pixels**, working the marked spots or the whole screen — with colour noise rather than a screen-sized flash.
+
+### 🎨 Interface
+
+- **Identify**, putting a number on each screen, plus a map of how they are arranged — which fills with each screen's own level, and can be dragged.
+- **A colour theme** for the whole interface — window, menu bar panel, HUD and all — in one of three styles: translucent, vivid, or flat.
+
+<details>
+<summary><b>Every feature, in the long form</b></summary>
+
+<br>
 
 - **Brightness, contrast and volume** per display, over DDC/CI, with software
   gamma dimming as a fallback and for going below the backlight minimum.
@@ -110,7 +207,18 @@ To build and install from source instead, see [Building](#building) —
   all — chosen from the same palette the displays use, in one of three styles:
   translucent, vivid, or flat. See [The theme](#the-theme).
 
-## Design goals
+</details>
+
+<br>
+
+<a name="design-notes"></a>
+
+## 🎨 Design notes
+
+<details>
+<summary><b>Design goals</b> — function first, and nothing runs when nothing is happening</summary>
+
+<br>
 
 **Function first.** The DDC engine was built and verified against real hardware
 before a single view existed. `ppctl` still exists for exactly that reason.
@@ -148,7 +256,14 @@ Haptics are deliberately *not* suppressed by it: that setting is about visible
 motion, and taking away the tap as well would leave the people who asked for
 less movement with the least feedback of anyone.
 
-### The theme
+</details>
+
+<a name="the-theme"></a>
+
+<details>
+<summary><b>The theme</b> — two colours, three styles, 384 combinations tested for contrast</summary>
+
+<br>
 
 Two colours and a style, chosen in Settings → General.
 
@@ -207,7 +322,14 @@ the contrast is not negotiable, and it is done by arithmetic rather than by a
 hand-tuned cap per tone — eight numbers nobody would maintain, which would break
 silently the first time a tone was retuned.
 
-### Asking before doing
+</details>
+
+<a name="asking-before-doing"></a>
+
+<details>
+<summary><b>Asking before doing</b> — a preset draws where it would go, before it goes there</summary>
+
+<br>
 
 Two controls in this app used to do more than the surface showed. A preset was
 a button you pressed to find out what it did, and a schedule was a list of
@@ -268,7 +390,14 @@ stop, and would fight the scroll view the card sits in; hovering has neither
 problem, and asking a question by pointing at something is a lighter act than
 asking by grabbing it.
 
-### Reaching for the thing you are already looking at
+</details>
+
+<a name="reaching-for-the-thing-you-are-already-looking-at"></a>
+
+<details>
+<summary><b>Reaching for the thing you are already looking at</b> — the map is a control, the HUD can be grabbed</summary>
+
+<br>
 
 **The arrangement map is also a set of levels.** Each screen fills from the
 bottom with its own brightness and can be dragged. Both came out of the same
@@ -435,211 +564,20 @@ into, so the handle would land somewhere other than the pointer. Hover lifts,
 scroll transitions and card presses are all built from translation, shadow and
 opacity for that reason.
 
-## Layout
+</details>
 
-```
-Packages/PixelPilotCore/   UI-free core, unit tested
-  Sources/CDDCPrivate/     C shim over undocumented IOAVService / DisplayServices
-  Sources/PixelPilotCore/
-    DDC/                   Packet construction, transport, coalescing queue
-    Displays/              EDID, registry, capability probing
-    Control/               Brightness, gamma dimming, volume
-    Health/                Test patterns, marks, reports, the repair cycle
-    System/                Preferences, diagnostics log
-  Sources/ppctl/           CLI for verifying against real hardware
-Sources/PixelPilot/        The app
-  DesignSystem/            Tokens, motion, morphing shapes, theme, components
-  AppKit/                  Window ownership; the app's shell is AppKit
-  Settings/                The one settings window: sidebar, display pages, app pages
-  MenuBar/ OSD/ Onboarding/ Input/ Model/
-project.yml                Xcode project definition (the .xcodeproj is generated)
-```
+<br>
 
-The shell is AppKit rather than SwiftUI's `App`. The menu bar item is a
-hand-built `NSStatusItem` and `NSPanel`, because `MenuBarExtra` can neither
-receive a scroll event nor let the icon be drawn — and once it is gone, no
-scene is eagerly instantiated, so `openWindow` and `SettingsLink` have nothing
-to bind to. Every surface inside the shell is still SwiftUI.
+<a name="behaviour"></a>
 
-The property that arrangement has to keep: closing the menu bar panel drops its
-hosting view, not just the window. The panel's staggered entrance is free
-precisely because the hierarchy is rebuilt on every open, and the ambient drift
-stops because there is nothing left for it to run in.
+## 🌗 Behaviour
 
-## Building
+<a name="following-the-built-in-panel"></a>
 
-```bash
-./Scripts/generate.sh
-open PixelPilot.xcodeproj
-```
+<details>
+<summary><b>Following the built-in panel</b> — the mapping is taught, not configured</summary>
 
-Tests:
-
-```bash
-./Scripts/test.sh
-```
-
-Cutting a release — builds ad-hoc signed, packages a disk image, tags and
-publishes it. `--dry-run` stops after the disk image:
-
-```bash
-./Scripts/release.sh 0.2.0 --dry-run
-```
-
-The CLI, for checking what a monitor actually supports:
-
-```bash
-cd Packages/PixelPilotCore && swift build && ./.build/debug/ppctl probe
-```
-
-`ppctl list` reports whether the private back ends resolved, `ppctl probe` shows
-which features a panel really implements, and `ppctl audio` explains which audio
-route a display resolves to.
-
-`ppctl watch-brightness` prints every change to the built-in panel's brightness.
-It exists because one question could not be answered by reading code: whether
-`DisplayServicesRegisterForBrightnessChangeNotifications` fires for the ambient
-light sensor's own adjustments, or only for a person pressing a key. `--poll`
-asks on a one-second timer instead, as the control group. It needs the built-in
-display awake, so on a laptop the lid has to be open.
-
-**It fires for both.** Verified on an M4 MacBook Air under macOS 26: covering
-the sensor and waiting produces notifications with no key touched. So following
-is genuinely event-driven, and the five-second timer in
-`BuiltinBrightnessSource` stays what it was built as — the fallback for a
-system where those symbols have gone, not the working path.
-
-**Quit BetterDisplay, MonitorControl or Lunar before testing.** They drive the
-same I2C bus, and concurrent traffic produces failures that look like hardware
-faults.
-
-## Code signing and the Accessibility permission
-
-The brightness keys are intercepted with a `CGEventTap`, which needs
-Accessibility permission, and macOS ties that permission to the app's code
-signature. An ad-hoc signature changes on every build, so the permission has to
-be granted again each time — which makes the app unusable as a daily tool.
-
-`project.yml` therefore sets `CODE_SIGN_STYLE: Automatic` with a
-`DEVELOPMENT_TEAM`. A free Apple ID is enough; no paid developer program is
-involved.
-
-Worth knowing if you clone this on another machine: **signing in to Xcode alone
-does nothing.** Xcode only issues a development certificate when a target asks
-for one, so with manual ad-hoc signing the account sits there registered and the
-certificate list stays empty. Setting up a new machine takes:
-
-1. Xcode → Settings → Accounts → add the Apple ID.
-2. Open the project, select the target, Signing & Capabilities → pick the Team.
-3. Put that team id into `project.yml` as `DEVELOPMENT_TEAM` — `Scripts/generate.sh`
-   rewrites the project from that file, so a selection made only in the UI is
-   lost on the next regeneration.
-
-`Scripts/install.sh` falls back to ad-hoc signing when no certificate exists, so
-it keeps working through that setup.
-
-To confirm the signature is actually stable, install twice and compare:
-
-```bash
-codesign -dvvv "/Applications/Pixel Pilot.app" 2>&1 | grep CDHash
-```
-
-The hash must not change between builds. That is the property the Accessibility
-grant depends on — not the file path.
-
-## Notes on the private APIs
-
-DDC on Apple Silicon has no public API. Displays hang off the DCP coprocessor,
-where the legacy `IOFramebuffer` I2C calls silently fail, and the replacement
-`IOAVService*` functions are undocumented — though they are exported from IOKit
-and present in the macOS 26 SDK.
-
-Both `IOAVService*` and `DisplayServices` are resolved with `dlsym` rather than
-linked. If a future macOS drops them, the app degrades to gamma dimming and says
-so in the diagnostics log, instead of failing to launch.
-
-`IOAVServiceCopyEDID` is exported but its signature is a guess, so it is
-reachable only from `ppctl probe-edid`. Display identification uses the
-IORegistry's `DisplayAttributes` instead, which is both documented enough and
-more reliable.
-
-`DisplayServicesRegisterForBrightnessChangeNotifications` is what lets a display
-follow the built-in panel without polling for it. Its signature is undocumented,
-so the handler installed on it takes five pointer-sized parameters and **reads
-none of them** — on arm64 those are register slots, and an argument that is never
-read cannot be misread. All the notification is used for is "something changed";
-the value itself comes back through `DisplayServicesGetBrightness`, which the app
-already depends on. If the symbols are missing, `BuiltinBrightnessSource` falls
-back to a five-second timer that runs only while a display is actually following,
-and the display's page says so.
-
-The system on-screen indicator is not used. macOS 26 reworked the private OSD
-interface and third-party values no longer render there; established apps show
-an empty indicator on Tahoe. Pixel Pilot draws its own — which is also what
-makes it something you can reach into rather than only read. See
-[Reaching for the thing you are already looking
-at](#reaching-for-the-thing-you-are-already-looking-at).
-
-## Software dimming survives a crash
-
-Anything that dims a display owes the user a guarantee that the screen comes
-back. The obvious approach — signal handlers calling
-`CGDisplayRestoreColorSyncSettings` — turned out to be both unnecessary and
-harmful.
-
-Measured with `ppctl gamma 0.85 hold`, then `kill -9`, then `ppctl gamma-check`:
-the table was identity again. The window server ties gamma to the client
-connection that set it and reverts when that connection dies, so a crash cannot
-leave the screen dark.
-
-The handlers were removed. They called a function that is not async-signal-safe
-from inside a crash, risking a hang during crash reporting, to provide a
-guarantee the system already made. `atexit` is kept for the orderly-exit path.
-
-Both commands stay in `ppctl` so the finding can be re-checked on a future macOS
-rather than taken on faith.
-
-## Finding out what a display really implements
-
-The capability string is a self-report, and displays under-declare. `ppctl scan`
-reads all 256 VCP registers and sorts them into three groups:
-
-| | |
-|---|---|
-| `absent` | no reply, or the display declined the feature |
-| `phantom` | a well-formed reply that cannot describe a control — 0xFFFF or 0 maximum, or current above maximum |
-| `live` | a well-formed reply with a plausible range |
-
-The middle group is the reason the command exists. A dead register still answers:
-asking this panel for its speaker volume returns a correctly checksummed reply
-carrying a maximum of 0xFFFF. A scan that only asked "did it respond?" would call
-that a working control.
-
-`ppctl try <vcp>` write-probes a single register and restores its value on every
-path. Factory-reset codes, input source and power mode are refused outright —
-that guard is in code, with a test, because a sweep of undocumented registers is
-exactly how a monitor ends up reset or switched to an input that takes the
-picture and the DDC channel with it.
-
-Two things worth knowing before trusting a scan. The scan timing keeps
-`writeCycles` at 2: with one cycle this panel reported 255 of 256 registers
-absent, brightness included. And a register that accepts a write proves only that
-it stores a value — whether anything is connected to it is a separate question,
-answered by looking or listening.
-
-### The audio verdict on the development panel
-
-For the record, since the question keeps coming up: this display has no audio
-control over DDC at all. Seven of the nine MCCS audio features are explicitly
-declined; speaker volume and mute are phantoms. Scanning the alternate I2C
-address 0x50 returns the identical 34 registers, so nothing is hidden there.
-
-Its speakers and headphone jack can only be driven from its own on-screen menu.
-The menu bar's volume row therefore controls the system output and offers a
-device picker, which is the one thing that helps when audio is going somewhere
-with a fixed level.
-
-## Following the built-in panel
+<br>
 
 Taking over the brightness keys costs something, and the settings window has
 always admitted it: while Pixel Pilot runs, macOS stops dimming the built-in
@@ -678,7 +616,14 @@ There is no on-screen indicator when a following display moves: a HUD that
 flashed every time a cloud passed the window would be the most irritating thing
 this app could do.
 
-## Warmth, and what it costs
+</details>
+
+<a name="warmth-and-what-it-costs"></a>
+
+<details>
+<summary><b>Warmth, and what it costs</b> — why it goes through the gamma table even when the panel offers VCP 0x0C</summary>
+
+<br>
 
 Colour temperature goes through the gamma table, even on panels that expose
 VCP 0x0C. Those implement it as the four or five coarse presets their own menu
@@ -698,7 +643,14 @@ is running — `CBBlueLightClient` is private and is not used here — so the ap
 counts how often its own tables are reset in a burst and says what it sees. It
 cannot win that fight, and it does not pretend to.
 
-## Attention, and why it does not fade
+</details>
+
+<a name="attention-and-why-it-does-not-fade"></a>
+
+<details>
+<summary><b>Attention, and why it does not fade</b> — a fourth term in the gamma table, and no timer</summary>
+
+<br>
 
 Off by default, like the schedule and like following, and for a sharper version
 of the same reason: this one moves the light every time you change window.
@@ -743,7 +695,14 @@ veils nothing** (nil is a normal answer, and veiling every screen because nobody
 could be found is the failure where you cannot see what to click), **one display
 veils nothing**, and a display can opt out on its own page.
 
-## A finish is not a coating
+</details>
+
+<a name="a-finish-is-not-a-coating"></a>
+
+<details>
+<summary><b>A finish is not a coating</b> — what Paper, Matte and Ink can and cannot do</summary>
+
+<br>
 
 The finish reshapes the tone curve: black lifts off zero, white comes down off
 the ceiling, and a softness term moves the midtones between them. Three named
@@ -771,43 +730,14 @@ It is deliberately not a warmth control. Someone who wants paper *and* warm has
 both, one card apart; a finish that quietly also moved the Kelvin would be two
 things on one control with the second one unlabelled.
 
-## A checkerboard is two pixels, not four million
+</details>
 
-The one-pixel checkerboard was drawn as a `Canvas` filling one `Path` per device
-pixel. On a 4K panel that is 2160 rows of 1920 squares — 4.1 million path
-allocations into a display list that is then retained. It measured **1.1 GB for
-a single render**, and every re-render after it (a hover, a mark, a change of
-mode) added another gigabyte. It is the last pattern in the walk, so finishing a
-health check and looking around was enough to take the machine to tens of
-gigabytes.
+<a name="reanimating-is-folk-practice"></a>
 
-It is now a 2×2 device-pixel image handed to `Image` at the display's scale and
-tiled, so its natural size is one point and it repeats exactly on the pixel
-grid. Sixteen bytes, and the same picture — in fact a more accurate one, because
-the old loop accumulated a float and drifted. `TestPatternRenderTests` pins both
-halves, because either alone is satisfied by a bug: a pattern that draws nothing
-costs no memory, and a pattern that costs no memory may be drawing nothing. So
-the test reads the pixels back and requires exact single-pixel alternation with
-no value between black and white, *and* renders ten times at 4K and requires the
-footprint not to move.
+<details>
+<summary><b>Reanimating is folk practice</b> — and why the full-screen pass is noise, not flashing</summary>
 
-The general shape is worth remembering: in this app, anything that loops per
-device pixel is a bug, and a `Canvas` display list is retained rather than
-drawn and discarded.
-
-## Panels lie
-
-Monitors answer DDC queries for features they do not have. The Samsung U32T1
-this was developed against reports a volume of 100 with a maximum of 65535
-despite having no speakers, and a mute state of "muted" that is simply
-uninitialised memory.
-
-Taking those at face value produces sliders that move and do nothing. So every
-panel is probed once, the answers are sanity-checked, and controls that fail the
-check are not drawn at all. `ppctl probe` shows the verdict per feature, and the
-display's Diagnostics fold lists the reason a control is missing.
-
-## Reanimating is folk practice
+<br>
 
 A stuck pixel is one whose liquid crystal is not relaxing to the voltage it is
 being given, so it sits lit in the wrong colour. Swinging that voltage hard
@@ -845,14 +775,335 @@ mid grey and exercise nothing. A ten-minute session holds one sleep assertion
 and one sleeping task, and both are released in the same teardown that puts the
 display's own colour tables back.
 
-## Acknowledgements
+</details>
+
+<br>
+
+<a name="layout"></a>
+
+## 🗂️ Layout
+
+```
+Packages/PixelPilotCore/   UI-free core, unit tested
+  Sources/CDDCPrivate/     C shim over undocumented IOAVService / DisplayServices
+  Sources/PixelPilotCore/
+    DDC/                   Packet construction, transport, coalescing queue
+    Displays/              EDID, registry, capability probing
+    Control/               Brightness, gamma dimming, volume
+    Health/                Test patterns, marks, reports, the repair cycle
+    System/                Preferences, diagnostics log
+  Sources/ppctl/           CLI for verifying against real hardware
+Sources/PixelPilot/        The app
+  DesignSystem/            Tokens, motion, morphing shapes, theme, components
+  AppKit/                  Window ownership; the app's shell is AppKit
+  Settings/                The one settings window: sidebar, display pages, app pages
+  MenuBar/ OSD/ Onboarding/ Input/ Model/
+project.yml                Xcode project definition (the .xcodeproj is generated)
+```
+
+<details>
+<summary><b>Why the shell is AppKit and not SwiftUI's <code>App</code></b></summary>
+
+<br>
+
+The shell is AppKit rather than SwiftUI's `App`. The menu bar item is a
+hand-built `NSStatusItem` and `NSPanel`, because `MenuBarExtra` can neither
+receive a scroll event nor let the icon be drawn — and once it is gone, no
+scene is eagerly instantiated, so `openWindow` and `SettingsLink` have nothing
+to bind to. Every surface inside the shell is still SwiftUI.
+
+The property that arrangement has to keep: closing the menu bar panel drops its
+hosting view, not just the window. The panel's staggered entrance is free
+precisely because the hierarchy is rebuilt on every open, and the ambient drift
+stops because there is nothing left for it to run in.
+
+</details>
+
+<br>
+
+<a name="building"></a>
+
+## 🔨 Building
+
+```bash
+./Scripts/generate.sh
+open PixelPilot.xcodeproj
+```
+
+Tests:
+
+```bash
+./Scripts/test.sh
+```
+
+Cutting a release — builds ad-hoc signed, packages a disk image, tags and
+publishes it. `--dry-run` stops after the disk image:
+
+```bash
+./Scripts/release.sh 0.2.0 --dry-run
+```
+
+The CLI, for checking what a monitor actually supports:
+
+```bash
+cd Packages/PixelPilotCore && swift build && ./.build/debug/ppctl probe
+```
+
+> [!TIP]
+> **Quit BetterDisplay, MonitorControl or Lunar before testing.** They drive the
+> same I2C bus, and concurrent traffic produces failures that look like hardware
+> faults.
+
+<details>
+<summary><b>What each <code>ppctl</code> command is for</b></summary>
+
+<br>
+
+`ppctl list` reports whether the private back ends resolved, `ppctl probe` shows
+which features a panel really implements, and `ppctl audio` explains which audio
+route a display resolves to.
+
+`ppctl watch-brightness` prints every change to the built-in panel's brightness.
+It exists because one question could not be answered by reading code: whether
+`DisplayServicesRegisterForBrightnessChangeNotifications` fires for the ambient
+light sensor's own adjustments, or only for a person pressing a key. `--poll`
+asks on a one-second timer instead, as the control group. It needs the built-in
+display awake, so on a laptop the lid has to be open.
+
+**It fires for both.** Verified on an M4 MacBook Air under macOS 26: covering
+the sensor and waiting produces notifications with no key touched. So following
+is genuinely event-driven, and the five-second timer in
+`BuiltinBrightnessSource` stays what it was built as — the fallback for a
+system where those symbols have gone, not the working path.
+
+</details>
+
+<a name="code-signing-and-the-accessibility-permission"></a>
+
+<details>
+<summary><b>Code signing and the Accessibility permission</b> — and why building it yourself avoids the re-granting</summary>
+
+<br>
+
+The brightness keys are intercepted with a `CGEventTap`, which needs
+Accessibility permission, and macOS ties that permission to the app's code
+signature. An ad-hoc signature changes on every build, so the permission has to
+be granted again each time — which makes the app unusable as a daily tool.
+
+`project.yml` therefore sets `CODE_SIGN_STYLE: Automatic` with a
+`DEVELOPMENT_TEAM`. A free Apple ID is enough; no paid developer program is
+involved.
+
+Worth knowing if you clone this on another machine: **signing in to Xcode alone
+does nothing.** Xcode only issues a development certificate when a target asks
+for one, so with manual ad-hoc signing the account sits there registered and the
+certificate list stays empty. Setting up a new machine takes:
+
+1. Xcode → Settings → Accounts → add the Apple ID.
+2. Open the project, select the target, Signing & Capabilities → pick the Team.
+3. Put that team id into `project.yml` as `DEVELOPMENT_TEAM` — `Scripts/generate.sh`
+   rewrites the project from that file, so a selection made only in the UI is
+   lost on the next regeneration.
+
+`Scripts/install.sh` falls back to ad-hoc signing when no certificate exists, so
+it keeps working through that setup.
+
+To confirm the signature is actually stable, install twice and compare:
+
+```bash
+codesign -dvvv "/Applications/Pixel Pilot.app" 2>&1 | grep CDHash
+```
+
+The hash must not change between builds. That is the property the Accessibility
+grant depends on — not the file path.
+
+</details>
+
+<br>
+
+<a name="internals"></a>
+
+## 🔬 Internals
+
+<a name="notes-on-the-private-apis"></a>
+
+<details>
+<summary><b>Notes on the private APIs</b> — DDC on Apple Silicon has no public API</summary>
+
+<br>
+
+DDC on Apple Silicon has no public API. Displays hang off the DCP coprocessor,
+where the legacy `IOFramebuffer` I2C calls silently fail, and the replacement
+`IOAVService*` functions are undocumented — though they are exported from IOKit
+and present in the macOS 26 SDK.
+
+Both `IOAVService*` and `DisplayServices` are resolved with `dlsym` rather than
+linked. If a future macOS drops them, the app degrades to gamma dimming and says
+so in the diagnostics log, instead of failing to launch.
+
+`IOAVServiceCopyEDID` is exported but its signature is a guess, so it is
+reachable only from `ppctl probe-edid`. Display identification uses the
+IORegistry's `DisplayAttributes` instead, which is both documented enough and
+more reliable.
+
+`DisplayServicesRegisterForBrightnessChangeNotifications` is what lets a display
+follow the built-in panel without polling for it. Its signature is undocumented,
+so the handler installed on it takes five pointer-sized parameters and **reads
+none of them** — on arm64 those are register slots, and an argument that is never
+read cannot be misread. All the notification is used for is "something changed";
+the value itself comes back through `DisplayServicesGetBrightness`, which the app
+already depends on. If the symbols are missing, `BuiltinBrightnessSource` falls
+back to a five-second timer that runs only while a display is actually following,
+and the display's page says so.
+
+The system on-screen indicator is not used. macOS 26 reworked the private OSD
+interface and third-party values no longer render there; established apps show
+an empty indicator on Tahoe. Pixel Pilot draws its own — which is also what
+makes it something you can reach into rather than only read. See
+[Reaching for the thing you are already looking
+at](#reaching-for-the-thing-you-are-already-looking-at).
+
+</details>
+
+<a name="software-dimming-survives-a-crash"></a>
+
+<details>
+<summary><b>Software dimming survives a crash</b> — the signal handlers were removed, and measured</summary>
+
+<br>
+
+Anything that dims a display owes the user a guarantee that the screen comes
+back. The obvious approach — signal handlers calling
+`CGDisplayRestoreColorSyncSettings` — turned out to be both unnecessary and
+harmful.
+
+Measured with `ppctl gamma 0.85 hold`, then `kill -9`, then `ppctl gamma-check`:
+the table was identity again. The window server ties gamma to the client
+connection that set it and reverts when that connection dies, so a crash cannot
+leave the screen dark.
+
+The handlers were removed. They called a function that is not async-signal-safe
+from inside a crash, risking a hang during crash reporting, to provide a
+guarantee the system already made. `atexit` is kept for the orderly-exit path.
+
+Both commands stay in `ppctl` so the finding can be re-checked on a future macOS
+rather than taken on faith.
+
+</details>
+
+<a name="finding-out-what-a-display-really-implements"></a>
+
+<details>
+<summary><b>Finding out what a display really implements</b> — absent, phantom, live</summary>
+
+<br>
+
+The capability string is a self-report, and displays under-declare. `ppctl scan`
+reads all 256 VCP registers and sorts them into three groups:
+
+| | |
+|---|---|
+| `absent` | no reply, or the display declined the feature |
+| `phantom` | a well-formed reply that cannot describe a control — 0xFFFF or 0 maximum, or current above maximum |
+| `live` | a well-formed reply with a plausible range |
+
+The middle group is the reason the command exists. A dead register still answers:
+asking this panel for its speaker volume returns a correctly checksummed reply
+carrying a maximum of 0xFFFF. A scan that only asked "did it respond?" would call
+that a working control.
+
+`ppctl try <vcp>` write-probes a single register and restores its value on every
+path. Factory-reset codes, input source and power mode are refused outright —
+that guard is in code, with a test, because a sweep of undocumented registers is
+exactly how a monitor ends up reset or switched to an input that takes the
+picture and the DDC channel with it.
+
+Two things worth knowing before trusting a scan. The scan timing keeps
+`writeCycles` at 2: with one cycle this panel reported 255 of 256 registers
+absent, brightness included. And a register that accepts a write proves only that
+it stores a value — whether anything is connected to it is a separate question,
+answered by looking or listening.
+
+#### The audio verdict on the development panel
+
+For the record, since the question keeps coming up: this display has no audio
+control over DDC at all. Seven of the nine MCCS audio features are explicitly
+declined; speaker volume and mute are phantoms. Scanning the alternate I2C
+address 0x50 returns the identical 34 registers, so nothing is hidden there.
+
+Its speakers and headphone jack can only be driven from its own on-screen menu.
+The menu bar's volume row therefore controls the system output and offers a
+device picker, which is the one thing that helps when audio is going somewhere
+with a fixed level.
+
+</details>
+
+<a name="panels-lie"></a>
+
+<details>
+<summary><b>Panels lie</b> — a volume of 100 with a maximum of 65535, on a monitor with no speakers</summary>
+
+<br>
+
+Monitors answer DDC queries for features they do not have. The Samsung U32T1
+this was developed against reports a volume of 100 with a maximum of 65535
+despite having no speakers, and a mute state of "muted" that is simply
+uninitialised memory.
+
+Taking those at face value produces sliders that move and do nothing. So every
+panel is probed once, the answers are sanity-checked, and controls that fail the
+check are not drawn at all. `ppctl probe` shows the verdict per feature, and the
+display's Diagnostics fold lists the reason a control is missing.
+
+</details>
+
+<a name="a-checkerboard-is-two-pixels-not-four-million"></a>
+
+<details>
+<summary><b>A checkerboard is two pixels, not four million</b> — 1.1 GB for a single render, fixed with 16 bytes</summary>
+
+<br>
+
+The one-pixel checkerboard was drawn as a `Canvas` filling one `Path` per device
+pixel. On a 4K panel that is 2160 rows of 1920 squares — 4.1 million path
+allocations into a display list that is then retained. It measured **1.1 GB for
+a single render**, and every re-render after it (a hover, a mark, a change of
+mode) added another gigabyte. It is the last pattern in the walk, so finishing a
+health check and looking around was enough to take the machine to tens of
+gigabytes.
+
+It is now a 2×2 device-pixel image handed to `Image` at the display's scale and
+tiled, so its natural size is one point and it repeats exactly on the pixel
+grid. Sixteen bytes, and the same picture — in fact a more accurate one, because
+the old loop accumulated a float and drifted. `TestPatternRenderTests` pins both
+halves, because either alone is satisfied by a bug: a pattern that draws nothing
+costs no memory, and a pattern that costs no memory may be drawing nothing. So
+the test reads the pixels back and requires exact single-pixel alternation with
+no value between black and white, *and* renders ten times at 4K and requires the
+footprint not to move.
+
+The general shape is worth remembering: in this app, anything that loops per
+device pixel is a bug, and a `Canvas` display list is retained rather than
+drawn and discarded.
+
+</details>
+
+<br>
+
+## 🙏 Acknowledgements
 
 The DDC/CI wire protocol implementation follows
 [m1ddc](https://github.com/waydabber/m1ddc) and
 [MonitorControl](https://github.com/MonitorControl/MonitorControl), both MIT
 licensed.
 
-## Licence
+## ⚖️ Licence
 
-[Apache 2.0](LICENSE). MIT code from the two projects above remains under its
-own terms; Apache 2.0 is compatible with it in this direction.
+[Custom Non-Commercial](LICENSE) — free to download, use and modify for personal
+use; commercial use, redistribution and rebranding need written permission. MIT
+code from the two projects above remains under its own terms.
+
+<div align="center">
+<br>
+<sub>Built for one desk, and then made fit for others.</sub>
+</div>
