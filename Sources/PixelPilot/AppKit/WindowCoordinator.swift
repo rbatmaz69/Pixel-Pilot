@@ -40,6 +40,10 @@ final class WindowCoordinator: NSObject {
 
   init(model: AppModel) {
     self.model = model
+    super.init()
+    // Weakly, so the model's hook cannot keep this alive. The coordinator owns
+    // the model, not the other way round.
+    model.onShowWelcome = { [weak self] in self?.showOnboarding() }
   }
 
   // MARK: - Settings

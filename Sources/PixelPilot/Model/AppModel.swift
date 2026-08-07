@@ -650,6 +650,21 @@ final class AppModel {
     attention.settingsChanged()
   }
 
+  // MARK: - The welcome guide
+
+  /// Set by `WindowCoordinator`, which is the only thing that owns windows.
+  ///
+  /// A closure rather than a reference back to it, for the reason the whole
+  /// arrangement rests on: the coordinator holds the model, and a model holding
+  /// the coordinator would be a cycle. This is the same shape
+  /// `AttentionController` uses for its candidate list.
+  @ObservationIgnored var onShowWelcome: (() -> Void)?
+
+  func showWelcome() {
+    Haptics.confirm()
+    onShowWelcome?()
+  }
+
   // MARK: - Test patterns, health and repair
 
   @ObservationIgnored private let health = DisplayHealthController()

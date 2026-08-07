@@ -1,4 +1,5 @@
 import AppKit
+import PixelPilotCore
 import SwiftUI
 import Testing
 
@@ -100,6 +101,51 @@ struct WindowPlacementTests {
     let corrected = try #require(WindowCoordinator.broughtOnScreenForTesting(huge))
     #expect(abs(corrected.midX - visible.midX) < 0.5)
     #expect(abs(corrected.midY - visible.midY) < 0.5)
+  }
+
+  /// The welcome guide is shown once and records that it has been, and that
+  /// record lives with the user's settings rather than inside the app bundle —
+  /// so deleting the app cannot bring it back, and reinstalling is the obvious
+  /// thing to try and the one thing that cannot work. Until this, there was no
+  /// way at all to see it a second time.
+  ///
+  /// The coordinator owns the model, so the way back is a closure the
+  /// coordinator sets rather than a reference the model holds.
+  @Test("The welcome guide can be asked for again")
+  func welcomeCanBeReopened() {
+    let model = AppModel(
+      gamma: GammaDimmer(),
+      preferences: Preferences(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+    )
+
+    // Nothing wired yet: asking must be harmless rather than a crash.
+    model.showWelcome()
+
+    var asked = 0
+    model.onShowWelcome = { asked += 1 }
+    model.showWelcome()
+    #expect(asked == 1)
+  }
+
+  /// And the half above cannot catch: that a real coordinator wires itself up.
+  /// A hook nobody sets is a button that does nothing, which is the same
+  /// outcome as not having added it.
+  @Test("A coordinator wires the guide up, and asking opens a window")
+  func coordinatorWiresTheGuide() throws {
+    let model = AppModel(
+      gamma: GammaDimmer(),
+      preferences: Preferences(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+    )
+    let windows = WindowCoordinator(model: model)
+    #expect(model.onShowWelcome != nil, "the button would do nothing")
+
+    let before = NSApp.windows.count
+    model.showWelcome()
+    defer { NSApp.windows.forEach { if $0.title.isEmpty == false { $0.close() } } }
+
+    #expect(NSApp.windows.count > before, "asking for the guide opened nothing")
+    // Held so the coordinator is not torn down before the window it made.
+    withExtendedLifetime(windows) {}
   }
 
   /// "Has this window ever been placed" has to be asked *before*
