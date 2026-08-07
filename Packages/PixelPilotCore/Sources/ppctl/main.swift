@@ -35,6 +35,10 @@ USAGE
                                       built-in panel. Answers whether the ambient
                                       light sensor is observable; --poll asks on a
                                       one-second timer instead, as the control.
+  ppctl latest-release [--current v]  Ask GitHub what the newest release is and
+                                      print what the app's updater would make of
+                                      it. Touches no display. --current sets the
+                                      version to compare against (default 0.0.0).
 
 OPTIONS
   -d, --display <n>   Index from `ppctl list` (default: first DDC-capable one)
@@ -107,6 +111,63 @@ guard let command = arguments.first else {
   exit(0)
 }
 arguments.removeFirst()
+
+// MARK: - Commands that touch no hardware
+//
+// Handled before the shared setup below, which discovers displays and probes
+// the DDC bus. Asking GitHub for a release number has nothing to do with any of
+// that, and making it wait on an I2C sweep would be absurd.
+
+if command == "latest-release" {
+  // The updater's network path, reachable without opening a window — the same
+  // reason `watch-brightness` exists. Everything the Updates page will show is
+  // printed here first, so the feed can be verified against the real service
+  // before a single view is written, and re-checked later without the UI.
+  let current = SemanticVersion(takeOption(["--current"]) ?? "0.0.0") ?? SemanticVersion(0, 0, 0)
+
+  let release: GitHubRelease
+  do {
+    release = try await ReleaseFeed(userAgent: "ppctl").latest()
+  } catch {
+    fail("could not reach GitHub: \(error.localizedDescription)")
+  }
+
+  print("tag:        \(release.tag)")
+  print("name:       \(release.name ?? "—")")
+  print("published:  \(release.publishedAt?.formatted() ?? "—")")
+  print("page:       \(release.pageURL.absoluteString)")
+  print("prerelease: \(release.isPrerelease)   draft: \(release.isDraft)")
+
+  if let asset = UpdatePolicy.diskImageAsset(in: release.assets) {
+    let megabytes = Double(asset.size) / 1_000_000
+    print("asset:      \(asset.name) (\(String(format: "%.1f", megabytes)) MB)")
+    print("            \(asset.downloadURL.absoluteString)")
+    // The distinction matters: a digest in an algorithm we cannot check is not
+    // the same as a verified one, and the updater treats them differently.
+    if let hex = UpdatePolicy.sha256(fromDigest: asset.digest) {
+      print("sha256:     \(hex)")
+    } else {
+      print("sha256:     none published — the download cannot be checksummed")
+    }
+  } else {
+    print("asset:      no disk image attached — nothing this app could install")
+  }
+
+  print("")
+  print("against \(current):")
+  switch UpdatePolicy.verdict(latestTag: release.tag, current: current) {
+  case .upToDate:
+    print("  up to date")
+  case let .available(version):
+    print("  \(version) is available")
+  case let .skipped(version):
+    print("  \(version) is available, but skipped")
+  case let .unreadable(tag):
+    print("  '\(tag)' is not a version this app can compare")
+  }
+
+  exit(0)
+}
 
 // MARK: - Shared setup
 

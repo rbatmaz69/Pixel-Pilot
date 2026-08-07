@@ -20,11 +20,12 @@ enum SettingsRoute: Hashable {
 /// it is the difference between a list of six words and a list that says what
 /// is behind each of them without being opened.
 enum AppPage: String, CaseIterable, Hashable {
-  case general, keys, presets, schedule, apps, shortcuts
+  case general, updates, keys, presets, schedule, apps, shortcuts
 
   var title: String {
     switch self {
     case .general: "General"
+    case .updates: "Updates"
     case .keys: "Keys"
     case .presets: "Presets"
     case .schedule: "Schedule"
@@ -36,6 +37,7 @@ enum AppPage: String, CaseIterable, Hashable {
   var summary: String {
     switch self {
     case .general: "Colour, style, open at login"
+    case .updates: "New versions, and what they cost"
     case .keys: "Media keys, permissions, detection"
     case .presets: "Saved brightness and volume sets"
     case .schedule: "Changes through the day"
@@ -47,6 +49,7 @@ enum AppPage: String, CaseIterable, Hashable {
   var symbolName: String {
     switch self {
     case .general: "paintpalette"
+    case .updates: "arrow.trianglehead.2.clockwise.rotate.90"
     case .keys: "keyboard"
     case .presets: "square.stack"
     case .schedule: "sun.horizon"
@@ -242,6 +245,7 @@ struct SettingsWindow: View {
   private func appPage(_ app: AppPage) -> some View {
     switch app {
     case .general: GeneralSettings(model: model)
+    case .updates: UpdateSettings(model: model)
     case .keys: KeySettings(model: model)
     case .presets: PresetSettings(model: model)
     case .schedule: ScheduleSettings(model: model)

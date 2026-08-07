@@ -50,11 +50,25 @@ final class AppModel {
   private(set) var pendingLearnedPress: HIDMediaKeyMonitor.RawPress?
   var isLearningKey: Bool { hidKeys.isLearning }
 
-  let log = DiagnosticsLog()
+  /// Assigned in `init` rather than inline, because `updater` is handed the
+  /// same instance and a stored property cannot be read through `self` until
+  /// every other one has been given a value.
+  let log: DiagnosticsLog
   let preferences: Preferences
 
   let hotkeys = HotkeyStore()
   let systemAudio = SystemAudioModel()
+
+  /// Whether there is a newer release, and the machinery to install it.
+  ///
+  /// Built here rather than owned by the settings page, because the menu bar
+  /// panel shows a dot when there is one and the check runs at launch — both of
+  /// which happen with the settings window closed and its views not built.
+  ///
+  /// `@ObservationIgnored` and still observable where it matters: the reference
+  /// never changes, and `Updater` is `@Observable` in its own right, so a view
+  /// reading `updater.phase` tracks that rather than this.
+  @ObservationIgnored let updater: Updater
 
   /// The presets, mirrored out of the store — see `keyBindingList` for why the
   /// store cannot be read directly from a view.
@@ -78,12 +92,15 @@ final class AppModel {
     keyBindings: KeyBindingStore = .shared,
     appRules: AppRuleStore = .shared
   ) {
+    let log = DiagnosticsLog()
+    self.log = log
     self.discovery = discovery
     self.gamma = gamma
     self.preferences = preferences
     self.presets = presets
     self.keyBindings = keyBindings
     self.appRules = appRules
+    self.updater = Updater(preferences: preferences, log: log)
     syncPresets()
     syncKeyBindings()
     syncAppRules()
@@ -391,18 +408,19 @@ final class AppModel {
   ///
   /// Spawns a detached copy that waits for this process to exit before opening
   /// the bundle — launching straight away would collide with the copy that is
-  /// still running.
+  /// still running. `RelaunchHandoff` holds that wait, because installing an
+  /// update needs exactly the same one with a bundle swap in front of it.
   func relaunch() {
-    let bundleURL = Bundle.main.bundleURL
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/bin/sh")
-    process.arguments = [
-      "-c",
-      "while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done; "
-        + "open \"\(bundleURL.path)\"",
-    ]
-    try? process.run()
+    RelaunchHandoff.relaunch(bundle: Bundle.main.bundleURL)
+    quitForHandoff()
+  }
 
+  /// Shuts down cleanly and exits, leaving a detached shell to finish up.
+  ///
+  /// `stop()` first, and it is not optional: it is what puts the gamma tables
+  /// back. Exiting a dimmed display without it leaves the screen dark until
+  /// something else resets it, and the replacement app has no idea it happened.
+  func quitForHandoff() {
     stop()
     NSApplication.shared.terminate(nil)
   }
@@ -659,6 +677,17 @@ final class AppModel {
   /// the coordinator would be a cycle. This is the same shape
   /// `AttentionController` uses for its candidate list.
   @ObservationIgnored var onShowWelcome: (() -> Void)?
+
+  /// Opens the settings window on a particular page.
+  ///
+  /// Same shape as `onShowWelcome` and for the same reason: the model has no
+  /// windows and `WindowCoordinator` owns the one there is. Used by the cards
+  /// that answer a question on one page by sending you to another — the update
+  /// page's note about the Accessibility grant being the reason it exists.
+  @ObservationIgnored var onShowSettingsPage: ((AppPage) -> Void)?
+
+  func showKeysSettings() { onShowSettingsPage?(.keys) }
+  func showUpdateSettings() { onShowSettingsPage?(.updates) }
 
   func showWelcome() {
     Haptics.confirm()

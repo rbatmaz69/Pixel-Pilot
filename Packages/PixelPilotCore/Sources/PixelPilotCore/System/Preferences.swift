@@ -381,6 +381,38 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   /// installation comes through an update unchanged.
   public var themeStyle: ThemeStyle = .glass
 
+  /// Whether the app asks GitHub for a newer release on its own.
+  ///
+  /// On by default, and it is the one thing in this app that reaches the
+  /// network at all. What it costs is one request when the app starts and at
+  /// most one a day after that — arithmetic on `lastUpdateCheck` rather than a
+  /// timer, so an idle app stays idle. Nothing is sent.
+  public var automaticUpdateChecks: Bool = true
+
+  /// When GitHub was last asked, successfully or not.
+  ///
+  /// This *is* the schedule. `UpdatePolicy.shouldCheck` compares it against the
+  /// clock, which is what lets the app notice a release within a day of being
+  /// run without anything repeating in the background.
+  public var lastUpdateCheck: Date?
+
+  /// A version the user declined, as its `description`.
+  ///
+  /// One version, not a floor: skipping 0.3.0 hides 0.3.0 and says nothing
+  /// about 0.4.0. Stored as text rather than as a `SemanticVersion` because it
+  /// crosses `Codable`, and a plain string is the shape that can be read out of
+  /// the defaults blob by hand.
+  public var skippedUpdateVersion: String?
+
+  /// The version that was running just before an update replaced the bundle.
+  ///
+  /// Set immediately before the swap and cleared once it has been acted on. It
+  /// is how the first launch of a new build knows to say that the Accessibility
+  /// grant is gone — the release build is signed ad-hoc, its signature changes
+  /// with every release, and macOS ties that grant to the signature. Without
+  /// this the app comes back looking broken with no explanation.
+  public var pendingUpdateFromVersion: String?
+
   public init() {}
 
   /// Decoded by hand, and this is not boilerplate worth deleting.
@@ -433,6 +465,14 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
     hasCompletedOnboarding = try container.decodeIfPresent(
       Bool.self, forKey: .hasCompletedOnboarding
     ) ?? true
+    automaticUpdateChecks = try container.decodeIfPresent(
+      Bool.self, forKey: .automaticUpdateChecks
+    ) ?? fallback.automaticUpdateChecks
+    lastUpdateCheck = try container.decodeIfPresent(Date.self, forKey: .lastUpdateCheck)
+    skippedUpdateVersion = try container.decodeIfPresent(String.self, forKey: .skippedUpdateVersion)
+    pendingUpdateFromVersion = try container.decodeIfPresent(
+      String.self, forKey: .pendingUpdateFromVersion
+    )
   }
 }
 

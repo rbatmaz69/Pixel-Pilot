@@ -266,8 +266,24 @@ struct MenuBarPanel: View {
       Button(action: onOpenSettings) {
         Label("Settings", systemImage: "gearshape")
           .labelStyle(.titleAndIcon)
+          // A dot rather than a banner, a badge on the menu bar icon, or a row
+          // that pushes the panel taller. An update is worth knowing about and
+          // is never urgent — it can wait until the panel is open for some
+          // other reason, which is what a dot on the way out says and what a
+          // notch in the menu bar would not.
+          .overlay(alignment: .topTrailing) {
+            if model.updater.hasUpdate {
+              AccentDot(accent: theme.tone, size: 6)
+                .offset(x: 4, y: -2)
+                .transition(.scale.combined(with: .opacity))
+                .accessibilityLabel("An update is available")
+            }
+          }
       }
-      .help("Displays, presets, schedule and keys")
+      .help(model.updater.hasUpdate
+        ? "An update is available — displays, presets, schedule and keys"
+        : "Displays, presets, schedule and keys")
+      .animation(motion.effectDefault, value: model.updater.hasUpdate)
 
       Spacer()
 

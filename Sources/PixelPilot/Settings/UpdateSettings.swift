@@ -1,0 +1,292 @@
+import PixelPilotCore
+import SwiftUI
+
+/// Whether there is a newer version, and what installing it will cost.
+///
+/// The last card on this page is the reason the page needs prose at all. This
+/// app is signed ad-hoc, so every release has a different signature, and macOS
+/// ties the Accessibility grant to the signature — meaning an update always
+/// takes away the permission that makes the brightness keys work. An updater
+/// that installed quietly and left the user with an app whose main feature had
+/// stopped would be worse than no updater, so the cost is stated before the
+/// button and again after the restart.
+struct UpdateSettings: View {
+  let model: AppModel
+
+  @Environment(\.motion) private var motion
+  @Environment(\.openURL) private var openURL
+
+  private var updater: Updater { model.updater }
+
+  var body: some View {
+    CardStack {
+      versionCard.entrance(index: 0)
+      if let release = releaseOnOffer {
+        notesCard(release).entrance(index: 1)
+      }
+      automaticCard.entrance(index: 2)
+      accessibilityCard.entrance(index: 3)
+    }
+    .animation(motion.spatialDefault, value: updater.phase)
+    // Respects the once-a-day rule, so opening this page repeatedly is free.
+    // "Check now" below is the way to insist.
+    .onAppear { updater.check() }
+  }
+
+  /// The release the page is currently about, at whatever stage.
+  private var releaseOnOffer: GitHubRelease? {
+    switch updater.phase {
+    case let .available(release),
+         let .downloading(release, _),
+         let .verifying(release),
+         let .readyToInstall(release, _):
+      release
+    default:
+      nil
+    }
+  }
+
+  // MARK: - This version
+
+  private var versionCard: some View {
+    PanelCard(title: "This version", systemImage: "shippingbox") {
+      VStack(alignment: .leading, spacing: Layout.normal) {
+        StatusRow(
+          symbol: statusSymbol,
+          tint: statusTint,
+          title: statusTitle,
+          detail: statusDetail
+        )
+
+        if case let .downloading(_, fraction) = updater.phase {
+          ProgressView(value: fraction)
+            .progressViewStyle(.linear)
+            .tint(Status.info)
+        }
+
+        HStack(spacing: Layout.tight) {
+          actions
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var actions: some View {
+    switch updater.phase {
+    case let .available(release):
+      switch updater.installCapability {
+      case .canInstall:
+        Button("Download \(SemanticVersion(release.tag)?.description ?? release.tag)") {
+          updater.download(release)
+        }
+        .buttonStyle(SoftButtonStyle(isProminent: true))
+      case .notWritable:
+        // No install button at all rather than one that cannot work. The
+        // sentence under the row says why, and the releases page is the way
+        // through.
+        Button("Open the releases page") { openURL(release.pageURL) }
+          .buttonStyle(.soft)
+      }
+      Button("Skip this one") { updater.skip(release) }
+        .buttonStyle(.soft)
+
+    case let .downloading(_, fraction):
+      Text("\(Int(fraction * 100))%")
+        .font(TypeScale.readout)
+        .foregroundStyle(.secondary)
+      Button("Stop") { updater.cancel() }
+        .buttonStyle(.soft)
+
+    case .verifying:
+      Button("Stop") { updater.cancel() }
+        .buttonStyle(.soft)
+
+    case let .readyToInstall(release, app):
+      Button("Install and restart") {
+        updater.install(release, from: app) { model.quitForHandoff() }
+      }
+      .buttonStyle(SoftButtonStyle(isProminent: true))
+      Button("Not now") { updater.cancel() }
+        .buttonStyle(.soft)
+
+    case .checking, .installing:
+      ProgressView().controlSize(.small)
+
+    default:
+      Button("Check now") { updater.check(force: true) }
+        .buttonStyle(.soft)
+      if let skipped = updater.skippedVersion {
+        Button("Stop skipping \(skipped)") {
+          updater.unskip()
+          updater.check(force: true)
+        }
+        .buttonStyle(.soft)
+      }
+    }
+  }
+
+  private var statusSymbol: String {
+    switch updater.phase {
+    case .idle, .checking: "shippingbox"
+    case .upToDate: "checkmark.circle.fill"
+    case .available: "arrow.down.circle.fill"
+    case .downloading, .verifying, .installing: "arrow.down.circle"
+    case .readyToInstall: "checkmark.seal.fill"
+    case .failed: "exclamationmark.triangle.fill"
+    }
+  }
+
+  private var statusTint: Color? {
+    switch updater.phase {
+    case .upToDate, .readyToInstall: Status.ok
+    case .available: Status.info
+    case .failed: Status.warn
+    default: nil
+    }
+  }
+
+  private var statusTitle: String {
+    switch updater.phase {
+    case .checking: "Asking GitHub…"
+    case let .available(release):
+      "\(SemanticVersion(release.tag)?.description ?? release.tag) is available"
+    case .downloading: "Downloading…"
+    case .verifying: "Checking what arrived…"
+    case .readyToInstall: "Ready to install"
+    case .installing: "Installing…"
+    case .upToDate: "Up to date"
+    case .failed: "Could not check for updates"
+    case .idle: "Version \(Updater.currentVersionString)"
+    }
+  }
+
+  private var statusDetail: String {
+    switch updater.phase {
+    case let .failed(message):
+      return message
+
+    case .readyToInstall:
+      return "Downloaded and checked against the checksum GitHub published for it. "
+        + "Installing quits the app and opens the new one."
+
+    case let .available(release):
+      let published = release.publishedAt.map {
+        " Published \($0.formatted(date: .abbreviated, time: .omitted))."
+      } ?? ""
+      let blocked = updater.installCapability == .notWritable
+        ? " This copy is not somewhere it can replace itself — it is at "
+          + "\(Bundle.main.bundleURL.deletingLastPathComponent().path), which this app cannot "
+          + "write to. Download it from the releases page and put it in Applications by hand."
+        : ""
+      return "You have \(Updater.currentVersionString)." + published + blocked
+
+    default:
+      let version = "Version \(Updater.currentVersionString) (build \(Updater.currentBuildString))."
+      guard let last = updater.lastCheck else { return version + " Not checked yet." }
+      return version + " Checked \(last.formatted(date: .abbreviated, time: .shortened))."
+    }
+  }
+
+  // MARK: - What is new
+
+  private func notesCard(_ release: GitHubRelease) -> some View {
+    PanelCard(title: release.name ?? "What is new", systemImage: "text.alignleft") {
+      VStack(alignment: .leading, spacing: Layout.normal) {
+        if let notes = Self.readableNotes(release.body) {
+          Text(notes)
+            .font(TypeScale.detail)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+
+        Button("Read the full notes on GitHub") { openURL(release.pageURL) }
+          .buttonStyle(.soft)
+      }
+    }
+  }
+
+  /// The release body, as much of it as belongs on a card.
+  ///
+  /// The notes generated by `Scripts/release.sh` open with installation
+  /// instructions — a centred image, the Gatekeeper steps, the alert blocks —
+  /// all of which are for somebody who does not have the app yet. The person
+  /// reading this card has it open. So the boilerplate is cut at the changelog
+  /// heading GitHub appends, and what is left is the part that is actually news.
+  ///
+  /// Rendered through `AttributedString`'s markdown parser rather than shown
+  /// raw, so `**bold**` reads as bold. Its inline-only mode is deliberate: full
+  /// markdown here would mean headings and lists laying themselves out inside a
+  /// card sized for a paragraph.
+  static func readableNotes(_ body: String?) -> AttributedString? {
+    guard let body, !body.isEmpty else { return nil }
+
+    var text = body
+    if let changelog = text.range(of: "## What's Changed") {
+      text = String(text[changelog.upperBound...])
+    }
+    // Drop the HTML header block and the install steps; neither renders as
+    // markdown and neither is news.
+    let lines = text
+      .split(separator: "\n", omittingEmptySubsequences: false)
+      .drop { $0.hasPrefix("<") || $0.isEmpty }
+      .filter { !$0.hasPrefix("<") }
+      .prefix(20)
+
+    let trimmed = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+
+    return try? AttributedString(
+      markdown: trimmed,
+      options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+    )
+  }
+
+  // MARK: - Automatic checks
+
+  private var automaticCard: some View {
+    PanelCard(title: "Automatic checks", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
+      VStack(alignment: .leading, spacing: Layout.tight) {
+        Toggle("Check for updates automatically", isOn: Binding(
+          get: { updater.automaticChecks },
+          set: { updater.automaticChecks = $0 }
+        ))
+
+        CardFooter("When the app starts, and at most once a day after that. There is no "
+          + "timer behind this — the date of the last check is stored and compared against "
+          + "the clock, which is what lets the app sit at 0.0 % CPU and still notice a "
+          + "release within a day of being run. It is one request to api.github.com asking "
+          + "which release is newest. Nothing is sent, nothing is counted, and this is the "
+          + "only thing in the app that touches the network at all.")
+      }
+    }
+  }
+
+  // MARK: - The honest part
+
+  private var accessibilityCard: some View {
+    PanelCard(title: "What an update costs", systemImage: "hand.raised") {
+      VStack(alignment: .leading, spacing: Layout.normal) {
+        StatusRow(
+          symbol: "key.slash",
+          tint: Status.warn,
+          title: "The Accessibility permission has to be granted again",
+          detail: "Every release is signed ad-hoc, so its signature is different from the "
+            + "last one, and macOS ties the Accessibility grant to the signature rather "
+            + "than to the app's name or where it lives. After updating, the brightness "
+            + "keys stop working until Pixel Pilot is removed from System Settings → "
+            + "Privacy & Security → Accessibility and added back."
+        )
+
+        Button("Open the Keys page") { model.showKeysSettings() }
+          .buttonStyle(.soft)
+
+        CardFooter("Ending this needs a Developer ID certificate and notarisation, which "
+          + "need the paid Apple developer program. Until then it is a real cost of "
+          + "updating and it is better said here than discovered afterwards. Building "
+          + "from source does not have the problem: a development certificate is stable "
+          + "across builds, so the grant survives.")
+      }
+    }
+  }
+}

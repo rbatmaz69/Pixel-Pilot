@@ -114,6 +114,7 @@ To build and install from source instead, see [Building](#building) —
 - **Following the built-in panel**, so an external display tracks the light in the room — taught by adjusting it, not configured.
 - **Attention** (off until switched on): the screen holding the window you are working in stays put, and the others sink back.
 - **Dropping an application on the menu bar icon** to give it a preset.
+- **Updates**, found on its own and installed on a click — checked at launch and at most once a day, with no timer behind it.
 
 ### 🩺 Panel health
 
@@ -201,6 +202,13 @@ To build and install from source instead, see [Building](#building) —
   arranged — which fills with each screen's own level, and can be dragged.
 - **Typing an exact figure**, for the times a slider is the wrong instrument.
 - **Dropping an application on the menu bar icon** to give it a preset.
+- **Updates**, noticed and installed by the app itself. It asks GitHub which
+  release is newest when it starts and at most once a day after that — a stored
+  date compared against the clock rather than anything repeating — and the
+  Updates page downloads it, checks it against the checksum GitHub publishes,
+  and swaps the bundle. It also says, before the button and again after the
+  restart, that the Accessibility permission will have to be granted again.
+  See [Updating an app nobody signed](#updating-an-app-nobody-signed).
 - **A heads-up display you can grab**: the indicator a brightness key puts on
   screen is a slider, and pointing at it stops it counting down.
 - **A colour theme** for the whole interface — window, menu bar panel, HUD and
@@ -389,6 +397,80 @@ rather than as editing. A drag would have to be told apart from dragging a
 stop, and would fight the scroll view the card sits in; hovering has neither
 problem, and asking a question by pointing at something is a lighter act than
 asking by grabbing it.
+
+</details>
+
+<a name="updating-an-app-nobody-signed"></a>
+
+<details>
+<summary><b>Updating an app nobody signed</b> — what the checksum proves, and what an update costs</summary>
+
+<br>
+
+The app asks GitHub's releases API which version is newest, and can download,
+check and install it. Two facts shape all of it, and both are admitted on the
+Updates page rather than buried here.
+
+**An update always costs the Accessibility permission.** The release build is
+signed ad-hoc, so its signature changes with every release, and macOS ties that
+grant to the signature rather than to the app's name or path. Since the
+brightness keys run through a `CGEventTap`, an update stops the app's main
+feature until the permission is granted again. So the app says so before the
+install button, and the first launch of the new build opens Settings → Keys
+and says it again — at the moment it actually matters. Anything quieter would
+mean an app that comes back apparently broken, having done nothing wrong. The
+version it replaced is written to preferences immediately before the swap,
+because afterwards there is no process left to remember it. See
+[Code signing and the Accessibility permission](#code-signing-and-the-accessibility-permission).
+
+**There is no signing key, so the checksum is the whole guarantee.**
+`codesign --verify` on an ad-hoc bundle proves it is internally consistent, not
+that it is ours — anyone can produce an ad-hoc signature. What is actually
+checked is the SHA-256 that GitHub publishes beside the asset, fetched over the
+same TLS connection as the release itself. That catches a truncated download and
+a tampered CDN object; it does not defend against GitHub, and the card says
+exactly that rather than implying more. The signature check is still run, to
+catch a disk image that contains something other than this app — a different
+failure, and one that would otherwise be found only after the running app had
+been replaced with it.
+
+**No timer, again.** The check runs at launch and when the Updates page is
+opened, and `UpdatePolicy.shouldCheck` turns both into at most one request a day
+by comparing a stored date against the clock. The date is written on failure as
+well as on success, because an app that cannot reach GitHub would otherwise
+retry on every launch — the closest thing to a polling loop this app could
+accidentally grow. That arithmetic lives in the UI-free core with tests, along
+with the version comparison that exists because `0.10.0` is newer than `0.2.0`
+and string comparison says otherwise.
+
+**Not Sparkle.** It is the obvious answer and it would have been the first
+dependency in the project, needing a hosted appcast and EdDSA key management in
+`Scripts/release.sh`, and bringing an interface that looks nothing like the rest
+of the app. The GitHub API already publishes everything the check needs,
+including that digest.
+
+The swap itself is a detached `/bin/sh` that waits for this process to exit and
+then `ditto`s the new bundle over the old one — the same wait `relaunch()`
+already used for permission changes, which is why both now share
+`RelaunchHandoff`. The old bundle is moved aside rather than deleted, so a copy
+that fails halfway leaves a complete app on disk instead of nothing: that script
+has no window to report into. `RelaunchHandoffTests` runs the real script
+against throwaway directories, including the failure path and paths containing
+quotes and `$`.
+
+Two things were only found by running it against the real release. The async
+`URLSession.download(from:delegate:)` never delivers `didWriteData` to its
+per-task delegate, on the shared session or on one of its own, so the progress
+bar sat at zero for the entire download; it takes a session-level delegate. And
+the process that installs an update cannot unmount its own disk image, because
+`ditto` reads from it after that process is gone — so the *replacement* app
+detaches it at launch.
+
+Installing in place is offered only when the bundle and its parent are writable.
+`/Applications` is `root:admin` and group-writable and an app dragged there is
+owned by whoever dragged it, so the ordinary case needs no privileged helper. A
+copy run from somewhere else is told so, and pointed at the releases page,
+rather than given a button that cannot work.
 
 </details>
 
@@ -875,6 +957,12 @@ the sensor and waiting produces notifications with no key touched. So following
 is genuinely event-driven, and the five-second timer in
 `BuiltinBrightnessSource` stays what it was built as — the fallback for a
 system where those symbols have gone, not the working path.
+
+`ppctl latest-release` prints what the updater would see — tag, asset, published
+SHA-256, and the verdict against a version passed with `--current`. It touches
+no display, and it exists for the same reason `watch-brightness` does: the
+network path was checked against the real service before there was a view to
+show it in, and it can be re-checked without opening one.
 
 </details>
 

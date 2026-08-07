@@ -18,6 +18,13 @@ let package = Package(
 
     .executableTarget(name: "ppctl", dependencies: ["PixelPilotCore"]),
 
-    .testTarget(name: "PixelPilotCoreTests", dependencies: ["PixelPilotCore"]),
+    // The fixture is a real answer from GitHub's releases API, captured rather
+    // than hand-written, so the decoding is checked against the shape the
+    // service actually sends instead of the shape we remember it sending.
+    .testTarget(
+      name: "PixelPilotCoreTests",
+      dependencies: ["PixelPilotCore"],
+      resources: [.process("Fixtures")]
+    ),
   ]
 )

@@ -79,10 +79,15 @@ final class StatusItemController: NSObject {
         content: MenuBarPanel(
           model: model,
           onOpenSettings: { [weak self] in
-            self?.panel.close()
-            self?.updateHighlight()
-            // No route: the gear reopens the window where it was left.
-            self?.windows.showSettings()
+            guard let self else { return }
+            panel.close()
+            updateHighlight()
+            // Normally no route: the gear reopens the window where it was left.
+            // The exception is a gear wearing an update dot — a button visibly
+            // marked with something has been clicked to see that something, and
+            // landing on the page it was left on would make the dot a mark with
+            // no way through.
+            windows.showSettings(route: model.updater.hasUpdate ? .app(.updates) : nil)
           }
         )
       )

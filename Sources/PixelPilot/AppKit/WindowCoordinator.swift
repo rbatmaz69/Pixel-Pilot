@@ -44,6 +44,7 @@ final class WindowCoordinator: NSObject {
     // Weakly, so the model's hook cannot keep this alive. The coordinator owns
     // the model, not the other way round.
     model.onShowWelcome = { [weak self] in self?.showOnboarding() }
+    model.onShowSettingsPage = { [weak self] page in self?.showSettings(route: .app(page)) }
   }
 
   // MARK: - Settings
