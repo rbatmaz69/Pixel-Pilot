@@ -120,4 +120,15 @@ struct PanelPresentationTests {
     #expect(start.minX == end.minX)
     #expect(abs(start.maxY - end.maxY) < 1e-9)
   }
+
+  @Test("HIG motion tokens use critically damped springs and zero idle drift")
+  func higMotionTokensAreCriticallyDamped() {
+    #expect(MotionTokens.standard.stagger == 0)
+    #expect(MotionTokens.standard.ambientPeriod == 0)
+    // Critically damped unfoldSpring must not overshoot past 1.005
+    for t in stride(from: 0.0, through: 0.5, by: 0.02) {
+      let val = MotionTokens.unfoldSpring.value(target: 1.0, time: t)
+      #expect(val <= 1.005, "unfoldSpring overshot to \(val) at t=\(t)")
+    }
+  }
 }

@@ -28,7 +28,7 @@ import Testing
 @MainActor
 struct WindowPlacementTests {
   private var visible: CGRect {
-    (NSScreen.main ?? NSScreen.screens[0]).visibleFrame
+    NSScreen.screens[0].visibleFrame
   }
 
   /// The exact shape of the bug. Nothing about the window's size is wrong,
@@ -36,7 +36,7 @@ struct WindowPlacementTests {
   @Test("A window at the origin is off the usable area and is brought back")
   func originIsCorrected() throws {
     let underDockY = visible.minY > 0 ? 0 : visible.minY - 24
-    let atOrigin = CGRect(x: 0, y: underDockY, width: 560, height: 492)
+    let atOrigin = CGRect(x: visible.minX, y: underDockY, width: 560, height: 492)
     let corrected = try #require(
       WindowCoordinator.broughtOnScreenForTesting(atOrigin),
       "a window sitting under the Dock was left where it was"
@@ -52,12 +52,12 @@ struct WindowPlacementTests {
   /// the bottom of the window below the bottom of the screen.
   @Test("The frame this was actually found with is corrected")
   func theRealFrame() throws {
-    let stored = CGRect(x: 86, y: -30, width: 560, height: 492)
+    let stored = CGRect(x: visible.minX + 86, y: visible.minY - 30, width: 560, height: 492)
     let corrected = try #require(WindowCoordinator.broughtOnScreenForTesting(stored))
 
     #expect(visible.contains(corrected))
     // Moved up just enough, and not sideways at all — it was never wrong across.
-    #expect(corrected.minX == 86)
+    #expect(corrected.minX == visible.minX + 86)
     #expect(corrected.minY == visible.minY)
   }
 
@@ -65,12 +65,13 @@ struct WindowPlacementTests {
   /// failure by another route.
   @Test("A frame off every screen comes back")
   func offScreenComesBack() throws {
+    let fallbackVisible = (NSScreen.main ?? NSScreen.screens[0]).visibleFrame
     for frame in [
       CGRect(x: 12_000, y: 9_000, width: 560, height: 492),
-      CGRect(x: -4_000, y: 100, width: 560, height: 492),
+      CGRect(x: -14_000, y: 100, width: 560, height: 492),
     ] {
       let corrected = try #require(WindowCoordinator.broughtOnScreenForTesting(frame))
-      #expect(visible.contains(corrected))
+      #expect(fallbackVisible.contains(corrected))
     }
   }
 
@@ -97,7 +98,7 @@ struct WindowPlacementTests {
   @Test("A window larger than the screen is centred rather than jammed")
   func oversizedIsCentred() throws {
     let huge = CGRect(
-      x: 0, y: 0, width: visible.width + 400, height: visible.height + 400
+      x: visible.minX, y: visible.minY, width: visible.width + 400, height: visible.height + 400
     )
     let corrected = try #require(WindowCoordinator.broughtOnScreenForTesting(huge))
     #expect(abs(corrected.midX - visible.midX) < 0.5)

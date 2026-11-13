@@ -674,13 +674,12 @@ struct SoftButtonStyle: ButtonStyle {
         .padding(.horizontal, Layout.snug)
         .padding(.vertical, Layout.tight)
         .background {
-          MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
+          RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
             .fill(fill)
         }
-        .scaleEffect(configuration.isPressed ? 0.94 : 1)
-        // Down is quick and flat, up rings: pressing should feel immediate,
-        // releasing should feel elastic. One curve for both loses that.
-        .animation(configuration.isPressed ? motion.effectFast : motion.expressive,
+        // Native macOS NSButton physics: 0ms instantaneous press highlight,
+        // 120ms ease-out release, and zero scale shrinkage.
+        .animation(configuration.isPressed ? nil : motion.effectFast,
                    value: configuration.isPressed)
         .animation(motion.effectFast, value: isHovered)
         .opacity(isEnabled ? 1 : 0.4)
@@ -774,26 +773,9 @@ private struct Entrance: ViewModifier {
   let index: Int
 
   @Environment(\.motion) private var motion
-  @State private var shown = false
 
   func body(content: Content) -> some View {
+    // Native macOS HIG: views appear immediately without a staggered waterfall lag.
     content
-      .opacity(shown ? 1 : 0)
-      .scaleEffect(shown ? 1 : 0.96, anchor: .top)
-      .offset(y: shown ? 0 : 10)
-      // Keyed to `shown` rather than wrapped in `withAnimation`. These cards
-      // contain sliders, and a slider's knob position must never be animated —
-      // a transaction opened up here would reach it.
-      .animation(entranceCurve, value: shown)
-      // Flipped in `onAppear` rather than initialised true, so there is one
-      // frame of the "before" state to animate away from.
-      .onAppear { shown = true }
-  }
-
-  private var entranceCurve: Animation {
-    // Capped, because the panel can hold more displays than the cascade reads
-    // well for. Past the eighth the last one arrives late enough to look like
-    // a hitch rather than a rhythm.
-    motion.spatialSlow.delay(Double(min(index, 8)) * motion.stagger)
   }
 }

@@ -203,10 +203,14 @@ final class WindowCoordinator: NSObject {
   /// `visibleFrame` rather than `frame`, so "usable" means what it says: not
   /// under the menu bar and not behind the Dock.
   private static func broughtOnScreen(_ frame: CGRect) -> CGRect? {
-    let screen = NSScreen.screens.max {
-      $0.visibleFrame.intersection(frame).area < $1.visibleFrame.intersection(frame).area
+    let screen = NSScreen.screens
+      .filter { $0.visibleFrame.intersection(frame).area > 0 }
+      .max {
+        $0.visibleFrame.intersection(frame).area < $1.visibleFrame.intersection(frame).area
+      }
+    guard let visible = (screen ?? NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else {
+      return nil
     }
-    guard let visible = (screen ?? NSScreen.main)?.visibleFrame else { return nil }
     guard !visible.contains(frame) else { return nil }
 
     // Too big to fit anywhere is not a placement problem, and shoving it into a
