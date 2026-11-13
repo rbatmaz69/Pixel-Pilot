@@ -22,15 +22,25 @@ import SwiftUI
 /// Once it says that, being able to fix it there is a shorter path than
 /// selecting the display and finding the slider.
 struct DisplayMap: View {
+  enum Mode: Hashable {
+    case light
+    case arrange
+  }
+
   let displays: [DisplayViewModel]
   @Binding var selection: DisplayViewModel.ID?
   /// Bumped when screens are added, removed or rearranged, so the geometry is
   /// recomputed then and at no other time.
   let layoutTick: Int
+  var supportsArrangement: Bool = false
+  var onBeginHighlight: ((DisplayViewModel) -> Void)? = nil
+  var onEndHighlight: (() -> Void)? = nil
+  var onApplyArrangement: (([DisplayLayout.ArrangementEntry]) -> Void)? = nil
 
   @Environment(\.motion) private var motion
   @Environment(\.theme) private var theme
   @Namespace private var ring
+  @State private var mode: Mode = .light
   @State private var hovered: DisplayViewModel.ID?
   @State private var dragging: DisplayViewModel.ID?
   /// Where the display was when the drag began. Captured once, because the
@@ -40,6 +50,14 @@ struct DisplayMap: View {
   /// detent gives one tick rather than one per frame.
   @State private var latchedDetent: Double?
   @State private var isAtEnd = false
+
+  // Interactive 2D arrange state
+  @State private var arrangeSnapshot: [DisplayLayout.ArrangementEntry]?
+  @State private var arrangeDragOriginalFrame: CGRect = .zero
+  @State private var arrangeGuides: [DisplayLayout.AlignmentGuide] = []
+  @State private var draggingMenuBarFrom: CGDirectDisplayID?
+  @State private var menuBarDropTarget: DisplayViewModel.ID?
+  @State private var menuBarDragPoint: CGPoint?
 
   /// How far the pointer travels to cross the whole range, in points.
   ///
@@ -52,108 +70,116 @@ struct DisplayMap: View {
   private static let travel: Double = 120
 
   var body: some View {
-    GeometryReader { geometry in
-      let placed = placements(in: geometry.size)
-      ZStack(alignment: .topLeading) {
-        ForEach(placed, id: \.display.id) { entry in
-          tile(entry.display, in: entry.rect)
-        }
+    VStack(spacing: 8) {
+      if supportsArrangement, displays.count > 1 {
+        SegmentedMorphPicker(
+          selection: $mode,
+          options: [
+            (Mode.light, "☀︎ Licht"),
+            (Mode.arrange, "↔︎ Anordnen"),
+          ],
+          accent: theme.tone
+        )
+        .controlSize(.small)
       }
-      .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+
+      GeometryReader { geometry in
+        let entries = resolvedEntries
+        let placements = placements(for: entries, in: geometry.size)
+        let primaryID = primaryDisplayID(in: entries)
+
+        ZStack(alignment: .topLeading) {
+          if mode == .arrange {
+            alignmentGuideOverlay(for: entries, in: geometry.size)
+          }
+
+          ForEach(placements, id: \.display.id) { entry in
+            tile(
+              entry.display,
+              in: entry.rect,
+              allPlacements: placements,
+              allEntries: entries,
+              canvasSize: geometry.size,
+              isPrimary: entry.display.displayID == primaryID
+            )
+          }
+
+          if mode == .arrange, let menuBarDragPoint {
+            menuBarPill(isDragging: true)
+              .position(menuBarDragPoint)
+              .allowsHitTesting(false)
+              .shadow(color: .black.opacity(0.30), radius: 6, y: 2)
+          }
+        }
+        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+      }
+      .frame(height: 112)
+      .animation(motion.spatialDefault, value: selection)
+      .animation(motion.effectFast, value: mode)
+      .accessibilityElement(children: .contain)
+      .accessibilityLabel("Display-Anordnung")
     }
-    .frame(height: 108)
-    .animation(motion.spatialDefault, value: selection)
-    .accessibilityElement(children: .contain)
-    .accessibilityLabel("Display arrangement")
   }
 
-  private func tile(_ display: DisplayViewModel, in rect: CGRect) -> some View {
+  private var resolvedEntries: [DisplayLayout.ArrangementEntry] {
+    if let arrangeSnapshot { return arrangeSnapshot }
+    _ = layoutTick
+    if mode == .arrange {
+      return displays.map { display in
+        DisplayLayout.ArrangementEntry(
+          id: display.displayID,
+          frame: CGDisplayBounds(display.displayID)
+        )
+      }
+    }
+    let screens = NSScreen.screens
+    return displays.map { display in
+      let frame = screens.first { $0.displayID == display.displayID }?.frame
+        ?? CGRect(x: 0, y: 0, width: 1600, height: 900)
+      return DisplayLayout.ArrangementEntry(id: display.displayID, frame: frame)
+    }
+  }
+
+  private func primaryDisplayID(in entries: [DisplayLayout.ArrangementEntry]) -> CGDirectDisplayID? {
+    entries.first { abs($0.frame.minX) < 1 && abs($0.frame.minY) < 1 }?.id ?? entries.first?.id
+  }
+
+  private func tile(
+    _ display: DisplayViewModel,
+    in rect: CGRect,
+    allPlacements: [(display: DisplayViewModel, rect: CGRect)],
+    allEntries: [DisplayLayout.ArrangementEntry],
+    canvasSize: CGSize,
+    isPrimary: Bool
+  ) -> some View {
     let isSelected = selection == display.id
     let isHovered = hovered == display.id
     let isDragging = dragging == display.id
-    let level = min(1, max(0, display.brightness))
-    let screenShape = RoundedRectangle(cornerRadius: 6, style: .continuous)
 
     return ZStack(alignment: .bottom) {
-      // Physical monitor screen bezel + wallpaper + live brightness level
-      screenShape
-        .fill(Color(.sRGB, red: 0.11, green: 0.095, blue: 0.085))
-        .overlay {
-          // Warm Studio Horizon mini-wallpaper modulated by live brightness
-          StudioWallpaperCanvas(
-            accent: display.accent,
-            brightness: level,
-            isCompact: true
-          )
-        }
-        .overlay(alignment: .bottom) {
-          Rectangle()
-            .fill(theme.fill(for: display.accent).opacity(0.28))
-            .frame(height: rect.height * level)
-            .animation(nil, value: display.brightness)
-        }
-        .overlay(alignment: .top) {
-          // MacBook camera notch silhouette for built-in displays
-          if display.isBuiltin {
-            UnevenRoundedRectangle(
-              topLeadingRadius: 0,
-              bottomLeadingRadius: 2.5,
-              bottomTrailingRadius: 2.5,
-              topTrailingRadius: 0
-            )
-            .fill(Color.black.opacity(0.88))
-            .frame(width: min(16, rect.width * 0.26), height: 3)
-          }
-        }
-        .clipShape(screenShape)
-        .overlay {
-          screenShape
-            .strokeBorder(
-              isSelected ? display.accent : theme.rim(for: display.accent),
-              lineWidth: isSelected ? 2 : 1.25
-            )
-        }
-        .overlay {
-          if isSelected {
-            screenShape
-              .strokeBorder(display.accent, lineWidth: 2)
-              .matchedGeometryEffect(id: "mapRing", in: ring)
-          }
-        }
-        .overlay { badge(display, isDragging: isDragging) }
-        .shadow(
-          color: display.accent.opacity(0.14 + 0.36 * level),
-          radius: 5 + 9 * level,
-          y: 1
-        )
-
-      // Physical hardware foot / MacBook base lip silhouette below bezel
-      if display.isBuiltin {
-        Capsule(style: .continuous)
-          .fill(Color.primary.opacity(0.28))
-          .frame(width: min(rect.width * 1.08, rect.width + 6), height: 2.5)
-          .offset(y: 3.5)
-      } else {
-        VStack(spacing: 0) {
-          Rectangle()
-            .fill(Color.primary.opacity(0.24))
-            .frame(width: 4, height: 3)
-          Capsule(style: .continuous)
-            .fill(Color.primary.opacity(0.30))
-            .frame(width: min(18, rect.width * 0.36), height: 2)
-        }
-        .offset(y: 5)
-      }
+      tileScreen(
+        display,
+        in: rect,
+        allPlacements: allPlacements,
+        allEntries: allEntries,
+        isPrimary: isPrimary
+      )
+      tileStand(display, width: rect.width)
     }
+    .scaleEffect(isDragging && mode == .arrange ? 1.04 : 1.0)
     .animation(motion.effectFast, value: isDragging)
     .frame(width: rect.width, height: rect.height)
-    .offset(x: rect.minX, y: rect.minY - (isHovered && !motion.isReduced ? 1 : 0))
+    .offset(x: rect.minX, y: rect.minY - (isHovered && !motion.isReduced && mode == .light ? 1 : 0))
     .animation(motion.spatialFast, value: isHovered)
     .contentShape(.rect)
     .onHover { hovered = $0 ? display.id : (hovered == display.id ? nil : hovered) }
     .onTapGesture { selection = display.id }
-    .gesture(dragGesture(for: display))
-    .help(display.name)
+    .gesture(
+      mode == .light
+        ? AnyGesture(dragGesture(for: display).map { _ in () })
+        : AnyGesture(arrangeGesture(for: display, in: canvasSize, entries: allEntries).map { _ in () })
+    )
+    .help(mode == .arrange ? "\(display.name) ziehen zum Anordnen" : display.name)
     .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     .accessibilityLabel(display.name)
     .accessibilityValue(
@@ -169,8 +195,134 @@ struct DisplayMap: View {
     }
   }
 
-  /// Compact glass pill badge inside the mini-monitor showing the warm LED and percentage.
+  private func tileScreen(
+    _ display: DisplayViewModel,
+    in rect: CGRect,
+    allPlacements: [(display: DisplayViewModel, rect: CGRect)],
+    allEntries: [DisplayLayout.ArrangementEntry],
+    isPrimary: Bool
+  ) -> some View {
+    let isSelected = selection == display.id
+    let isDragging = dragging == display.id
+    let isDropTarget = menuBarDropTarget == display.id
+    let level = min(1, max(0, display.brightness))
+    let screenShape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+    let span = ColorTemperature.range.upperBound - ColorTemperature.range.lowerBound
+    let warmth: Double = display.colorTemperatureKelvin.map { kelvin in
+      span > 0 ? min(1, max(0, (kelvin - ColorTemperature.range.lowerBound) / span)) : 1
+    } ?? 1.0
+    let strokeColor: Color = isDropTarget
+      ? theme.studioAccent
+      : (isSelected ? display.accent : theme.rim(for: display.accent))
+    let strokeWidth: CGFloat = (isDropTarget || isSelected) ? 2 : 1.25
+    let shadowColor = display.accent.opacity(isDragging ? 0.55 : (0.14 + 0.36 * level))
+    let shadowRadius: CGFloat = isDragging ? 14 : (5 + 9 * level)
+
+    return ZStack {
+      Color(.sRGB, red: 0.11, green: 0.095, blue: 0.085)
+
+      StudioWallpaperCanvas(
+        accent: display.accent,
+        brightness: level,
+        warmthFraction: warmth,
+        finish: display.toneCurve,
+        isCompact: true
+      )
+
+      if mode == .light {
+        VStack(spacing: 0) {
+          Spacer(minLength: 0)
+          Rectangle()
+            .fill(theme.fill(for: display.accent).opacity(0.28))
+            .frame(height: rect.height * level)
+            .animation(nil, value: display.brightness)
+        }
+      }
+
+      VStack(spacing: 0) {
+        tileTopChrome(
+          display,
+          in: rect,
+          allPlacements: allPlacements,
+          allEntries: allEntries,
+          isPrimary: isPrimary
+        )
+        Spacer(minLength: 0)
+      }
+    }
+    .clipShape(screenShape)
+    .overlay(screenShape.strokeBorder(strokeColor, lineWidth: strokeWidth))
+    .overlay {
+      if isSelected, !isDropTarget {
+        screenShape
+          .strokeBorder(display.accent, lineWidth: 2)
+          .matchedGeometryEffect(id: "mapRing", in: ring)
+      }
+    }
+    .overlay { badge(display, isDragging: isDragging) }
+    .shadow(color: shadowColor, radius: shadowRadius, y: 1)
+  }
+
   @ViewBuilder
+  private func tileTopChrome(
+    _ display: DisplayViewModel,
+    in rect: CGRect,
+    allPlacements: [(display: DisplayViewModel, rect: CGRect)],
+    allEntries: [DisplayLayout.ArrangementEntry],
+    isPrimary: Bool
+  ) -> some View {
+    if isPrimary {
+      let pill = menuBarPill(isDragging: false)
+        .opacity(draggingMenuBarFrom == display.displayID ? 0.25 : 1)
+        .padding(.horizontal, 4)
+        .padding(.top, 3)
+        .help(mode == .arrange ? "Menüleiste ziehen, um Hauptbildschirm festzulegen" : "Hauptbildschirm")
+
+      if mode == .arrange {
+        pill.gesture(
+          menuBarDragGesture(
+            from: display.displayID,
+            tileOrigin: rect.origin,
+            tileWidth: rect.width,
+            allPlacements: allPlacements,
+            allEntries: allEntries
+          )
+        )
+      } else {
+        pill
+      }
+    } else if display.isBuiltin {
+      UnevenRoundedRectangle(
+        topLeadingRadius: 0,
+        bottomLeadingRadius: 2.5,
+        bottomTrailingRadius: 2.5,
+        topTrailingRadius: 0
+      )
+      .fill(Color.black.opacity(0.88))
+      .frame(width: min(16, rect.width * 0.26), height: 3)
+    }
+  }
+
+  @ViewBuilder
+  private func tileStand(_ display: DisplayViewModel, width: CGFloat) -> some View {
+    if display.isBuiltin {
+      Capsule(style: .continuous)
+        .fill(Color.primary.opacity(0.28))
+        .frame(width: min(width * 1.08, width + 6), height: 2.5)
+        .offset(y: 3.5)
+    } else {
+      VStack(spacing: 0) {
+        Rectangle()
+          .fill(Color.primary.opacity(0.24))
+          .frame(width: 4, height: 3)
+        Capsule(style: .continuous)
+          .fill(Color.primary.opacity(0.30))
+          .frame(width: min(18, width * 0.36), height: 2)
+      }
+      .offset(y: 5)
+    }
+  }
+
   private func badge(_ display: DisplayViewModel, isDragging: Bool) -> some View {
     HStack(spacing: 4) {
       AccentDot(accent: display.accent, isReady: display.isReady, size: 6)
@@ -186,7 +338,159 @@ struct DisplayMap: View {
     )
   }
 
-  // MARK: - Dragging a screen
+  private func menuBarPill(isDragging: Bool) -> some View {
+    HStack(spacing: 2) {
+      Capsule(style: .continuous)
+        .fill(Color.white.opacity(0.95))
+        .frame(height: 3.5)
+        .overlay {
+          if mode == .arrange {
+            HStack(spacing: 2) {
+              ForEach(0 ..< 3, id: \.self) { _ in
+                Circle()
+                  .fill(Color.black.opacity(0.45))
+                  .frame(width: 1.5, height: 1.5)
+              }
+            }
+          }
+        }
+    }
+    .frame(width: isDragging ? 38 : nil)
+    .padding(.vertical, isDragging ? 4 : 2)
+  }
+
+  @ViewBuilder
+  private func alignmentGuideOverlay(
+    for entries: [DisplayLayout.ArrangementEntry],
+    in size: CGSize
+  ) -> some View {
+    let frames = entries.map(\.frame)
+    let box = CGRect(origin: .zero, size: size).insetBy(dx: 10, dy: 10)
+    if let first = frames.first, box.width > 0, box.height > 0 {
+      let desktop = frames.dropFirst().reduce(first) { $0.union($1) }
+      let scale = DisplayLayout.scaleFactor(frames: frames, into: box)
+      let scaled = CGSize(width: desktop.width * scale, height: desktop.height * scale)
+      let originX = box.minX + (box.width - scaled.width) / 2
+      let originY = box.minY + (box.height - scaled.height) / 2
+
+      ForEach(arrangeGuides, id: \.self) { guide in
+        Path { path in
+          switch guide.axis {
+          case .horizontal:
+            let y = originY + (guide.position - desktop.minY) * scale
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: size.width, y: y))
+          case .vertical:
+            let x = originX + (guide.position - desktop.minX) * scale
+            path.move(to: CGPoint(x: x, y: 0))
+            path.addLine(to: CGPoint(x: x, y: size.height))
+          }
+        }
+        .stroke(
+          theme.studioAccent.opacity(0.9),
+          style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+        )
+      }
+    }
+  }
+
+  // MARK: - 2D Arrange Gesture
+
+  private func arrangeGesture(
+    for display: DisplayViewModel,
+    in canvasSize: CGSize,
+    entries: [DisplayLayout.ArrangementEntry]
+  ) -> some Gesture {
+    DragGesture(minimumDistance: 4)
+      .onChanged { gesture in
+        if dragging != display.id {
+          dragging = display.id
+          selection = display.id
+          let initial = entries
+          arrangeSnapshot = initial
+          arrangeDragOriginalFrame = initial.first { $0.id == display.displayID }?.frame
+            ?? CGDisplayBounds(display.displayID)
+          onBeginHighlight?(display)
+        }
+
+        let currentEntries = arrangeSnapshot ?? entries
+        let box = CGRect(origin: .zero, size: canvasSize).insetBy(dx: 10, dy: 10)
+        let scale = max(0.01, DisplayLayout.scaleFactor(frames: currentEntries.map(\.frame), into: box))
+        let threshold = max(48, 18 / scale)
+
+        let rawMoving = arrangeDragOriginalFrame.offsetBy(
+          dx: gesture.translation.width / scale,
+          dy: gesture.translation.height / scale
+        )
+        let stationary = currentEntries
+          .filter { $0.id != display.displayID }
+          .map(\.frame)
+
+        let snapped = DisplayLayout.snap(
+          moving: rawMoving,
+          against: stationary,
+          threshold: threshold
+        )
+        if snapped.guides != arrangeGuides, !snapped.guides.isEmpty {
+          Haptics.detent()
+        }
+        arrangeGuides = snapped.guides
+
+        arrangeSnapshot = currentEntries.map { entry in
+          guard entry.id == display.displayID else { return entry }
+          return DisplayLayout.ArrangementEntry(id: entry.id, frame: snapped.frame)
+        }
+      }
+      .onEnded { _ in
+        guard dragging == display.id else { return }
+        dragging = nil
+        let committed = arrangeSnapshot
+        arrangeSnapshot = nil
+        arrangeGuides = []
+        onEndHighlight?()
+        if let committed {
+          onApplyArrangement?(committed)
+          Haptics.confirm()
+        }
+      }
+  }
+
+  private func menuBarDragGesture(
+    from sourceID: CGDirectDisplayID,
+    tileOrigin: CGPoint,
+    tileWidth: CGFloat,
+    allPlacements: [(display: DisplayViewModel, rect: CGRect)],
+    allEntries: [DisplayLayout.ArrangementEntry]
+  ) -> some Gesture {
+    DragGesture(minimumDistance: 2, coordinateSpace: .local)
+      .onChanged { gesture in
+        draggingMenuBarFrom = sourceID
+        let globalPoint = CGPoint(
+          x: tileOrigin.x + tileWidth / 2 + gesture.translation.width,
+          y: tileOrigin.y + 6 + gesture.translation.height
+        )
+        menuBarDragPoint = globalPoint
+        let target = allPlacements.first { $0.rect.insetBy(dx: -4, dy: -4).contains(globalPoint) }
+        if target?.display.id != menuBarDropTarget {
+          menuBarDropTarget = target?.display.id
+          if menuBarDropTarget != nil { Haptics.detent() }
+        }
+      }
+      .onEnded { _ in
+        let dropID = menuBarDropTarget
+        draggingMenuBarFrom = nil
+        menuBarDragPoint = nil
+        menuBarDropTarget = nil
+        guard let dropID,
+              let targetDisplay = displays.first(where: { $0.id == dropID }),
+              targetDisplay.displayID != sourceID else { return }
+        let reassigned = DisplayLayout.assignPrimary(id: targetDisplay.displayID, in: allEntries)
+        onApplyArrangement?(reassigned)
+        Haptics.confirm()
+      }
+  }
+
+  // MARK: - Dragging a screen (Brightness mode)
 
   /// Four points before this counts as a drag, so a tap still selects.
   ///
@@ -243,22 +547,24 @@ struct DisplayMap: View {
 
   /// Recomputed only when the view is laid out or `layoutTick` changes — there
   /// is nothing watching the screens from in here.
-  private func placements(in size: CGSize) -> [(display: DisplayViewModel, rect: CGRect)] {
-    _ = layoutTick
-
-    let screens = NSScreen.screens
-    let frames = displays.map { display in
-      screens.first { $0.displayID == display.displayID }?.frame
-        // A display the app knows about but AppKit does not is drawn as a
-        // placeholder rather than dropped: a map missing a monitor is worse
-        // than a map with an approximate one.
-        ?? CGRect(x: 0, y: 0, width: 1600, height: 900)
+  private func placements(
+    for entries: [DisplayLayout.ArrangementEntry],
+    in size: CGSize
+  ) -> [(display: DisplayViewModel, rect: CGRect)] {
+    let frames = entries.map(\.frame)
+    let rects: [CGRect] = if mode == .arrange {
+      DisplayLayout.normalizeTopDown(
+        frames: frames,
+        into: CGRect(origin: .zero, size: size).insetBy(dx: 10, dy: 10),
+        spacing: 2
+      )
+    } else {
+      DisplayLayout.normalize(
+        frames: frames,
+        into: CGRect(origin: .zero, size: size),
+        spacing: 7
+      )
     }
-    let rects = DisplayLayout.normalize(
-      frames: frames,
-      into: CGRect(origin: .zero, size: size),
-      spacing: 7
-    )
     return Array(zip(displays, rects)).map { ($0, $1) }
   }
 }

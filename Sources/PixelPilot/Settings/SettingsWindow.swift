@@ -143,7 +143,11 @@ struct SettingsWindow: View {
         DisplayMap(
           displays: model.displays,
           selection: mapSelection,
-          layoutTick: model.screenLayoutTick
+          layoutTick: model.screenLayoutTick,
+          supportsArrangement: true,
+          onBeginHighlight: { model.beginArrangingHighlight(for: $0) },
+          onEndHighlight: { model.endArrangingHighlight() },
+          onApplyArrangement: { model.applyDisplayArrangement($0) }
         )
         .padding(.horizontal, Layout.snug)
         .padding(.top, Layout.snug)
