@@ -131,12 +131,28 @@ struct GeneralSettings: View {
           )
         }
 
-        CardFooter("Glass keeps the translucent look the app shipped with, Vivid puts far "
-          + "more of the colour into every surface, and Flat drops the material and the "
-          + "gradients for colour and clear edges. Neither end of Depth is grey: light is a "
-          + "pale wash of the background colour and dark is a deep one. Automatic follows "
-          + "the system. Each display also keeps its own accent for telling monitors apart "
-          + "— that one is on the display's own page, under Displays.")
+        if theme.style != .flat {
+          LabeledReadout(title: "Liquid Glass opacity", value: theme.glassOpacity) {
+            ExpressiveSlider(
+              value: Binding(
+                get: { theme.glassOpacity },
+                set: { theme.glassOpacity = $0 }
+              ),
+              range: GlobalSettings.glassOpacityRange,
+              accent: theme.theme.tone,
+              icon: "rectangle.portrait.on.rectangle.portrait.angled",
+              detents: []
+            )
+            .accessibilityLabel("Liquid Glass opacity")
+          }
+          .transition(.blurReplace)
+        }
+
+        CardFooter("Warm Paper uses an archival ivory field with high-contrast espresso ink; "
+          + "Dark Walnut pairs deep obsidian-walnut surfaces with warm specular edges. "
+          + "Liquid Glass opacity adjusts the translucency of the menu bar popover, HUD pill, "
+          + "and settings sidebar. Each display also keeps its own identification LED colour "
+          + "on the display's page under Displays.")
       }
     }
   }
