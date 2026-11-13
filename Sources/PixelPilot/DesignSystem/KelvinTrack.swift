@@ -50,7 +50,7 @@ enum KelvinTrack {
       Spacer()
       Text("Neutral").font(TypeScale.detail).foregroundStyle(.secondary)
       Spacer()
-      Text("Cool").font(TypeScale.detail).foregroundStyle(.secondary)
+      Text("Kühl").font(TypeScale.detail).foregroundStyle(.secondary)
     }
   }
 }

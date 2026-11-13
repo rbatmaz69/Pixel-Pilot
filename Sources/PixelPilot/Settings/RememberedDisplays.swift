@@ -26,14 +26,14 @@ struct RememberedDisplays: View {
   }
 
   private var rememberedCard: some View {
-    PanelCard(title: "Remembered displays", systemImage: "externaldrive.badge.checkmark") {
+    PanelCard(title: "Bekannte Displays", systemImage: "externaldrive.badge.checkmark") {
       VStack(alignment: .leading, spacing: Layout.tight) {
         Text("Jedes Panel behält seine Kalibrierung, auch wenn das Kabel den Port wechselt.")
           .font(TypeScale.editorialAccent)
           .foregroundStyle(.secondary)
 
         if model.knownDisplays.isEmpty {
-          Text("Nothing remembered yet. A display is recorded the first time it is probed.")
+          Text("Noch keine Displays gespeichert. Monitore werden beim ersten Verbinden automatisch erfasst.")
             .font(TypeScale.detail)
             .foregroundStyle(.secondary)
         } else {
@@ -43,8 +43,8 @@ struct RememberedDisplays: View {
               symbol: connected ? "display" : "display.trianglebadge.exclamationmark",
               tint: connected ? Status.ok : nil,
               title: entry.settings.lastKnownName.isEmpty
-                ? "Unnamed display" : entry.settings.lastKnownName,
-              detail: connected ? "Connected" : "Not connected"
+                ? "Unbenanntes Display" : entry.settings.lastKnownName,
+              detail: connected ? "Verbunden" : "Nicht verbunden"
             ) {
               Button {
                 forgetting = entry.key
@@ -52,35 +52,29 @@ struct RememberedDisplays: View {
                 Image(systemName: "trash")
               }
               .buttonStyle(.soft)
-              .help("Forget this display")
+              .help("Dieses Display vergessen")
             }
             .transition(.blurReplace)
           }
         }
 
-        CardFooter("A display is remembered by its panel, not by the port it is in, so "
-          + "moving a cable keeps its settings. Forgetting one is how a monitor that has "
-          + "been sold or reconfigured stops carrying its old settings around.")
+        CardFooter("Einstellungen folgen dem physischen Panel statt dem Port.")
       }
       .animation(motion.spatialDefault, value: model.knownDisplays.count)
     }
     .onAppear { model.refreshKnownDisplays() }
     .confirmationDialog(
-      "Forget this display?",
+      "Dieses Display vergessen?",
       isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }),
       presenting: forgetting
     ) { key in
-      Button("Forget", role: .destructive) {
+      Button("Vergessen", role: .destructive) {
         model.forgetDisplay(key)
         forgetting = nil
       }
-      Button("Cancel", role: .cancel) { forgetting = nil }
+      Button("Abbrechen", role: .cancel) { forgetting = nil }
     } message: { _ in
-      // Naming what is actually lost, rather than asking "are you sure". The
-      // expensive part is the capability cache: without it the panel is probed
-      // again — six DDC round trips — the next time it appears.
-      Text("Its accent colour, DDC timing and cached capabilities are discarded. The next "
-        + "time it connects it will be probed again, which takes a few seconds.")
+      Text("Akzentfarbe, DDC-Timing und gespeicherte Hardware-Fähigkeiten werden beim nächsten Verbinden neu eingelesen.")
     }
   }
 }

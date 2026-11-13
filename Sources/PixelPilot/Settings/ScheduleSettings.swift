@@ -37,13 +37,13 @@ struct ScheduleSettings: View {
   // MARK: - The arc
 
   private var arcCard: some View {
-    PanelCard(title: "Through the day", systemImage: "sun.horizon") {
+    PanelCard(title: "Tagesverlauf", systemImage: "sun.horizon") {
       VStack(alignment: .leading, spacing: Layout.normal) {
         Text("Sanfte Lichtpunkte entlang des natürlichen Tageshorizonts — ereignisgesteuert ohne Hintergrund-Timer.")
           .font(TypeScale.editorialAccent)
           .foregroundStyle(.secondary)
 
-        Toggle("Change the displays on a schedule", isOn: Binding(
+        Toggle("Displays nach Tageszeit anpassen", isOn: Binding(
           get: { schedule.isEnabled },
           set: { enabled in
             if enabled, schedule.stops.isEmpty { schedule = .suggested }
@@ -64,19 +64,19 @@ struct ScheduleSettings: View {
           .transition(.blurReplace)
 
           HStack {
-            Text("00:00 · Midnight").font(TypeScale.detail).foregroundStyle(.secondary)
+            Text("00:00 · Mitternacht").font(TypeScale.detail).foregroundStyle(.secondary)
             Spacer()
-            Label("Sunrise", systemImage: "sunrise.fill")
+            Label("Aufgang", systemImage: "sunrise.fill")
               .font(TypeScale.detail)
               .foregroundStyle(.secondary)
             Spacer()
-            Text("12:00 · Noon").font(TypeScale.detail.weight(.medium)).foregroundStyle(.primary.opacity(0.75))
+            Text("12:00 · Mittag").font(TypeScale.detail.weight(.medium)).foregroundStyle(.primary.opacity(0.75))
             Spacer()
-            Label("Sunset", systemImage: "sunset.fill")
+            Label("Untergang", systemImage: "sunset.fill")
               .font(TypeScale.detail)
               .foregroundStyle(.secondary)
             Spacer()
-            Text("24:00 · Midnight").font(TypeScale.detail).foregroundStyle(.secondary)
+            Text("24:00 · Mitternacht").font(TypeScale.detail).foregroundStyle(.secondary)
           }
 
           scrubReadout
@@ -84,58 +84,37 @@ struct ScheduleSettings: View {
           if let next = model.nextScheduledChange {
             StatusRow(
               symbol: "clock",
-              title: "Next change \(Self.relative(next))",
-              detail: "Nothing runs in between — one wake-up is scheduled, and that is all."
+              title: "Nächster Wechsel \(Self.relative(next))",
+              detail: "Nur ein geplanter Aufwachzeitpunkt — dazwischen 0 % CPU-Last."
             )
             .transition(.blurReplace)
           }
         }
 
-        // Rewriting a claim this app used to make. The preset settings said a
-        // schedule was a bad trade because it needed a timer and a location;
-        // neither turned out to be true, and leaving the old reasoning in place
-        // next to the feature that disproves it would be worse than either.
-        CardFooter("Stops, not a slow fade: a handful of moments a day with nothing scheduled "
-          + "between them. A stop either sets a brightness and a warmth on every display, or "
-          + "applies a preset — and a preset is how it reaches one monitor and not the other. "
-          + "Solar stops are optional and need a rough location: one decimal place, about "
-          + "11 km.")
+        CardFooter("Jeder Lichtpunkt setzt Helligkeit & Wärme oder aktiviert ein Preset.")
       }
     }
   }
 
-  /// What the screens would be doing at the moment the pointer is over.
-  ///
-  /// A schedule is a list of times, and reading a list is how you find out what
-  /// it says at nine in the evening — which nobody does, so a stop that is
-  /// wrong stays wrong until an evening goes badly. Pointing at the picture
-  /// answers it instead.
-  ///
-  /// Kept to one row, in the space the card already had. This is a caption on
-  /// the arc, not a second view of the schedule.
   @ViewBuilder
   private var scrubReadout: some View {
     if let scrubbed, let stop = DayArc.stop(at: scrubbed, stops: schedule.stops) {
       StatusRow(
         symbol: "eye",
         tint: theme.tone,
-        title: "At \(DayArc.timeLabel(at: scrubbed)): \(summary(of: stop))",
-        detail: "Set by \(DayArc.label(for: stop)). Looking changes nothing."
+        title: "Um \(DayArc.timeLabel(at: scrubbed)): \(summary(of: stop))",
+        detail: "Gesetzt durch \(DayArc.label(for: stop)). Vorschau ändert noch nichts."
       )
       .transition(.blurReplace)
     }
   }
 
-  /// A stop in one line: what it does, in the order it does it.
   private func summary(of stop: ScheduleStop) -> String {
     if let id = stop.presetID {
-      // Named rather than unrolled into numbers. What a preset will do is a
-      // question about the preset — the answer is on the Presets page, where
-      // resting on one shows every display it touches.
       guard let preset = model.presetList.first(where: { $0.id == id }) else {
-        return "a preset that no longer exists"
+        return "fehlendes Preset"
       }
-      return "the “\(preset.name)” preset"
+      return "Preset „\(preset.name)“"
     }
 
     var parts: [String] = []
@@ -145,15 +124,13 @@ struct ScheduleSettings: View {
     if let kelvin = stop.kelvin {
       parts.append("\(Int(kelvin.rounded())) K")
     }
-    // A stop is allowed to carry neither — `ScheduleAction.values` makes both
-    // optional on purpose — and "nothing" is a better answer than an empty line.
-    return parts.isEmpty ? "no change" : parts.joined(separator: ", ")
+    return parts.isEmpty ? "keine Änderung" : parts.joined(separator: ", ")
   }
 
   // MARK: - Stops
 
   private var stopsCard: some View {
-    PanelCard(title: "Stops", systemImage: "list.bullet") {
+    PanelCard(title: "Lichtpunkte", systemImage: "list.bullet") {
       VStack(alignment: .leading, spacing: Layout.snug) {
         ForEach(schedule.stops) { stop in
           stopRow(stop)
@@ -161,19 +138,19 @@ struct ScheduleSettings: View {
         }
 
         HStack(spacing: Layout.tight) {
-          Button("Add a time") {
+          Button("Zeitpunkt hinzufügen") {
             schedule.stops.append(
               ScheduleStop(time: .clock(hour: 12, minute: 0), brightness: 0.7)
             )
             save()
           }
-          Button("Add sunrise") {
+          Button("Sonnenaufgang") {
             schedule.stops.append(
               ScheduleStop(time: .sunrise(offsetMinutes: 0), brightness: 0.85, kelvin: 6500)
             )
             save()
           }
-          Button("Add sunset") {
+          Button("Sonnenuntergang") {
             schedule.stops.append(
               ScheduleStop(time: .sunset(offsetMinutes: 0), brightness: 0.5, kelvin: 4000)
             )
@@ -215,7 +192,7 @@ struct ScheduleSettings: View {
         // two different things to do at the same moment.
         SegmentedMorphPicker(
           selection: kindBinding(index),
-          options: [(StopKind.values, "Values"), (StopKind.preset, "Preset")]
+          options: [(StopKind.values, "Werte"), (StopKind.preset, "Preset")]
         )
 
         switch schedule.stops[index].action {
@@ -247,7 +224,7 @@ struct ScheduleSettings: View {
     switch schedule.stops[index].time {
     case .clock:
       DatePicker(
-        "Time",
+        "Uhrzeit",
         selection: clockBinding(index),
         displayedComponents: .hourAndMinute
       )
@@ -265,18 +242,13 @@ struct ScheduleSettings: View {
     }
   }
 
-  /// Brightness and warmth, each of which can be left alone.
-  ///
-  /// Both switchable, because `ScheduleStop` makes both optional on purpose and
-  /// the row had no way to say so — it drew a brightness slider always, and a
-  /// stop that set no brightness read as "0 %" above a handle sitting at 70.
   @ViewBuilder
   private func valueControls(_ index: Int) -> some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
-      Toggle("Set the brightness", isOn: brightnessEnabled(index))
+      Toggle("Helligkeit festlegen", isOn: brightnessEnabled(index))
 
       if let brightness = schedule.stops[index].brightness {
-        LabeledReadout(title: "Brightness", value: brightness) {
+        LabeledReadout(title: "Helligkeit", value: brightness) {
           ExpressiveSlider(
             value: Binding(
               get: { schedule.stops[index].brightness ?? 0.7 },
@@ -290,7 +262,7 @@ struct ScheduleSettings: View {
         .transition(.blurReplace.combined(with: .scale(0.97, anchor: .top)))
       }
 
-      Toggle("Set the warmth", isOn: warmthEnabled(index))
+      Toggle("Farbwärme festlegen", isOn: warmthEnabled(index))
 
       if let kelvin = schedule.stops[index].kelvin {
         warmthSlider(index, kelvin: kelvin)
@@ -304,7 +276,7 @@ struct ScheduleSettings: View {
   private func warmthSlider(_ index: Int, kelvin: Double) -> some View {
     VStack(alignment: .leading, spacing: Layout.tight) {
       HStack(alignment: .firstTextBaseline) {
-        Text("Warmth")
+        Text("Farbwärme")
           .font(TypeScale.rowTitle)
           .foregroundStyle(.secondary)
         Spacer()
@@ -346,8 +318,8 @@ struct ScheduleSettings: View {
     let preset = model.presetList.first { $0.id == presetID }
 
     VStack(alignment: .leading, spacing: Layout.tight) {
-      ControlRow(title: "Apply") {
-        MorphMenuPicker(title: preset?.name ?? "Choose a preset") {
+      ControlRow(title: "Anwenden") {
+        MorphMenuPicker(title: preset?.name ?? "Preset wählen") {
           ForEach(model.presetList) { candidate in
             Button {
               schedule.stops[index].action = .preset(candidate.id)
@@ -363,17 +335,14 @@ struct ScheduleSettings: View {
         StatusRow(
           symbol: "exclamationmark.triangle.fill",
           tint: Status.warn,
-          title: model.presetList.isEmpty ? "No presets yet" : "That preset is gone",
+          title: model.presetList.isEmpty ? "Noch keine Presets" : "Preset nicht mehr vorhanden",
           detail: model.presetList.isEmpty
-            ? "Capture one on the Presets page. Until then this stop does nothing."
-            : "It was deleted after this stop was made. Nothing happens here until another "
-              + "one is chosen."
+            ? "Erstelle zuerst ein Preset unter Licht-Szenen."
+            : "Das verknüpfte Preset wurde gelöscht — wähle ein anderes."
         )
         .transition(.blurReplace)
       } else {
-        CardFooter("A preset says something per display, which two numbers here cannot — "
-          + "so this is how a stop reaches contrast, volume, or one monitor and not the "
-          + "other.")
+        CardFooter("Presets steuern auch Kontrast, Lautstärke und einzelne Monitore gezielt.")
       }
     }
   }
@@ -479,23 +448,23 @@ struct ScheduleSettings: View {
     switch stop.time {
     case .clock: ""
     case let .sunrise(offset), let .sunset(offset):
-      offset == 0 ? "on the dot" : "\(offset > 0 ? "+" : "")\(offset) min"
+      offset == 0 ? "genau dann" : "\(offset > 0 ? "+" : "")\(offset) Min."
     }
   }
 
   // MARK: - Location
 
   private var locationCard: some View {
-    PanelCard(title: "Where sunrise happens", systemImage: "location") {
+    PanelCard(title: "Standort für Sonnenstand", systemImage: "location") {
       VStack(alignment: .leading, spacing: Layout.normal) {
         if hasCoordinate {
           StatusRow(
             symbol: "checkmark.circle.fill",
             tint: Status.ok,
-            title: "Location set",
+            title: "Standort gespeichert",
             detail: coordinateDescription
           ) {
-            Button("Clear") { model.setCoordinate(latitude: nil, longitude: nil) }
+            Button("Löschen") { model.setCoordinate(latitude: nil, longitude: nil) }
               .buttonStyle(.soft)
               .font(TypeScale.detail)
           }
@@ -503,29 +472,26 @@ struct ScheduleSettings: View {
           StatusRow(
             symbol: "location.slash",
             tint: Status.warn,
-            title: "No location yet",
-            detail: "Sunrise and sunset stops do nothing until there is one. Clock stops "
-              + "work regardless."
+            title: "Noch kein Standort",
+            detail: "Wird nur für Sonnenauf- und Sonnenuntergangs-Punkte benötigt."
           )
 
           HStack(spacing: Layout.tight) {
-            Button("Ask macOS once") { locator.requestOnce { model.setCoordinate(latitude: $0, longitude: $1) } }
+            Button("macOS einmalig fragen") { locator.requestOnce { model.setCoordinate(latitude: $0, longitude: $1) } }
               .buttonStyle(SoftButtonStyle(isProminent: true))
             if let error = locator.error {
               Text(error).font(TypeScale.detail).foregroundStyle(Status.bad)
             }
           }
 
-          // The no-permission path, so the feature is never gated behind
-          // granting something.
           HStack(spacing: Layout.tight) {
-            TextField("Latitude", text: $manualLatitude)
+            TextField("Breitengrad", text: $manualLatitude)
               .textFieldStyle(.roundedBorder)
               .frame(width: 90)
-            TextField("Longitude", text: $manualLongitude)
+            TextField("Längengrad", text: $manualLongitude)
               .textFieldStyle(.roundedBorder)
               .frame(width: 90)
-            Button("Use these") {
+            Button("Übernehmen") {
               guard let lat = Double(manualLatitude), let lon = Double(manualLongitude) else { return }
               model.setCoordinate(latitude: lat, longitude: lon)
             }
@@ -534,8 +500,7 @@ struct ScheduleSettings: View {
           .font(TypeScale.detail)
         }
 
-        CardFooter("Asked once, rounded to one decimal place, and kept. Sunrise does not need "
-          + "to know which street you are on, so it is not stored.")
+        CardFooter("Einmalig auf 11 km gerundet gespeichert — keine Standortverfolgung.")
       }
       .animation(motion.spatialDefault, value: hasCoordinate)
     }
@@ -544,7 +509,7 @@ struct ScheduleSettings: View {
   private var coordinateDescription: String {
     let global = Preferences.shared.global
     guard let latitude = global.latitude, let longitude = global.longitude else { return "" }
-    return String(format: "%.1f, %.1f — accurate to about 11 km", latitude, longitude)
+    return String(format: "%.1f, %.1f — ca. 11 km Genauigkeit", latitude, longitude)
   }
 
   // MARK: - Editing

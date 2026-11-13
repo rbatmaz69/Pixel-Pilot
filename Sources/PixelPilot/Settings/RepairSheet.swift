@@ -39,7 +39,7 @@ struct RepairSheet: View {
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.normal) {
       VStack(alignment: .leading, spacing: 2) {
-        Text("Reanimate stuck pixels")
+        Text("Pixel reanimieren")
           .font(TypeScale.sheetTitle)
         Text("Gezieltes Subpixel-Training für träge Flüssigkristalle auf \(display.name).")
           .font(TypeScale.editorialAccent)
@@ -54,7 +54,7 @@ struct RepairSheet: View {
 
           if isWholeScreen {
             VStack(alignment: .leading, spacing: Layout.tight) {
-              Text("What to show").font(TypeScale.rowTitle)
+              Text("Muster").font(TypeScale.rowTitle)
               SegmentedMorphPicker(
                 selection: $style,
                 options: RepairPlan.Style.allCases.map { ($0, $0.displayName) },
@@ -68,7 +68,7 @@ struct RepairSheet: View {
           }
 
           VStack(alignment: .leading, spacing: Layout.tight) {
-            Text("How hard").font(TypeScale.rowTitle)
+            Text("Intensität").font(TypeScale.rowTitle)
             SegmentedMorphPicker(
               selection: Binding(
                 get: { effectiveIntensity },
@@ -86,15 +86,14 @@ struct RepairSheet: View {
               StatusRow(
                 symbol: "figure.walk.motion",
                 tint: Status.info,
-                title: "Reduce Motion is on",
-                detail: "So this runs at the gentle rate. Turning that off in System "
-                  + "Settings ▸ Accessibility ▸ Display puts the choice back."
+                title: "Bewegung reduzieren ist aktiv",
+                detail: "Läuft automatisch im sanften Modus gemäß Systemeinstellungen."
               )
             }
           }
 
           VStack(alignment: .leading, spacing: Layout.tight) {
-            Text("For how long").font(TypeScale.rowTitle)
+            Text("Dauer").font(TypeScale.rowTitle)
             SegmentedMorphPicker(
               selection: $duration,
               options: RepairPlan.Duration.allCases.map { ($0, $0.displayName) },
@@ -103,9 +102,8 @@ struct RepairSheet: View {
             if duration == .untilStopped {
               StatusRow(
                 symbol: "clock.badge.exclamationmark",
-                title: "No end to it",
-                detail: "On an OLED panel, hours of this is a burn-in question rather "
-                  + "than a repair one."
+                title: "Dauerlauf ohne Zeitlimit",
+                detail: "Bei OLED-Panels lange Dauerläufe vermeiden, um Einbrennen vorzubeugen."
               )
             }
           }
@@ -114,11 +112,8 @@ struct RepairSheet: View {
 
           StatusRow(
             symbol: "sun.max",
-            title: "Turn the brightness up first",
-            detail: "The cells get more to work with. Left to you rather than done "
-              + "automatically: driving the display's own brightness would mean "
-              + "putting it back afterwards, across a session that unplugging the "
-              + "monitor can end."
+            title: "Helligkeit vorab aufdrehen",
+            detail: "Volle Leuchtkraft unterstützt die Trägheitslösung der Subpixel."
           )
 
           Text(RepairSheet.honestly)
@@ -133,11 +128,11 @@ struct RepairSheet: View {
       Divider()
 
       HStack {
-        Button("Cancel", role: .cancel) { isPresented = false }
+        Button("Abbrechen", role: .cancel) { isPresented = false }
           .buttonStyle(.soft)
           .keyboardShortcut(.cancelAction)
         Spacer()
-        Button("Start") {
+        Button("Starten") {
           model.startRepair(
             on: display,
             style: isWholeScreen ? style : .noise,
@@ -167,10 +162,8 @@ struct RepairSheet: View {
     StatusRow(
       symbol: "exclamationmark.triangle.fill",
       tint: Status.warn,
-      title: "This flashes the screen quickly",
-      detail: "If you're photosensitive or prone to seizures, don't run it — and don't "
-        + "leave it running where somebody else will walk past the screen. It counts "
-        + "three before it starts, and esc stops it at any point."
+      title: "Schnelle Farbwechsel & Blitzmuster",
+      detail: "Bei Lichtempfindlichkeit nicht starten. Startet nach 3 Sekunden; Esc stoppt sofort."
     )
   }
 
@@ -179,38 +172,26 @@ struct RepairSheet: View {
     if isWholeScreen, marks.isEmpty {
       StatusRow(
         symbol: "rectangle.dashed",
-        title: "The whole screen",
-        detail: "Nothing is marked on this display. Marking the spots first makes this "
-          + "a smaller, quieter thing to sit through — and it works the same cells."
+        title: "Gesamter Bildschirm",
+        detail: "Keine markierten Bereiche — übt die komplette Fläche."
       )
     } else if isWholeScreen {
-      // The classification is a guess from which pattern somebody was looking
-      // at, not a diagnosis — so this says its piece and leaves Start enabled.
       StatusRow(
         symbol: "circle.slash",
         tint: Status.warn,
-        title: "Every mark here is a dead pixel",
-        detail: "Exercising won't help those: a dead pixel is a transistor that isn't "
-          + "switching, and nothing on the screen reaches a transistor. If one of them "
-          + "was really stuck, mark it again and press S — then this works those spots "
-          + "instead of the whole screen."
+        title: "Nur tote Pixel markiert",
+        detail: "Tote Transistoren reagieren nicht auf Farbwechsel; drücke S auf festsitzenden Pixeln."
       )
     } else {
       StatusRow(
         symbol: "scope",
         tint: Status.ok,
-        title: exercisable.count == 1 ? "1 marked spot" : "\(exercisable.count) marked spots",
-        detail: "Only those areas flash. The rest of the screen stays dark."
+        title: exercisable.count == 1 ? "1 markierte Stelle" : "\(exercisable.count) markierte Stellen",
+        detail: "Nur diese Bereiche blitzen, der Rest bleibt dunkel."
       )
     }
   }
 
-  /// Said here and again on the card, in the same words, because a claim that
-  /// changes between two places is a claim nobody can check.
   static let honestly =
-    "This sometimes frees a stuck pixel — one lit in the wrong colour, because its cell "
-    + "won't relax. It can't do anything for a dead one: that's a transistor that isn't "
-    + "switching, and no picture on the screen reaches a transistor. There's no "
-    + "manufacturer behind this technique and no study; it's folk practice that works "
-    + "often enough to be worth ten minutes and not often enough to promise anything."
+    "Kann träge oder farbig leuchtende Subpixel befreien; dauerhaft tote Pixel bleiben unverändert."
 }

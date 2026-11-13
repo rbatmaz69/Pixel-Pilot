@@ -16,10 +16,10 @@ public enum BrightnessStrategy: String, Codable, Sendable, CaseIterable {
 
   public var displayName: String {
     switch self {
-    case .automatic: "Automatic"
+    case .automatic: "Automatisch"
     case .ddc: "DDC/CI"
-    case .gamma: "Software (gamma)"
-    case .native: "Native"
+    case .gamma: "Software (Gamma)"
+    case .native: "Nativ"
     }
   }
 }
@@ -279,19 +279,18 @@ public enum KeyTarget: String, Codable, Sendable, CaseIterable {
 
   public var displayName: String {
     switch self {
-    case .focusedWindow: "Where you're working"
-    case .pointer: "Under the pointer"
-    case .allDisplays: "All displays"
+    case .focusedWindow: "Aktives Fenster"
+    case .pointer: "Unter dem Zeiger"
+    case .allDisplays: "Alle Displays"
     }
   }
 
   public var summary: String {
     switch self {
-    case .focusedWindow: "The screen with the window you're typing in."
-    case .pointer: "The screen the pointer happens to be on."
+    case .focusedWindow: "Das Display mit dem Fenster, in dem du gerade arbeitest."
+    case .pointer: "Das Display direkt unter dem Mauszeiger."
     case .allDisplays:
-      "Every screen moves together, keeping the differences you set between them. "
-        + "The same group the panel's master slider drives."
+      "Bewegt alle Monitore gemeinsam und erhält dabei deine relative Abstimmung."
     }
   }
 

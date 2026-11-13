@@ -18,14 +18,14 @@ struct KeyLearningSheet: View {
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.normal) {
       VStack(alignment: .leading, spacing: 2) {
-        Text("Teach a key")
+        Text("Taste anlernen")
           .font(TypeScale.sheetTitle)
         Text("Lerne eine Sondertaste deiner Tastatur direkt über den HID-Kanal an.")
           .font(TypeScale.editorialAccent)
           .foregroundStyle(.secondary)
       }
 
-      ControlRow(title: "This key should") {
+      ControlRow(title: "Funktion der Taste") {
         MorphMenuPicker(title: action.displayName) {
           ForEach(MediaKeyAction.allCases) { candidate in
             Button {
@@ -51,7 +51,7 @@ struct KeyLearningSheet: View {
       Spacer(minLength: 0)
 
       HStack {
-        Button("Cancel", role: .cancel) {
+        Button("Abbrechen", role: .cancel) {
           model.cancelLearningKey()
           isPresented = false
         }
@@ -61,7 +61,7 @@ struct KeyLearningSheet: View {
         Spacer()
 
         if let press = model.pendingLearnedPress {
-          Button("Use this key") {
+          Button("Taste übernehmen") {
             model.confirmLearnedKey(as: action)
             isPresented = false
           }
@@ -96,10 +96,10 @@ struct KeyLearningSheet: View {
           .font(.title3)
           .foregroundStyle(.tint)
           .symbolEffect(.breathe, isActive: !motion.isReduced)
-        Text("Press the key now.")
+        Text("Drücke jetzt die gewünschte Taste.")
           .font(TypeScale.rowTitle)
       }
-      Text("Nothing will happen when you press it — the key is only being recorded.")
+      Text("Die Taste wird nur aufgezeichnet und löst noch nichts aus.")
         .font(TypeScale.detail)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
@@ -110,13 +110,11 @@ struct KeyLearningSheet: View {
     let verdict = verdict(for: press)
 
     return VStack(alignment: .leading, spacing: Layout.tight) {
-      Label("Key captured", systemImage: "checkmark.circle.fill")
+      Label("Taste erkannt", systemImage: "checkmark.circle.fill")
         .foregroundStyle(Status.ok)
         .font(TypeScale.rowTitle)
         .symbolEffect(.bounce, value: press.signature)
 
-      // Showing the raw numbers is the point: on a keyboard using a vendor page
-      // this is the only evidence of what the key actually is.
       Text("\(press.deviceName) — \(press.signature.description)")
         .font(TypeScale.mono)
         .foregroundStyle(.secondary)
@@ -129,13 +127,13 @@ struct KeyLearningSheet: View {
         StatusRow(
           symbol: verdict.isAllowed ? "exclamationmark.triangle.fill" : "xmark.octagon.fill",
           tint: verdict.isAllowed ? Status.warn : Status.bad,
-          title: verdict.isAllowed ? "Usable, with a caveat" : "Not usable",
+          title: verdict.isAllowed ? "Mit Hinweis verwendbar" : "Nicht verwendbar",
           detail: text
         )
       }
 
       if !verdict.isAllowed {
-        Button("Try another key") { model.cancelLearningKey(); model.beginLearningKey() }
+        Button("Andere Taste wählen") { model.cancelLearningKey(); model.beginLearningKey() }
           .buttonStyle(.soft)
           .font(TypeScale.detail.weight(.medium))
       }

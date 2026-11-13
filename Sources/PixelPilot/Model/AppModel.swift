@@ -1550,7 +1550,7 @@ final class AppModel {
 
   /// What the HUD and the panel's master row both call the group. One constant,
   /// because two spellings of it is how they end up disagreeing.
-  static let everyDisplayName = "All displays"
+  static let everyDisplayName = "Alle Displays"
 
   // MARK: - Which screen a key press means
 

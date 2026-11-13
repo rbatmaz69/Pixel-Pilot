@@ -395,9 +395,9 @@ struct DayArc: View {
     case let .clock(hour, minute):
       String(format: "%02d:%02d", hour, minute)
     case let .sunrise(offset):
-      offset == 0 ? "Sunrise" : "Sunrise \(offset > 0 ? "+" : "")\(offset) min"
+      offset == 0 ? "Aufgang" : "Aufgang \(offset > 0 ? "+" : "")\(offset) Min"
     case let .sunset(offset):
-      offset == 0 ? "Sunset" : "Sunset \(offset > 0 ? "+" : "")\(offset) min"
+      offset == 0 ? "Untergang" : "Untergang \(offset > 0 ? "+" : "")\(offset) Min"
     }
   }
 }

@@ -267,7 +267,7 @@ struct DisplayPage: View {
         )
         heroMetaBadge(
           symbol: "doc.plaintext",
-          text: display.toneCurve.map { $0.namedFinish ?? "Custom" } ?? "Standard"
+          text: display.toneCurve.map { $0.namedFinish ?? "Individuell" } ?? "Standard"
         )
       }
 
@@ -335,10 +335,10 @@ struct DisplayPage: View {
   /// shows one display at a time. What is worth saying here is only that
   /// something changed the values from outside the card.
   private var controls: some View {
-    PanelCard(title: "Controls", systemImage: "slider.horizontal.3", accent: display.accent) {
+    PanelCard(title: "Analoge Licht- & Ton-Regler", systemImage: "slider.horizontal.3", accent: display.accent) {
       VStack(alignment: .leading, spacing: Layout.loose) {
         LabeledReadout(
-          title: "Brightness",
+          title: "Helligkeit",
           value: display.brightness,
           font: TypeScale.heroReadout,
           accent: display.accent,
@@ -364,7 +364,7 @@ struct DisplayPage: View {
 
         if display.supportsContrast {
           LabeledReadout(
-            title: "Contrast",
+            title: "Kontrast",
             value: display.contrast,
             accent: display.accent,
             onCommit: { display.setContrast($0) }
@@ -383,7 +383,7 @@ struct DisplayPage: View {
 
         if display.supportsVolume {
           LabeledReadout(
-            title: "Volume",
+            title: "Monitor-Lautsprecher",
             value: display.volume,
             accent: display.accent,
             onCommit: { display.setVolume($0) }
@@ -402,7 +402,7 @@ struct DisplayPage: View {
           // look the same, and here the fix is often just switching output.
           StatusRow(
             symbol: "speaker.slash",
-            title: "No volume control",
+            title: "Keine Lautstärkeregelung",
             detail: reason
           )
           .transition(.blurReplace)
@@ -413,27 +413,25 @@ struct DisplayPage: View {
   }
 
   private var configuration: some View {
-    PanelCard(title: "This display", systemImage: "gearshape", accent: display.accent) {
+    PanelCard(title: "Persönliche Abstimmung", systemImage: "gearshape", accent: display.accent) {
       VStack(alignment: .leading, spacing: Layout.normal) {
         VStack(alignment: .leading, spacing: Layout.tight) {
-          Text("Brightness via").font(TypeScale.rowTitle)
+          Text("Helligkeit über").font(TypeScale.rowTitle)
           SegmentedMorphPicker(
             selection: strategyBinding,
             options: BrightnessStrategy.allCases.map { ($0, $0.displayName) },
             accent: display.accent
           )
         }
-        .help("Automatic picks the best available path. Override only if that choice is wrong.")
+        .help("Automatisch wählt den besten verfügbaren Pfad.")
 
-        Toggle("Keep dimming below the backlight minimum", isOn: extraDimmingBinding)
-          .help("Once the backlight is at zero, continue with the gamma table. "
-            + "Costs contrast and appears in screenshots.")
+        Toggle("Weiter unter das Backlight-Minimum dimmen", isOn: extraDimmingBinding)
+          .help("Dimmt unter 0 % Backlight per Software-Gamma-Tabelle weiter (erscheint in Screenshots).")
 
-        Toggle("Brightness keys act on this display", isOn: mediaKeysBinding)
+        Toggle("Tastatur-Helligkeitstasten folgen diesem Display", isOn: mediaKeysBinding)
 
-        Toggle("This display sinks back when you're working elsewhere", isOn: attentionBinding)
-          .help("Only has an effect while Attention is switched on, under Keys. "
-            + "Turn it off for a screen that is watched rather than worked on.")
+        Toggle("Mit Fokus-Dimmung abdunkeln", isOn: attentionBinding)
+          .help("Senkt die Helligkeit leicht ab, wenn du auf einem anderen Bildschirm arbeitest.")
 
         if !display.isBuiltin {
           Divider()
@@ -442,15 +440,14 @@ struct DisplayPage: View {
         }
 
         VStack(alignment: .leading, spacing: Layout.tight) {
-          Text("Timing").font(TypeScale.rowTitle)
+          Text("Reaktionsgeschwindigkeit (DDC-Timing)").font(TypeScale.rowTitle)
           SegmentedMorphPicker(
             selection: timingBinding,
-            options: [(DDCTiming.default, "Standard"), (DDCTiming.relaxed, "Relaxed")],
+            options: [(DDCTiming.default, "Standard"), (DDCTiming.relaxed, "Entspannt")],
             accent: display.accent
           )
         }
-        .help("Increase this if readings fail intermittently or the display "
-          + "ignores the first change after being idle.")
+        .help("Erhöhen, falls Werte sporadisch aussetzen oder Befehle nach Standby verschluckt werden.")
 
         accentPicker
 
@@ -461,11 +458,11 @@ struct DisplayPage: View {
             if display.isProbing {
               HStack(spacing: Layout.tight) {
                 ProgressView().controlSize(.small)
-                Text("Probing…")
+                Text("Wird geprüft…")
               }
               .transition(.blurReplace)
             } else {
-              Text("Probe features again")
+              Text("Funktionen erneut prüfen")
                 .transition(.blurReplace)
             }
           }
@@ -473,7 +470,7 @@ struct DisplayPage: View {
           .disabled(display.isProbing)
           .animation(motion.spatialDefault, value: display.isProbing)
 
-          Text("Takes a few seconds — one round trip per feature.")
+          Text("Dauert wenige Sekunden.")
             .font(TypeScale.detail)
             .foregroundStyle(.secondary)
         }
@@ -490,7 +487,7 @@ struct DisplayPage: View {
   @ViewBuilder
   private var following: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
-      Toggle("Follow the built-in display's brightness", isOn: Binding(
+      Toggle("Helligkeit des integrierten Displays mitführen", isOn: Binding(
         get: { display.followsBuiltinBrightness },
         set: { model.setFollowsBuiltinBrightness($0, for: display) }
       ))
@@ -502,10 +499,8 @@ struct DisplayPage: View {
         // out here, and here the fix is often just opening the lid.
         StatusRow(
           symbol: "laptopcomputer.slash",
-          title: "No built-in display right now",
-          detail: "This follows the Mac's own screen, because that is the one macOS "
-            + "adjusts to the light in the room. On a laptop, opening the lid is "
-            + "enough; a Mac with no display of its own has nothing to follow."
+          title: "Kein integriertes Display aktiv",
+          detail: "Folgt dem integrierten Mac-Bildschirm, sobald das MacBook aufgeklappt ist."
         )
       } else if display.followsBuiltinBrightness {
         mapping
@@ -521,7 +516,7 @@ struct DisplayPage: View {
           // The mapping as a sentence rather than a graph. Two anchors and a
           // line between them is not worth a chart, and what someone wants to
           // know standing here is only "what is it doing right now".
-          Text("Built-in \(percent(source)) → this display "
+          Text("Integriert \(percent(source)) → dieses Display "
             + "\(percent(display.followCurve.target(forSource: source)))")
             .font(TypeScale.detail)
             .foregroundStyle(.secondary)
@@ -529,11 +524,10 @@ struct DisplayPage: View {
 
           Spacer(minLength: 0)
 
-          Button("Match now") { model.matchFollowNow(display) }
+          Button("Jetzt abgleichen") { model.matchFollowNow(display) }
             .buttonStyle(.soft(display.accent))
             .font(TypeScale.detail.weight(.medium))
-            .help("Remember this display's current brightness for whenever the "
-              + "built-in one is back at \(percent(source))")
+            .help("Merkt sich den aktuellen Unterschied für diese Umgebungshelligkeit")
         }
         .animation(motion.effectFast, value: source)
       }
@@ -545,16 +539,12 @@ struct DisplayPage: View {
         StatusRow(
           symbol: "timer",
           tint: Status.info,
-          title: "Asking every five seconds",
-          detail: "This system does not announce brightness changes, so they have to "
-            + "be checked for. Turning this off stops that entirely."
+          title: "Abfrage alle 5 Sekunden",
+          detail: "Liest Änderungen vom internen Panel automatisch mit."
         )
       }
 
-      CardFooter("Just move the slider above whenever this is wrong, and it is "
-        + "remembered for that light level — dim it once in a dark room and once "
-        + "in a bright one and it has what it needs. Presets and the schedule "
-        + "still win the moment they are applied, until the room next changes.")
+      CardFooter("Stelle den Regler im Dunkeln und im Hellen je einmal passend ein – Pixel Pilot lernt deine Kurve.")
     }
     .transition(.blurReplace)
   }
@@ -565,7 +555,7 @@ struct DisplayPage: View {
 
   private var accentPicker: some View {
     HStack {
-      Text("Accent")
+      Text("Monitor-Kennfarbe")
       Spacer()
       // The default is derived from the display's identity, so the same monitor
       // keeps its colour across launches. The override is for when that choice
@@ -576,9 +566,9 @@ struct DisplayPage: View {
           get: { display.settings.accentOverride },
           set: { value in display.updateSettings { $0.accentOverride = value } }
         ),
-        accessibilityLabel: "Accent colour for \(display.name)"
+        accessibilityLabel: "Kennfarbe für \(display.name)"
       )
-      .help("The colour this display is shown in")
+      .help("Akzentfarbe dieses Monitors in der Studio-Ansicht")
     }
   }
 
@@ -635,10 +625,10 @@ struct DisplayPage: View {
   /// answer where a silently absent control is not.
   private var diagnostics: some View {
     DisclosureCard(
-      title: "Diagnostics",
+      title: "Diagnose & Technik",
       systemImage: "stethoscope",
       accent: display.accent,
-      summary: "What this display reports it can do, and what it has been saying back."
+      summary: "Erkannte Hardware-Funktionen, Testbilder und DDC-Protokoll."
     ) {
       VStack(alignment: .leading, spacing: Layout.normal) {
         capabilities
@@ -655,16 +645,13 @@ struct DisplayPage: View {
   /// lie about the rest. These ask the pixels instead.
   private var testPatterns: some View {
     VStack(alignment: .leading, spacing: Layout.tight) {
-      Text("Test patterns").font(TypeScale.rowTitle)
-      Text("Fills this screen with images for finding dead pixels, banding, backlight "
-        + "bleed and scaling. Click or press → to move through them, M to mark a bad "
-        + "pixel, esc to leave. The Health card at the top of this page walks them in "
-        + "order and records what you found.")
+      Text("Testbilder").font(TypeScale.rowTitle)
+      Text("Vollbild-Testmuster zur Prüfung auf Pixelfehler, Clouding und Verlauf.")
         .font(TypeScale.detail)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
 
-      Button("Show test patterns") {
+      Button("Testbilder anzeigen") {
         model.showTestPatterns(on: display)
       }
       .buttonStyle(.soft)
@@ -673,7 +660,7 @@ struct DisplayPage: View {
 
   private var capabilities: some View {
     VStack(alignment: .leading, spacing: Layout.tight) {
-      Text("Reported features").font(TypeScale.rowTitle)
+      Text("Erkannte Funktionen").font(TypeScale.rowTitle)
 
       if let probed = display.capabilities {
         ForEach(VCPCode.probeSet, id: \.rawValue) { vcp in
@@ -689,7 +676,7 @@ struct DisplayPage: View {
           }
         }
       } else {
-        Text("Not probed yet.").font(.callout).foregroundStyle(.secondary)
+        Text("Noch nicht geprüft.").font(.callout).foregroundStyle(.secondary)
       }
     }
   }
@@ -698,7 +685,7 @@ struct DisplayPage: View {
     switch support {
     case let .supported(current, maximum): "\(current) / \(maximum)"
     case let .implausible(_, _, reason): reason
-    case .unsupported: "declined by the display"
+    case .unsupported: "vom Display abgelehnt"
     case let .unreachable(detail): detail
     }
   }
@@ -708,12 +695,12 @@ struct DisplayPage: View {
     // matters.
     let records = log.snapshot().suffix(40).reversed()
     return VStack(alignment: .leading, spacing: Layout.hair) {
-      Text("DDC log")
+      Text("DDC-Protokoll")
         .font(TypeScale.rowTitle)
         .padding(.bottom, Layout.hair)
 
       if records.isEmpty {
-        Text("No activity recorded.").font(.callout).foregroundStyle(.secondary)
+        Text("Keine Einträge aufgezeichnet.").font(.callout).foregroundStyle(.secondary)
       } else {
         ForEach(Array(records), id: \.id) { record in
           Text(record.entry.message)

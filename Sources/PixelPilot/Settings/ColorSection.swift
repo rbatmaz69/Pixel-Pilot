@@ -19,9 +19,9 @@ struct ColorSection: View {
   private static let defaultKelvin = KelvinTrack.defaultKelvin
 
   var body: some View {
-    PanelCard(title: "Colour", systemImage: "thermometer.sun", accent: display.accent) {
+    PanelCard(title: "Farbwärme & Weißpunkt", systemImage: "thermometer.sun", accent: display.accent) {
       VStack(alignment: .leading, spacing: Layout.normal) {
-        Toggle("Warm this display", isOn: Binding(
+        Toggle("Farbwärme auf diesem Display anpassen", isOn: Binding(
           get: { isWarmed },
           set: { display.setColorTemperature($0 ? Self.defaultKelvin : nil) }
         ))
@@ -37,10 +37,8 @@ struct ColorSection: View {
         probeRow
 
         CardFooter(isWarmed
-          ? "Warmth is applied to the colour tables, so it shows up in screenshots and "
-            + "costs a little contrast — the same trade as software dimming."
-          : "Off means off: with no warmth set, this display's colour is left exactly as "
-            + "macOS hands it over.")
+          ? "Die Farbwärme wirkt weich über die Farbtabelle des Displays."
+          : "Ohne aktive Farbwärme bleibt der Weißpunkt exakt auf Standard.")
       }
       .animation(motion.spatialDefault, value: isWarmed)
       .animation(motion.spatialDefault, value: display.isFightingSomethingOverColor)
@@ -50,7 +48,7 @@ struct ColorSection: View {
   private var slider: some View {
     VStack(alignment: .leading, spacing: Layout.tight) {
       HStack(alignment: .firstTextBaseline) {
-        Text("Temperature")
+        Text("Farbtemperatur")
           .font(TypeScale.rowTitle)
           .foregroundStyle(.secondary)
         Spacer()
@@ -108,10 +106,9 @@ struct ColorSection: View {
     StatusRow(
       symbol: "exclamationmark.triangle.fill",
       tint: Status.warn,
-      title: "Something else is changing the colour too",
-      detail: "This display's colour tables have been reset \(display.recentColorResets) times "
-        + "in the last minute. Night Shift and True Tone write the same tables, and whichever "
-        + "wrote last wins. Turning one of them off will settle it."
+      title: "Ein anderer Dienst verändert die Farben",
+      detail: "Die Farbtabellen wurden \(display.recentColorResets)-mal pro Minute zurückgesetzt. "
+        + "Deaktiviere Night Shift oder True Tone für ein ruhiges Bild."
     )
   }
 
@@ -120,7 +117,7 @@ struct ColorSection: View {
     if display.isProbingColor {
       HStack(spacing: Layout.tight) {
         ProgressView().controlSize(.small)
-        Text("Asking the display what colour controls it has…")
+        Text("Farbsteuerungs-Fähigkeiten werden geprüft…")
           .font(TypeScale.detail)
           .foregroundStyle(.secondary)
       }
@@ -130,8 +127,8 @@ struct ColorSection: View {
         symbol: display.hasNativeColorControl ? "checkmark.circle.fill" : "info.circle",
         tint: display.hasNativeColorControl ? Status.ok : nil,
         title: display.hasNativeColorControl
-          ? "This panel has its own colour control"
-          : "This panel has no colour control of its own",
+          ? "Display besitzt eigene Hardware-Farbsteuerung"
+          : "Display besitzt keine eigene Farbtemperatur-Steuerung",
         detail: nativeDetail(capabilities)
       )
       .transition(.blurReplace)
@@ -140,13 +137,11 @@ struct ColorSection: View {
 
   private func nativeDetail(_ capabilities: DisplayCapabilities) -> String {
     if display.hasNativeColorControl {
-      return "It is not used. Its steps are the coarse presets the monitor's own menu offers, "
-        + "and one slider meaning different things on different screens is worse than a "
-        + "consistent one."
+      return "Pixel Pilot nutzt bewusst die stufenlose Software-Farbtabelle für konsistente Ergebnisse."
     }
     if case let .implausible(_, _, reason) = capabilities.support(for: .colorTemperature) {
-      return "It answered the colour temperature query, but: \(reason)."
+      return "Hardware-Abfrage beantwortet (\(reason))."
     }
-    return "Warmth is done in software, which works on any display."
+    return "Die Farbwärme wird stufenlos per Software-Profil angewendet."
   }
 }

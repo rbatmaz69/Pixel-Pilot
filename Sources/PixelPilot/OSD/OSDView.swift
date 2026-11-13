@@ -70,14 +70,14 @@ enum OSDKind: Equatable {
 
   var accessibilityLabel: String {
     switch self {
-    case .brightness: "Brightness"
-    case .contrast: "Contrast"
-    case .warmth: "Warmth"
-    case .volume: "Volume"
-    case .muted: "Muted"
-    case .unavailable(.volume): "Volume unavailable"
-    case .unavailable(.contrast): "Contrast unavailable"
-    case .preset: "Preset applied"
+    case .brightness: "Helligkeit"
+    case .contrast: "Kontrast"
+    case .warmth: "Farbwärme"
+    case .volume: "Lautstärke"
+    case .muted: "Stumm"
+    case .unavailable(.volume): "Lautstärke nicht verfügbar"
+    case .unavailable(.contrast): "Kontrast nicht verfügbar"
+    case .preset: "Preset aktiviert"
     }
   }
 

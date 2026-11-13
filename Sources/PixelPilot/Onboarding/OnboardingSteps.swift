@@ -26,9 +26,9 @@ struct OnboardingFlow: View {
     var title: String {
       switch self {
       case .welcome: "Pixel Pilot"
-      case .permissions: "Two permissions"
-      case .displays: "Your displays"
-      case .preset: "One preset to start"
+      case .permissions: "Zwei Berechtigungen"
+      case .displays: "Deine Displays"
+      case .preset: "Erstes Preset"
       }
     }
 
@@ -93,19 +93,19 @@ struct OnboardingFlow: View {
 
   private var footer: some View {
     HStack(spacing: Layout.snug) {
-      Button("Skip") { onFinish() }
+      Button("Überspringen") { onFinish() }
         .buttonStyle(.soft)
 
       Spacer()
 
       if step != .welcome {
-        Button("Back") {
+        Button("Zurück") {
           step = Step(rawValue: step.rawValue - 1) ?? .welcome
         }
         .buttonStyle(.soft)
       }
 
-      Button(step == .preset ? "Done" : "Next") {
+      Button(step == .preset ? "Fertig" : "Weiter") {
         if let next = Step(rawValue: step.rawValue + 1) {
           step = next
         } else {
@@ -132,11 +132,9 @@ struct OnboardingFlow: View {
             .foregroundStyle(.secondary)
         }
 
-        Text("Brightness, contrast and volume for external displays — the controls macOS "
-          + "only gives you for the built-in one.")
+        Text("Helligkeit, Kontrast, Farbwärme und Lautstärke für externe Monitore direkt auf Hardware-Ebene.")
           .fixedSize(horizontal: false, vertical: true)
-        Text("Pixel Pilot lives in the menu bar. There is no Dock icon and no window "
-          + "waiting for you; click the icon whenever you need it.")
+        Text("Pixel Pilot wohnt in der Menüleiste ohne Dock-Symbol — ein Klick genügt.")
           .font(TypeScale.detail)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
@@ -146,24 +144,20 @@ struct OnboardingFlow: View {
 
   private var permissions: some View {
     VStack(alignment: .leading, spacing: Layout.normal) {
-      // Shared with the settings window rather than written twice, so the
-      // reasoning about showing both states lives in one place.
       PermissionRow(
-        title: "Accessibility",
-        detail: "Lets the brightness keys on your keyboard reach this app.",
+        title: "Bedienungshilfen",
+        detail: "Leitet Helligkeits- und Lautstärketasten deiner Tastatur weiter.",
         isGranted: model.accessibilityGranted,
         action: model.requestAccessibilityPermission
       )
       PermissionRow(
-        title: "Input Monitoring",
-        detail: "Needed for keyboards other than Apple's, whose keys macOS does not "
-          + "translate on its own.",
+        title: "Eingabeüberwachung",
+        detail: "Erkennt Helligkeitstasten auf externen Tastaturen ohne macOS-Übersetzung.",
         isGranted: model.inputMonitoringGranted,
         action: model.requestInputMonitoringPermission
       )
 
-      CardFooter("Both are optional. Without them the sliders and the menu bar still work — "
-        + "only the keyboard keys do not.")
+      CardFooter("Beide optional — Regler und Menüleiste funktionieren immer.")
     }
   }
 
@@ -171,9 +165,8 @@ struct OnboardingFlow: View {
     VStack(alignment: .leading, spacing: Layout.normal) {
       if model.displays.isEmpty {
         CharacterfulEmptyState(
-          title: "Nothing found yet",
-          message: "No external display is answering on the DDC bus. Connect one and it "
-            + "will appear here — this window does not need to be reopened."
+          title: "Noch kein externes Display gefunden",
+          message: "Schließe einen externen Monitor an — er erscheint automatisch hier."
         ) {
           SearchingRadar(size: 64)
         }
@@ -191,7 +184,7 @@ struct OnboardingFlow: View {
             AccentDot(accent: display.accent, isReady: display.isReady, size: 10)
             VStack(alignment: .leading, spacing: 1) {
               Text(display.name).font(TypeScale.rowTitle)
-              Text(display.isBuiltin ? "Built-in" : display.routeDescription)
+              Text(display.isBuiltin ? "Integriert" : display.routeDescription)
                 .font(TypeScale.detail)
                 .foregroundStyle(.secondary)
             }
@@ -200,34 +193,32 @@ struct OnboardingFlow: View {
         }
 
         if model.displays.count > 1 {
-          Button("Show me which is which") { model.identifyDisplays() }
+          Button("Bildschirme identifizieren") { model.identifyDisplays() }
             .buttonStyle(.soft)
             .font(TypeScale.detail.weight(.medium))
         }
 
-        CardFooter("Each display gets its own colour, derived from the panel itself, so the "
-          + "same monitor keeps it between launches.")
+        CardFooter("Jedes Display behält seine persönliche Kennfarbe dauerhaft.")
       }
     }
   }
 
   private var preset: some View {
     VStack(alignment: .leading, spacing: Layout.normal) {
-      Text("Set your displays how you like them, then capture that as a preset. One click "
-        + "brings it back later.")
+      Text("Stimme deine Displays nach Wunsch ab und sichere das Ergebnis als erstes Preset.")
         .fixedSize(horizontal: false, vertical: true)
 
       SymbolChipPicker(
         selection: $presetSymbol,
         symbols: ["sun.max.fill", "moon.fill", "film.fill", "desktopcomputer",
                   "gamecontroller.fill", "book.fill", "photo.fill", "eye.fill"],
-        accessibilityLabel: "Preset symbol"
+        accessibilityLabel: "Preset-Symbol"
       )
 
       HStack(spacing: Layout.snug) {
         TextField("Name", text: $presetName)
           .textFieldStyle(.roundedBorder)
-        Button("Capture") {
+        Button("Sichern") {
           let name = presetName.trimmingCharacters(in: .whitespaces)
           guard !name.isEmpty else { return }
           _ = model.captureCurrentState(name: name, symbolName: presetSymbol)
@@ -242,14 +233,13 @@ struct OnboardingFlow: View {
         StatusRow(
           symbol: "checkmark.circle.fill",
           tint: Status.ok,
-          title: "\(model.presetList.count) preset\(model.presetList.count == 1 ? "" : "s")",
+          title: model.presetList.count == 1 ? "1 Preset" : "\(model.presetList.count) Presets",
           detail: model.presetList.map(\.name).joined(separator: ", ")
         )
         .transition(.blurReplace)
       }
 
-      CardFooter("More of them, and the schedule that can apply them by time of day, are in "
-        + "Settings.")
+      CardFooter("Weitere Szenen und den Tages-Zeitplan findest du in den Einstellungen.")
     }
     .animation(motion.spatialDefault, value: model.presetList.count)
   }

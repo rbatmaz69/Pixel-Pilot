@@ -38,9 +38,8 @@ struct PresetSettings: View {
 
           if model.presetList.isEmpty {
             CharacterfulEmptyState(
-              title: "No presets yet",
-              message: "Set your displays the way you want them, then capture that below "
-                + "and give it a name."
+              title: "Noch keine Presets",
+              message: "Stelle deine Displays nach Wunsch ein und sichere die Szene unten."
             ) {
               SearchingRadar(size: 60)
             }
@@ -86,7 +85,7 @@ struct PresetSettings: View {
       }
       .entrance(index: 0)
 
-      PanelCard(title: "Capture the current state", systemImage: "plus.circle") {
+      PanelCard(title: "Aktuellen Zustand sichern", systemImage: "plus.circle") {
         VStack(alignment: .leading, spacing: Layout.normal) {
           symbolPicker
 
@@ -94,7 +93,7 @@ struct PresetSettings: View {
             TextField("Name", text: $newPresetName)
               .textFieldStyle(.roundedBorder)
 
-            Button("Capture") {
+            Button("Sichern") {
               let name = newPresetName.trimmingCharacters(in: .whitespaces)
               guard !name.isEmpty else { return }
               _ = model.captureCurrentState(name: name, symbolName: selectedSymbol)
@@ -104,14 +103,7 @@ struct PresetSettings: View {
             .disabled(newPresetName.trimmingCharacters(in: .whitespaces).isEmpty)
           }
 
-          CardFooter("Stores the brightness, contrast, warmth and volume of every connected "
-            + "display — including warmth that is switched off, so a daytime preset can "
-            + "undo a night one rather than only warm things differently. Contrast and "
-            + "volume are only taken from displays that have them. Input source is left out "
-            + "on purpose: switching inputs needs a confirmation, and a preset applied by "
-            + "the schedule or by an app has nobody in front of it to ask. To adjust a "
-            + "preset later, set the displays up and press its update button rather than "
-            + "making a new one.")
+          CardFooter("Sichert Helligkeit, Kontrast, Farbwärme, Papier-Finish und Lautstärke.")
         }
       }
       .entrance(index: 1)
@@ -133,7 +125,7 @@ struct PresetSettings: View {
     SymbolChipPicker(
       selection: $selectedSymbol,
       symbols: symbols,
-      accessibilityLabel: "Preset symbol"
+      accessibilityLabel: "Preset-Symbol"
     )
   }
 
@@ -165,26 +157,22 @@ struct PresetSettings: View {
         detail: summary(for: preset)
       ) {
         HStack(spacing: Layout.tight) {
-          Button("Apply") { model.apply(preset) }
+          Button("Anwenden") { model.apply(preset) }
             .buttonStyle(.soft)
 
-          // Re-capture rather than edit-the-numbers, for the reason at the top
-          // of this file: the way anyone arrives at a preset is by setting the
-          // displays up until they look right. Adjusting one afterwards works
-          // the same way — put the screens where you want them, then press this.
           Button {
             _ = model.recapture(preset)
           } label: {
             Image(systemName: "arrow.clockwise")
           }
           .buttonStyle(.soft)
-          .help("Update this preset from how the displays are set right now")
+          .help("Mit aktuellen Display-Werten überschreiben")
 
           Button { editing = preset } label: {
             Image(systemName: "pencil")
           }
           .buttonStyle(.soft)
-          .help("Rename, or change the symbol")
+          .help("Umbenennen oder Symbol ändern")
 
           Button {
             model.deletePreset(id: preset.id)
@@ -192,7 +180,7 @@ struct PresetSettings: View {
             Image(systemName: "trash")
           }
           .buttonStyle(.soft)
-          .help("Delete this preset")
+          .help("Preset löschen")
         }
         .font(TypeScale.detail.weight(.medium))
       }
@@ -235,7 +223,7 @@ struct PresetSettings: View {
           HStack(spacing: Layout.tight) {
             Text(known[key]?.lastKnownName.isEmpty == false
               ? known[key]!.lastKnownName
-              : "unknown display")
+              : "Unbekanntes Display")
               .font(TypeScale.detail)
               .foregroundStyle(.secondary)
               .frame(width: 110, alignment: .leading)
@@ -251,18 +239,14 @@ struct PresetSettings: View {
               miniTrack(volume, symbol: "speaker.wave.2.fill")
             }
             if let color = entry.color {
-              // A track would be wrong here: warmth is not a fraction of
-              // anything, and "off" is a state rather than a zero.
               miniLabel(
-                color.kelvinValue.map { "\(Int($0.rounded())) K" } ?? "neutral",
+                color.kelvinValue.map { "\(Int($0.rounded())) K" } ?? "Neutral",
                 symbol: "thermometer.sun"
               )
             }
             if let finish = entry.finish {
-              // Same reasoning as warmth: a finish is a shape, not a fraction,
-              // and "off" is a state rather than a zero.
               miniLabel(
-                finish.curveValue.map { $0.namedFinish?.lowercased() ?? "custom" } ?? "no finish",
+                finish.curveValue.map { $0.namedFinish ?? "Eigene" } ?? "Aus",
                 symbol: "doc.plaintext"
               )
             }
@@ -312,46 +296,42 @@ struct PresetSettings: View {
   /// most useful.
   private func summary(for preset: Preset) -> String {
     let keys = preset.affectedDisplays
-    guard !keys.isEmpty else { return "affects nothing" }
+    guard !keys.isEmpty else { return "Keine Displays" }
 
     let known = model.preferences.knownDisplays()
     let names = keys.map { key in
-      known[key]?.lastKnownName.isEmpty == false ? known[key]!.lastKnownName : "unknown display"
+      known[key]?.lastKnownName.isEmpty == false ? known[key]!.lastKnownName : "Unbekanntes Display"
     }
-    guard names.count <= 2 else { return "\(names.count) displays" }
+    guard names.count <= 2 else { return "\(names.count) Displays" }
     return names.sorted().joined(separator: ", ")
   }
 
   private var appearanceCard: some View {
-    PanelCard(title: "Automatic", systemImage: "circle.lefthalf.filled") {
+    PanelCard(title: "Automatischer Wechsel", systemImage: "circle.lefthalf.filled") {
       VStack(alignment: .leading, spacing: Layout.normal) {
-        Toggle("Switch presets with the system appearance", isOn: Binding(
+        Toggle("Presets mit dem System-Erscheinungsbild wechseln", isOn: Binding(
           get: { model.appearanceBindings.isEnabled },
           set: { value in model.updateAppearanceBindings { $0.isEnabled = value } }
         ))
 
-        ControlRow(title: "When light") { presetMenu(isDark: false) }
+        ControlRow(title: "Bei hellem Erscheinungsbild") { presetMenu(isDark: false) }
           .disabled(!model.appearanceBindings.isEnabled)
 
-        ControlRow(title: "When dark") { presetMenu(isDark: true) }
+        ControlRow(title: "Bei dunklem Erscheinungsbild") { presetMenu(isDark: true) }
           .disabled(!model.appearanceBindings.isEnabled)
 
-        CardFooter("Tied to light and dark rather than to a clock — macOS announces the "
-          + "change, so nothing has to be waiting for it. For times of day, see the "
-          + "Schedule tab.")
+        CardFooter("Reagiert direkt auf macOS Hell/Dunkel-Wechsel.")
       }
       .animation(motion.effectDefault, value: model.appearanceBindings.isEnabled)
     }
   }
 
-  /// The preset list grows at runtime, so this stays a menu — only its trigger
-  /// is ours. See `MorphMenuPicker` for why that line is drawn there.
   private func presetMenu(isDark: Bool) -> some View {
     let binding = appearanceBinding(isDark: isDark)
     let selected = model.presetList.first { $0.id == binding.wrappedValue }
 
-    return MorphMenuPicker(title: selected?.name ?? "Do nothing") {
-      Button("Do nothing") { binding.wrappedValue = nil }
+    return MorphMenuPicker(title: selected?.name ?? "Nichts ändern") {
+      Button("Nichts ändern") { binding.wrappedValue = nil }
       if !model.presetList.isEmpty { Divider() }
       ForEach(model.presetList) { preset in
         Button {
