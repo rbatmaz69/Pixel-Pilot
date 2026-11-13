@@ -120,4 +120,49 @@ struct DisplayLayoutTests {
     )
     #expect(rects == [.zero])
   }
+
+  @Test("Snapping docks gapless on the right and aligns top edges within threshold")
+  func snapRightTopFlush() {
+    let main = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+    let rawMoving = CGRect(x: 2100, y: 12, width: 1440, height: 900)
+
+    let result = DisplayLayout.snap(moving: rawMoving, against: [main], threshold: 24)
+    #expect(result.frame == CGRect(x: 1920, y: 0, width: 1440, height: 900))
+    #expect(result.guides.contains(DisplayLayout.AlignmentGuide(axis: .horizontal, position: 0)))
+  }
+
+  @Test("Snapping prevents interior overlap when dragged onto an existing monitor")
+  func snapPreventsOverlap() {
+    let main = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+    let rawMoving = CGRect(x: -1380, y: 80, width: 1440, height: 900)
+
+    let result = DisplayLayout.snap(moving: rawMoving, against: [main], threshold: 24)
+    // Should dock cleanly on the left edge at x = -1440 with midY centered on main (540)
+    #expect(abs(result.frame.maxX - main.minX) < 0.001)
+    #expect(!result.frame.insetBy(dx: 0.5, dy: 0.5).intersects(main))
+    #expect(result.guides.contains(DisplayLayout.AlignmentGuide(axis: .horizontal, position: 540)))
+  }
+
+  @Test("Snapping docks vertically above or below and aligns horizontal center")
+  func snapAboveCenterAligned() {
+    let main = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+    // Centered x is (1920 - 1280) / 2 = 320
+    let rawMoving = CGRect(x: 332, y: -800, width: 1280, height: 720)
+
+    let result = DisplayLayout.snap(moving: rawMoving, against: [main], threshold: 24)
+    #expect(result.frame == CGRect(x: 320, y: -720, width: 1280, height: 720))
+    #expect(result.guides.contains(DisplayLayout.AlignmentGuide(axis: .vertical, position: 960)))
+  }
+
+  @Test("Assigning a new primary display normalizes its origin to (0, 0)")
+  func assignPrimaryNormalizesOrigins() {
+    let entries = [
+      DisplayLayout.ArrangementEntry(id: 1, frame: CGRect(x: 0, y: 0, width: 1920, height: 1080)),
+      DisplayLayout.ArrangementEntry(id: 2, frame: CGRect(x: 1920, y: 120, width: 2560, height: 1440)),
+    ]
+
+    let reassigned = DisplayLayout.assignPrimary(id: 2, in: entries)
+    #expect(reassigned[0].frame.origin == CGPoint(x: -1920, y: -120))
+    #expect(reassigned[1].frame.origin == CGPoint(x: 0, y: 0))
+  }
 }
