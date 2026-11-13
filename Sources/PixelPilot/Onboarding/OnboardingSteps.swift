@@ -31,6 +31,19 @@ struct OnboardingFlow: View {
       case .preset: "One preset to start"
       }
     }
+
+    var subtitle: String {
+      switch self {
+      case .welcome:
+        "Warm Studio Craft für all deine Bildschirme — ruhig, präzise und mit 0,0 % CPU im Leerlauf."
+      case .permissions:
+        "Damit die Helligkeits- und Lautstärketasten deiner Tastatur jeden Monitor direkt erreichen."
+      case .displays:
+        "Jeder Bildschirm erhält seine eigene Studio-Kennfarbe und wird über seinen nativen Kanal gesteuert."
+      case .preset:
+        "Halte deine aktuelle Lichtstimmung als erste Szene für die Menüleiste fest."
+      }
+    }
   }
 
   var body: some View {
@@ -68,7 +81,12 @@ struct OnboardingFlow: View {
 
   private var header: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
-      Text(step.title).font(TypeScale.sheetTitle)
+      VStack(alignment: .leading, spacing: 3) {
+        Text(step.title).font(TypeScale.sheetTitle)
+        Text(step.subtitle)
+          .font(TypeScale.editorialAccent)
+          .foregroundStyle(.secondary)
+      }
       OnboardingProgress(current: step)
     }
   }
@@ -106,6 +124,14 @@ struct OnboardingFlow: View {
       BreathingMonitor(size: 96)
 
       VStack(alignment: .leading, spacing: Layout.snug) {
+        HStack(spacing: 6) {
+          AccentDot(accent: Status.ok, isReady: true, size: 7)
+          Text("STUDIO-ATELIER · 0,0 % CPU IM LEERLAUF")
+            .font(TypeScale.detail.weight(.semibold))
+            .tracking(0.5)
+            .foregroundStyle(.secondary)
+        }
+
         Text("Brightness, contrast and volume for external displays — the controls macOS "
           + "only gives you for the built-in one.")
           .fixedSize(horizontal: false, vertical: true)

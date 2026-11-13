@@ -21,10 +21,13 @@ struct IdentifyOverlay: View {
         .foregroundStyle(theme.fill(for: accent))
         .shadow(color: theme.glow(for: accent, active: true), radius: 24)
 
-      Text(name)
-        .font(TypeScale.sheetTitle)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
+      HStack(spacing: Layout.tight) {
+        AccentDot(accent: accent, isReady: true, size: 10)
+        Text(name)
+          .font(TypeScale.sheetTitle)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+      }
     }
     .padding(.horizontal, Layout.section * 2)
     .padding(.vertical, Layout.section)
@@ -33,12 +36,8 @@ struct IdentifyOverlay: View {
     // top of each other, and the numeral is the part meant to be read from
     // across a desk.
     .heroSurface()
-    // The HUD's arrival, in one line each: scale from slightly small, fade in,
-    // and unblur. The blur is what makes it read as materialising rather than
-    // as a window appearing.
-    .scaleEffect(hasArrived ? 1 : 0.9)
+    .scaleEffect(hasArrived ? 1 : 0.96)
     .opacity(hasArrived ? 1 : 0)
-    .blur(radius: hasArrived ? 0 : 6)
     .animation(motion.expressive, value: hasArrived)
     .onAppear { hasArrived = true }
     .accessibilityElement(children: .combine)
