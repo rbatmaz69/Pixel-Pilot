@@ -183,7 +183,7 @@ struct MenuBarPanel: View {
       return
     }
     previewTask = Task {
-      try? await Task.sleep(for: .milliseconds(180))
+      try? await Task.sleep(for: .milliseconds(90))
       guard !Task.isCancelled else { return }
       previewed = preset
     }
@@ -289,23 +289,43 @@ struct MenuBarPanel: View {
   /// at all. The master row deliberately gets no ghost: a preset holds a value
   /// per display and no master value, so any handle drawn there would be a
   /// number this app invented and then did not set.
+  /// Atmospheric 2-column Mood Scene Cards grid with live Ghost-Preview bridge on hover.
   private var presetRow: some View {
-    HStack(spacing: Layout.tight) {
-      ForEach(model.presetList) { preset in
-        Button {
-          model.apply(preset)
-        } label: {
-          Label(preset.name, systemImage: preset.symbolName)
-            .labelStyle(.titleAndIcon)
-            .font(TypeScale.detail.weight(.medium))
+    VStack(alignment: .leading, spacing: Layout.tight) {
+      HStack {
+        Text("LICHT-SZENEN")
+          .font(.system(size: 10, weight: .bold))
+          .foregroundStyle(.secondary)
+          .tracking(0.5)
+        Spacer()
+        if let previewed {
+          Text("Vorschau: \(previewed.name)")
+            .font(TypeScale.editorialAccent)
+            .foregroundStyle(theme.studioAccent)
+            .transition(.opacity)
         }
-        .buttonStyle(.soft)
-        .help("Apply \(preset.name)")
-        .onHover { preview($0 ? preset : nil) }
       }
-      Spacer(minLength: 0)
+
+      LazyVGrid(
+        columns: [
+          GridItem(.flexible(), spacing: 7),
+          GridItem(.flexible(), spacing: 7),
+        ],
+        spacing: 7
+      ) {
+        ForEach(model.presetList) { preset in
+          MoodSceneCard(
+            preset: preset,
+            isPreviewed: previewed?.id == preset.id,
+            action: { model.apply(preset) },
+            onHoverChange: { hovering in preview(hovering ? preset : nil) }
+          )
+        }
+      }
     }
-    .padding(.top, Layout.tight)
+    .padding(Layout.snug)
+    .cardSurface(accent: theme.tone)
+    .animation(motion.effectFast, value: previewed?.id)
   }
 
   /// Shown only when the brightness keys cannot work. Without it the keys would
@@ -536,5 +556,119 @@ private struct DisplayControlGroup: View {
         .help("\(Int(kelvin)) K")
         .transition(.blurReplace)
     }
+  }
+}
+
+/// Atmospheric scene card inside the Menu Bar Popover's 2-column scene grid.
+private struct MoodSceneCard: View {
+  let preset: Preset
+  let isPreviewed: Bool
+  let action: () -> Void
+  let onHoverChange: (Bool) -> Void
+
+  @Environment(\.theme) private var theme
+  @Environment(\.motion) private var motion
+  @State private var isPressed = false
+
+  private var averageBrightness: Double? {
+    let values = preset.entries.values.compactMap(\.brightness)
+    guard !values.isEmpty else { return nil }
+    return values.reduce(0, +) / Double(values.count)
+  }
+
+  private var representativeKelvin: Double? {
+    for entry in preset.entries.values {
+      if case let .kelvin(k) = entry.color { return k }
+      if case .neutral = entry.color { return ColorTemperature.neutralKelvin }
+    }
+    return nil
+  }
+
+  private var moodTint: Color {
+    if let kelvin = representativeKelvin {
+      if kelvin <= 3900 {
+        return Color(.sRGB, red: 0.878, green: 0.455, blue: 0.165)
+      } else if kelvin <= 5000 {
+        return Color(.sRGB, red: 0.918, green: 0.588, blue: 0.235)
+      }
+    }
+    if let avg = averageBrightness, avg < 0.40 {
+      return Color(.sRGB, red: 0.486, green: 0.380, blue: 0.690)
+    }
+    return theme.studioAccent
+  }
+
+  private var subtitleText: String {
+    var parts: [String] = []
+    if let avg = averageBrightness {
+      parts.append("\(Int((avg * 100).rounded())) %")
+    }
+    if let kelvin = representativeKelvin {
+      parts.append("\(Int((kelvin / 50).rounded() * 50)) K")
+    }
+    if parts.isEmpty {
+      return "\(preset.entries.count) Display\(preset.entries.count == 1 ? "" : "s")"
+    }
+    return parts.joined(separator: " · ")
+  }
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 8) {
+        Image(systemName: preset.symbolName)
+          .font(.system(size: 11, weight: .semibold))
+          .foregroundStyle(moodTint)
+          .frame(width: 24, height: 24)
+          .background(
+            RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+              .fill(moodTint.opacity(theme.isDark ? 0.22 : 0.15))
+          )
+          .overlay(
+            RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+              .strokeBorder(moodTint.opacity(0.35), lineWidth: 0.75)
+          )
+
+        VStack(alignment: .leading, spacing: 1) {
+          Text(preset.name)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+          Text(subtitleText)
+            .font(.system(size: 10, design: .rounded).monospacedDigit())
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
+
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 8)
+      .padding(.vertical, 7)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background {
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+          .fill(
+            LinearGradient(
+              colors: [
+                moodTint.opacity(isPreviewed ? (theme.isDark ? 0.24 : 0.18) : (theme.isDark ? 0.12 : 0.08)),
+                theme.surfaceRaised.opacity(theme.isDark ? 0.65 : 0.85),
+              ],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            )
+          )
+      }
+      .overlay {
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+          .strokeBorder(
+            isPreviewed ? moodTint.opacity(0.75) : theme.groupBorder,
+            lineWidth: isPreviewed ? 1.25 : 1
+          )
+      }
+      .contentShape(.rect)
+    }
+    .buttonStyle(.plain)
+    .help("Licht-Szene „\(preset.name)“ anwenden")
+    .onHover(perform: onHoverChange)
+    .animation(motion.effectFast, value: isPreviewed)
   }
 }
