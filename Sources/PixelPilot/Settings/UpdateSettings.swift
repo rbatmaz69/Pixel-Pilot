@@ -51,6 +51,10 @@ struct UpdateSettings: View {
   private var versionCard: some View {
     PanelCard(title: "This version", systemImage: "shippingbox") {
       VStack(alignment: .leading, spacing: Layout.normal) {
+        Text("Geprüfte Releases direkt von GitHub — ohne Hintergrund-Daemon und mit 0,0 % Idle-CPU.")
+          .font(TypeScale.editorialAccent)
+          .foregroundStyle(.secondary)
+
         StatusRow(
           symbol: statusSymbol,
           tint: statusTint,

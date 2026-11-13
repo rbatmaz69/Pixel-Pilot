@@ -34,14 +34,21 @@ struct PresetEditSheet: View {
     _symbolName = State(initialValue: preset.symbolName)
   }
 
+  @Environment(\.theme) private var theme
+
   private var trimmedName: String {
     name.trimmingCharacters(in: .whitespaces)
   }
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.normal) {
-      Text("Edit preset")
-        .font(TypeScale.sheetTitle)
+      VStack(alignment: .leading, spacing: 2) {
+        Text("Edit preset")
+          .font(TypeScale.sheetTitle)
+        Text("Name und Symbol in der Menüleiste anpassen.")
+          .font(TypeScale.editorialAccent)
+          .foregroundStyle(.secondary)
+      }
 
       TextField("Name", text: $name)
         .textFieldStyle(.roundedBorder)
@@ -66,24 +73,28 @@ struct PresetEditSheet: View {
 
       HStack {
         Button("Cancel", role: .cancel, action: onCancel)
+          .buttonStyle(.soft)
           .keyboardShortcut(.cancelAction)
 
         Spacer()
 
         Button("Save", action: save)
+          .buttonStyle(SoftButtonStyle(isProminent: true))
           .keyboardShortcut(.defaultAction)
           .disabled(trimmedName.isEmpty)
       }
     }
     .padding(Layout.loose)
-    .frame(width: 440, height: 300)
-    // A sheet is a container, not a card, so it takes the container radius —
-    // the same reasoning as `KeyLearningSheet`.
+    .frame(width: 440, height: 320)
     .background {
-      RoundedRectangle(cornerRadius: Layout.radiusPanel, style: .continuous)
-        .fill(.background)
+      RoundedRectangle(cornerRadius: Layout.radiusWindow, style: .continuous)
+        .fill(theme.surface)
     }
-    .clipShape(RoundedRectangle(cornerRadius: Layout.radiusPanel, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: Layout.radiusWindow, style: .continuous)
+        .strokeBorder(theme.specularRim, lineWidth: 1)
+    }
+    .clipShape(RoundedRectangle(cornerRadius: Layout.radiusWindow, style: .continuous))
   }
 
   private func save() {

@@ -28,6 +28,10 @@ struct RememberedDisplays: View {
   private var rememberedCard: some View {
     PanelCard(title: "Remembered displays", systemImage: "externaldrive.badge.checkmark") {
       VStack(alignment: .leading, spacing: Layout.tight) {
+        Text("Jedes Panel behält seine Kalibrierung, auch wenn das Kabel den Port wechselt.")
+          .font(TypeScale.editorialAccent)
+          .foregroundStyle(.secondary)
+
         if model.knownDisplays.isEmpty {
           Text("Nothing remembered yet. A display is recorded the first time it is probed.")
             .font(TypeScale.detail)

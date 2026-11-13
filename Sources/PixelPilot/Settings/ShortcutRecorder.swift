@@ -13,6 +13,7 @@ struct ShortcutRecorder: View {
   let onChange: (Shortcut?) -> Void
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
   @State private var isRecording = false
   @State private var monitor: Any?
   @State private var isHovered = false
@@ -24,7 +25,7 @@ struct ShortcutRecorder: View {
       HStack(spacing: 6) {
         Text(label)
           .font(.callout.monospaced())
-          .foregroundStyle(isRecording ? .secondary : .primary)
+          .foregroundStyle(isRecording ? theme.studioAccent : .primary)
 
         if shortcut != nil, !isRecording {
           Image(systemName: "xmark.circle.fill")
@@ -36,16 +37,19 @@ struct ShortcutRecorder: View {
             .onTapGesture { onChange(nil) }
         }
       }
-      .frame(minWidth: 110)
+      .frame(minWidth: 112)
       .padding(.horizontal, Layout.snug)
       .padding(.vertical, 5)
       .background {
-        MorphingRoundedRectangle(cornerRadius: isRecording ? Layout.radiusCard : Layout.radiusControl)
-          .fill(isRecording ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.quaternary))
+        RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+          .fill(isRecording ? theme.studioAccent.opacity(0.14) : theme.recessedWell)
       }
       .overlay {
-        MorphingRoundedRectangle(cornerRadius: isRecording ? Layout.radiusCard : Layout.radiusControl)
-          .stroke(isRecording ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), lineWidth: 1.5)
+        RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+          .strokeBorder(
+            isRecording ? theme.studioAccent : theme.groupBorder,
+            lineWidth: isRecording ? 1.5 : 1
+          )
           .modifier(RecordingPulse(isRecording: isRecording, isReduced: motion.isReduced))
       }
       .animation(motion.spatialFast, value: isRecording)
