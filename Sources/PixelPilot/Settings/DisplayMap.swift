@@ -71,80 +71,119 @@ struct DisplayMap: View {
     let isSelected = selection == display.id
     let isHovered = hovered == display.id
     let isDragging = dragging == display.id
+    let level = min(1, max(0, display.brightness))
+    let screenShape = RoundedRectangle(cornerRadius: 6, style: .continuous)
 
-    return MorphingRoundedRectangle(cornerRadius: 5)
-      .fill(theme.wash(for: display.accent))
-      // The level, as a filling rather than as a figure. It is clipped by the
-      // shape below rather than being a shape of its own, so a tile's corners
-      // stay the tile's corners whatever the level is.
-      .overlay(alignment: .bottom) {
-        Rectangle()
-          .fill(theme.fill(for: display.accent).opacity(0.5))
-          .frame(height: rect.height * min(1, max(0, display.brightness)))
-          // No animation on the height. During a drag this has to be where the
-          // pointer put it, for the same reason a slider handle does — and the
-          // rest of the time it moves because something else moved it, which is
-          // a fact rather than a transition.
-          .animation(nil, value: display.brightness)
-      }
-      .clipShape(MorphingRoundedRectangle(cornerRadius: 5))
-      .overlay {
-        MorphingRoundedRectangle(cornerRadius: 5)
-          .strokeBorder(theme.rim(for: display.accent), lineWidth: 1)
-      }
-      .overlay {
-        if isSelected {
-          // One ring for the whole map, so choosing another display makes it
-          // travel there rather than blink out here and in again over there —
-          // the same idiom as the accent swatches.
-          MorphingRoundedRectangle(cornerRadius: 5)
-            .strokeBorder(display.accent, lineWidth: 2)
-            .matchedGeometryEffect(id: "mapRing", in: ring)
+    return ZStack(alignment: .bottom) {
+      // Physical monitor screen bezel + wallpaper + live brightness level
+      screenShape
+        .fill(Color(.sRGB, red: 0.11, green: 0.095, blue: 0.085))
+        .overlay {
+          // Warm Studio Horizon mini-wallpaper modulated by live brightness
+          StudioWallpaperCanvas(
+            accent: display.accent,
+            brightness: level,
+            isCompact: true
+          )
         }
-      }
-      .overlay { badge(display, isDragging: isDragging) }
-      .animation(motion.effectFast, value: isDragging)
-      .frame(width: rect.width, height: rect.height)
-      // A translation, not a scale: the tile is now dragged, which makes the
-      // rule load-bearing here rather than merely consistent — a scale remaps
-      // the coordinate space the translation is measured in.
-      .offset(x: rect.minX, y: rect.minY - (isHovered && !motion.isReduced ? 2 : 0))
-      .animation(motion.spatialFast, value: isHovered)
-      .contentShape(.rect)
-      .onHover { hovered = $0 ? display.id : (hovered == display.id ? nil : hovered) }
-      .onTapGesture { selection = display.id }
-      .gesture(dragGesture(for: display))
-      .help(display.name)
-      .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-      .accessibilityLabel(display.name)
-      .accessibilityValue(
-        Text(display.brightness, format: .percent.precision(.fractionLength(0)))
-      )
-      .accessibilityAdjustableAction { direction in
-        guard display.isReady else { return }
-        let step = 1.0 / 16.0
-        display.setBrightness(
-          min(1, max(0, display.brightness + (direction == .increment ? step : -step)))
+        .overlay(alignment: .bottom) {
+          Rectangle()
+            .fill(theme.fill(for: display.accent).opacity(0.28))
+            .frame(height: rect.height * level)
+            .animation(nil, value: display.brightness)
+        }
+        .overlay(alignment: .top) {
+          // MacBook camera notch silhouette for built-in displays
+          if display.isBuiltin {
+            UnevenRoundedRectangle(
+              topLeadingRadius: 0,
+              bottomLeadingRadius: 2.5,
+              bottomTrailingRadius: 2.5,
+              topTrailingRadius: 0
+            )
+            .fill(Color.black.opacity(0.88))
+            .frame(width: min(16, rect.width * 0.26), height: 3)
+          }
+        }
+        .clipShape(screenShape)
+        .overlay {
+          screenShape
+            .strokeBorder(
+              isSelected ? display.accent : theme.rim(for: display.accent),
+              lineWidth: isSelected ? 2 : 1.25
+            )
+        }
+        .overlay {
+          if isSelected {
+            screenShape
+              .strokeBorder(display.accent, lineWidth: 2)
+              .matchedGeometryEffect(id: "mapRing", in: ring)
+          }
+        }
+        .overlay { badge(display, isDragging: isDragging) }
+        .shadow(
+          color: display.accent.opacity(0.14 + 0.36 * level),
+          radius: 5 + 9 * level,
+          y: 1
         )
-        display.commitBrightness()
+
+      // Physical hardware foot / MacBook base lip silhouette below bezel
+      if display.isBuiltin {
+        Capsule(style: .continuous)
+          .fill(Color.primary.opacity(0.28))
+          .frame(width: min(rect.width * 1.08, rect.width + 6), height: 2.5)
+          .offset(y: 3.5)
+      } else {
+        VStack(spacing: 0) {
+          Rectangle()
+            .fill(Color.primary.opacity(0.24))
+            .frame(width: 4, height: 3)
+          Capsule(style: .continuous)
+            .fill(Color.primary.opacity(0.30))
+            .frame(width: min(18, rect.width * 0.36), height: 2)
+        }
+        .offset(y: 5)
       }
+    }
+    .animation(motion.effectFast, value: isDragging)
+    .frame(width: rect.width, height: rect.height)
+    .offset(x: rect.minX, y: rect.minY - (isHovered && !motion.isReduced ? 1 : 0))
+    .animation(motion.spatialFast, value: isHovered)
+    .contentShape(.rect)
+    .onHover { hovered = $0 ? display.id : (hovered == display.id ? nil : hovered) }
+    .onTapGesture { selection = display.id }
+    .gesture(dragGesture(for: display))
+    .help(display.name)
+    .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    .accessibilityLabel(display.name)
+    .accessibilityValue(
+      Text(display.brightness, format: .percent.precision(.fractionLength(0)))
+    )
+    .accessibilityAdjustableAction { direction in
+      guard display.isReady else { return }
+      let step = 1.0 / 16.0
+      display.setBrightness(
+        min(1, max(0, display.brightness + (direction == .increment ? step : -step)))
+      )
+      display.commitBrightness()
+    }
   }
 
-  /// The dot, or the figure while the tile is being dragged.
-  ///
-  /// One or the other rather than both: a tile is forty points across, and the
-  /// number is only worth the room it takes while someone is setting it.
+  /// Compact glass pill badge inside the mini-monitor showing the warm LED and percentage.
   @ViewBuilder
   private func badge(_ display: DisplayViewModel, isDragging: Bool) -> some View {
-    if isDragging {
+    HStack(spacing: 4) {
+      AccentDot(accent: display.accent, isReady: display.isReady, size: 6)
       Text("\(Int((display.brightness * 100).rounded()))%")
-        .font(.caption2.weight(.semibold).monospacedDigit())
-        .foregroundStyle(theme.ink(for: display.accent))
-        .transition(.blurReplace)
-    } else {
-      AccentDot(accent: display.accent, isReady: display.isReady, size: 7)
-        .transition(.blurReplace)
+        .font(.system(size: isDragging ? 10.5 : 9.5, weight: .semibold, design: .rounded).monospacedDigit())
+        .foregroundStyle(.white)
     }
+    .padding(.horizontal, 5)
+    .padding(.vertical, 2)
+    .background(
+      Capsule(style: .continuous)
+        .fill(Color.black.opacity(isDragging ? 0.68 : 0.48))
+    )
   }
 
   // MARK: - Dragging a screen
@@ -218,8 +257,108 @@ struct DisplayMap: View {
     let rects = DisplayLayout.normalize(
       frames: frames,
       into: CGRect(origin: .zero, size: size),
-      spacing: 5
+      spacing: 7
     )
     return Array(zip(displays, rects)).map { ($0, $1) }
+  }
+}
+
+/// Reusable living studio wallpaper canvas used in `DisplayMap` mini-monitors
+/// and the `DisplayPage` Live Studio-Monitor Hero-Card.
+///
+/// Renders a warm Sonoma/Sequoia-inspired horizon landscape modulated by live
+/// brightness, warmth, and paper finish, with zero timers (`0.0% CPU while idle`).
+struct StudioWallpaperCanvas: View {
+  let accent: Color
+  var brightness: Double
+  var warmthFraction: Double = 0.5
+  var finish: ToneCurve? = nil
+  var isCompact: Bool = false
+
+  var body: some View {
+    let clampedBrightness = min(1, max(0, brightness))
+    let exposure = 0.22 + 0.78 * clampedBrightness
+    let warmTint = Color(
+      .sRGB,
+      red: 1.0,
+      green: 0.78 - 0.16 * (1 - warmthFraction),
+      blue: 0.55 - 0.30 * (1 - warmthFraction),
+      opacity: (1 - warmthFraction) * 0.28
+    )
+
+    GeometryReader { geo in
+      ZStack {
+        // Warm sunset/studio sky gradient
+        LinearGradient(
+          colors: [
+            Color(.sRGB, red: 0.18, green: 0.20, blue: 0.34).blended(with: accent, by: 0.28),
+            Color(.sRGB, red: 0.76, green: 0.42, blue: 0.24).blended(with: accent, by: 0.22),
+            Color(.sRGB, red: 0.95, green: 0.68, blue: 0.36),
+          ],
+          startPoint: .top,
+          endPoint: .bottom
+        )
+
+        // Glowing horizon sun orb
+        Circle()
+          .fill(
+            RadialGradient(
+              colors: [
+                Color(.sRGB, red: 1.0, green: 0.94, blue: 0.78, opacity: 0.92),
+                Color(.sRGB, red: 0.98, green: 0.64, blue: 0.28, opacity: 0.45),
+                .clear,
+              ],
+              center: .center,
+              startRadius: 0,
+              endRadius: isCompact ? 18 : 42
+            )
+          )
+          .frame(width: isCompact ? 36 : 84, height: isCompact ? 36 : 84)
+          .offset(x: geo.size.width * 0.14, y: -geo.size.height * 0.06)
+
+        // Layered warm studio hills at bottom
+        Path { path in
+          let w = geo.size.width
+          let h = geo.size.height
+          path.move(to: CGPoint(x: 0, y: h * 0.72))
+          path.addQuadCurve(
+            to: CGPoint(x: w * 0.58, y: h * 0.68),
+            control: CGPoint(x: w * 0.28, y: h * 0.54)
+          )
+          path.addQuadCurve(
+            to: CGPoint(x: w, y: h * 0.64),
+            control: CGPoint(x: w * 0.82, y: h * 0.76)
+          )
+          path.addLine(to: CGPoint(x: w, y: h))
+          path.addLine(to: CGPoint(x: 0, y: h))
+          path.closeSubpath()
+        }
+        .fill(
+          LinearGradient(
+            colors: [
+              Color(.sRGB, red: 0.22, green: 0.15, blue: 0.14),
+              Color(.sRGB, red: 0.12, green: 0.09, blue: 0.08),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+          )
+        )
+
+        // Kelvin warmth veil
+        Rectangle()
+          .fill(warmTint)
+
+        // Paper Finish matte lift simulation
+        if let finish {
+          Rectangle()
+            .fill(Color(.sRGB, red: 0.96, green: 0.93, blue: 0.87, opacity: finish.blackLift * 1.4))
+        }
+
+        // Brightness exposure veil
+        Rectangle()
+          .fill(Color.black.opacity(1 - exposure))
+      }
+    }
+    .allowsHitTesting(false)
   }
 }
