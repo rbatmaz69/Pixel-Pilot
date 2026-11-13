@@ -95,21 +95,21 @@ final class HotkeyCenter {
 
       var displayName: String {
         switch self {
-        case .brightnessUp: "Increase brightness"
-        case .brightnessDown: "Decrease brightness"
-        case .allBrightnessUp: "Increase brightness everywhere"
-        case .allBrightnessDown: "Decrease brightness everywhere"
-        case .contrastUp: "Increase contrast"
-        case .contrastDown: "Decrease contrast"
-        case .warmer: "Warmer"
-        case .cooler: "Cooler"
-        case .volumeUp: "Increase volume"
-        case .volumeDown: "Decrease volume"
-        case .toggleMute: "Toggle mute"
-        case .nextPreset: "Next preset"
-        case .previousPreset: "Previous preset"
-        case .identifyDisplays: "Identify displays"
-        case .openPanel: "Open the menu bar panel"
+        case .brightnessUp: "Helligkeit erhöhen"
+        case .brightnessDown: "Helligkeit verringern"
+        case .allBrightnessUp: "Helligkeit überall erhöhen"
+        case .allBrightnessDown: "Helligkeit überall verringern"
+        case .contrastUp: "Kontrast erhöhen"
+        case .contrastDown: "Kontrast verringern"
+        case .warmer: "Wärmeres Licht"
+        case .cooler: "Kühleres Licht"
+        case .volumeUp: "Lautstärke erhöhen"
+        case .volumeDown: "Lautstärke verringern"
+        case .toggleMute: "Ton ein / aus"
+        case .nextPreset: "Nächstes Preset"
+        case .previousPreset: "Vorheriges Preset"
+        case .identifyDisplays: "Displays identifizieren"
+        case .openPanel: "Menüleisten-Panel öffnen"
         }
       }
 
@@ -161,7 +161,7 @@ final class HotkeyCenter {
         var title: String {
           switch self {
           case .displays: "Displays"
-          case .sound: "Sound"
+          case .sound: "Ton"
           case .presets: "Presets"
           case .app: "Pixel Pilot"
           }

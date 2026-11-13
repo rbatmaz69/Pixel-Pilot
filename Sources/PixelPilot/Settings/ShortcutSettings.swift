@@ -20,15 +20,13 @@ struct ShortcutSettings: View {
       }
 
       if !model.presetList.isEmpty {
-        PanelCard(title: "Your presets", systemImage: "square.stack") {
+        PanelCard(title: "Deine Presets", systemImage: "square.stack") {
           VStack(alignment: .leading, spacing: Layout.snug) {
             ForEach(model.presetList) { preset in
               row(for: .preset(preset.id), label: preset.name, symbol: preset.symbolName)
             }
 
-            CardFooter("A shortcut for one particular preset. The Presets card above steps "
-              + "through the whole list instead, which is the one to bind when the list is "
-              + "long.")
+            CardFooter("Direkter Kurzbefehl für ein einzelnes Preset.")
           }
         }
         .entrance(index: HotkeyCenter.Action.Builtin.Group.allCases.count)
@@ -54,22 +52,13 @@ struct ShortcutSettings: View {
   private func footer(for group: HotkeyCenter.Action.Builtin.Group) -> String? {
     switch group {
     case .displays:
-      // The old text here said shortcuts act on the display under the pointer.
-      // That was true before there was a setting for it, and has been wrong
-      // since — the default has been the focused window for some time.
-      "These follow the setting under Keys: the screen you are working on, the one under "
-        + "the pointer, or all of them at once. “Everywhere” ignores that and always moves "
-        + "the whole group, keeping the differences between screens. Shortcuts have no "
-        + "finer step — the modifiers that get one out of a keyboard key are already part "
-        + "of the shortcut itself."
+      "Folgt dem Ziel unter Tasten & Fokus („Aktives Fenster“, „Unter dem Zeiger“ oder „Alle Displays“)."
     case .sound:
-      "The display's own speakers when it has them, and the system output when it does not."
+      "Nutzt Monitor-Lautsprecher sofern vorhanden, sonst die Systemausgabe."
     case .presets:
-      "Steps through the presets in the order they are listed, wrapping at both ends, and "
-        + "carries on from whichever one was applied last — including one applied by the "
-        + "schedule or by an app. The indicator says where you landed."
+      "Wechselt reihum durch alle Presets; das Studio-HUD zeigt den aktiven Treffer."
     case .app:
-      "They work anywhere, including over full-screen apps, and need no extra permission."
+      "Funktioniert global und auch über Vollbild-Apps ohne Zusatzberechtigung."
     }
   }
 

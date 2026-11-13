@@ -28,9 +28,9 @@ struct FinishSection: View {
   private var curve: ToneCurve { display.toneCurve ?? .paper }
 
   var body: some View {
-    PanelCard(title: "Finish", systemImage: "doc.plaintext", accent: display.accent) {
+    PanelCard(title: "Papier- & Matt-Finish", systemImage: "doc.plaintext", accent: display.accent) {
       VStack(alignment: .leading, spacing: Layout.normal) {
-        Toggle("Give this display a paper finish", isOn: Binding(
+        Toggle("Diesem Display ein Papier-Finish geben", isOn: Binding(
           get: { isFinished },
           set: { display.setToneCurve($0 ? .paper : nil) }
         ))
@@ -47,12 +47,8 @@ struct FinishSection: View {
         }
 
         CardFooter(isFinished
-          ? "This reshapes the colour tables — blacks lift, white comes down — which is what a "
-            + "matte panel does to an image and what ink does on paper. It does not remove "
-            + "reflections: those come from the glass, and no software reaches them. Like "
-            + "warmth, it shows up in screenshots."
-          : "Off means off: with no finish set, this display's tone curve is left exactly as "
-            + "macOS hands it over.")
+          ? "Hebt Schwarztöne sanft an und beruhigt Spitzenlichter – wie Tinte auf warmem Papier."
+          : "Ohne Finish bleibt die Tonwertkurve exakt wie von macOS vorgegeben.")
       }
       .animation(motion.spatialDefault, value: isFinished)
       .animation(motion.spatialDefault, value: showsDetail)
@@ -74,7 +70,7 @@ struct FinishSection: View {
         accent: display.accent
       )
 
-      Text(curve.namedFinish.map(describe) ?? "Adjusted by hand.")
+      Text(curve.namedFinish.map(describe) ?? "Individuell abgestimmt.")
         .font(TypeScale.editorialAccent)
         .foregroundStyle(.secondary)
 
@@ -107,9 +103,9 @@ struct FinishSection: View {
 
   private func describe(_ name: String) -> String {
     switch name {
-    case "Paper": "Whites settle and blacks lift just enough to stop reading as a hole."
-    case "Matte": "More of the same, near what a matte coating does to the picture."
-    case "Ink": "The flattest of the three — closer to e-paper than to a display."
+    case "Paper": "Sanftere Weißtöne und leicht angehobene Schatten für entspanntes Lesen."
+    case "Matte": "Ausgewogene Mattierung wie bei einer entspiegelten Studio-Oberfläche."
+    case "Ink": "Maximale Ruhe im Kontrast – fast wie elektronisches Papier."
     default: ""
     }
   }
@@ -119,7 +115,7 @@ struct FinishSection: View {
       showsDetail.toggle()
     } label: {
       Label(
-        showsDetail ? "Hide the numbers" : "Adjust the numbers",
+        showsDetail ? "Werte ausblenden" : "Schwarzwert & Weißpunkt feinabstimmen",
         systemImage: showsDetail ? "chevron.up" : "chevron.down"
       )
       .font(TypeScale.detail)
@@ -130,21 +126,21 @@ struct FinishSection: View {
   private var sliders: some View {
     VStack(alignment: .leading, spacing: Layout.normal) {
       slider(
-        title: "Black lift",
+        title: "Schwarzanhebung",
         value: curve.blackLift,
         range: ToneCurve.liftRange,
         readout: percent(curve.blackLift),
         set: { ToneCurve(blackLift: $0, whiteCeiling: curve.whiteCeiling, softness: curve.softness) }
       )
       slider(
-        title: "White ceiling",
+        title: "Weißpunkt-Decke",
         value: curve.whiteCeiling,
         range: ToneCurve.ceilingRange,
         readout: percent(curve.whiteCeiling),
         set: { ToneCurve(blackLift: curve.blackLift, whiteCeiling: $0, softness: curve.softness) }
       )
       slider(
-        title: "Softness",
+        title: "Weichzeichnung",
         value: curve.softness,
         range: ToneCurve.softnessRange,
         readout: String(format: "%.2f", curve.softness),

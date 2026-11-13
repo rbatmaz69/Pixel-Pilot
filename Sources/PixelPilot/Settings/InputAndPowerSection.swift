@@ -15,7 +15,7 @@ struct InputAndPowerSection: View {
   @State private var pendingPowerMode: PowerMode?
 
   var body: some View {
-    PanelCard(title: "Input and power", systemImage: "cable.connector", accent: display.accent) {
+    PanelCard(title: "Eingang & Ruhezustand", systemImage: "cable.connector", accent: display.accent) {
       VStack(alignment: .leading, spacing: Layout.normal) {
         inputs
         if !display.availablePowerModes.isEmpty {
@@ -25,33 +25,32 @@ struct InputAndPowerSection: View {
       }
     }
     .confirmationDialog(
-      pendingInput.map { "Switch to \(InputSource.name(for: $0))?" } ?? "",
+      pendingInput.map { "Zu \(InputSource.name(for: $0)) wechseln?" } ?? "",
       isPresented: Binding(get: { pendingInput != nil }, set: { if !$0 { pendingInput = nil } }),
       titleVisibility: .visible
     ) {
-      Button("Switch input", role: .destructive) {
+      Button("Eingang wechseln", role: .destructive) {
         if let value = pendingInput { display.switchInput(to: value) }
         pendingInput = nil
       }
-      Button("Cancel", role: .cancel) { pendingInput = nil }
+      Button("Abbrechen", role: .cancel) { pendingInput = nil }
     } message: {
       Text(switchInputWarning)
     }
     .confirmationDialog(
-      pendingPowerMode.map { "Set \(display.name) to \($0.displayName)?" } ?? "",
+      pendingPowerMode.map { "\(display.name) in „\($0.displayName)“ versetzen?" } ?? "",
       isPresented: Binding(
         get: { pendingPowerMode != nil }, set: { if !$0 { pendingPowerMode = nil } }
       ),
       titleVisibility: .visible
     ) {
-      Button("Turn off display", role: .destructive) {
+      Button("Display ausschalten", role: .destructive) {
         if let mode = pendingPowerMode { display.setPowerMode(mode) }
         pendingPowerMode = nil
       }
-      Button("Cancel", role: .cancel) { pendingPowerMode = nil }
+      Button("Abbrechen", role: .cancel) { pendingPowerMode = nil }
     } message: {
-      Text("Wake it again by moving the mouse or pressing the monitor's power button. "
-        + "The Mac itself stays awake.")
+      Text("Bewege die Maus oder drücke die Power-Taste am Monitor zum Aufwecken. Der Mac selbst bleibt wach.")
     }
   }
 
@@ -59,13 +58,11 @@ struct InputAndPowerSection: View {
   /// unlisted — "you can switch back with the monitor's buttons" is misleading
   /// when the input you are on does not appear in the list at all.
   private var switchInputWarning: String {
-    let base = "This Mac will stop appearing on \(display.name). Pixel Pilot talks to the "
-      + "display over the video connection, so it cannot switch back."
+    let base = "Das Bild dieses Macs verschwindet von \(display.name)."
     if display.currentInputIsUnlisted {
-      return base + " Your current connection is not even among the inputs this display "
-        + "lists, so there is no entry here to return to — only the monitor's own buttons."
+      return base + " Die aktuelle Verbindung ist nicht gelistet – der Rückwechsel ist nur direkt am Monitor möglich."
     }
-    return base + " You will need the monitor's own buttons."
+    return base + " Zurückwechseln ist direkt über die Monitortasten möglich."
   }
 
   // MARK: - Inputs
@@ -74,12 +71,11 @@ struct InputAndPowerSection: View {
   private var inputs: some View {
     if display.availableInputs.isEmpty {
       VStack(alignment: .leading, spacing: 8) {
-        Text("Input switching")
+        Text("Eingangsquelle")
           .font(.callout.weight(.medium))
         Text(display.isReadingCapabilityString
-          ? "Reading the display's capability list…"
-          : "Pixel Pilot only offers inputs the display lists itself. Reading that list "
-            + "takes a few seconds and is done once.")
+          ? "Eingangsliste des Monitors wird gelesen…"
+          : "Liest einmalig die vom Monitor gemeldeten Video-Eingänge ein.")
           .font(.caption)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
@@ -90,11 +86,11 @@ struct InputAndPowerSection: View {
           if display.isReadingCapabilityString {
             HStack(spacing: Layout.tight) {
               ProgressView().controlSize(.small)
-              Text("Reading…")
+              Text("Lese…")
             }
             .transition(.blurReplace)
           } else {
-            Text("Read available inputs")
+            Text("Eingänge einlesen")
               .transition(.blurReplace)
           }
         }
@@ -105,7 +101,7 @@ struct InputAndPowerSection: View {
     } else {
       VStack(alignment: .leading, spacing: Layout.tight) {
         HStack {
-          Text("Input")
+          Text("Eingangsquelle")
             .font(TypeScale.rowTitle)
           Spacer()
           Text(currentInputDescription)
@@ -137,12 +133,12 @@ struct InputAndPowerSection: View {
   /// current input would be inventing information.
   private var currentInputDescription: String {
     if let current = display.currentInput {
-      return "currently \(InputSource.name(for: current))"
+      return "aktuell \(InputSource.name(for: current))"
     }
     if let reported = display.reportedInput {
-      return String(format: "reports 0x%02X — not one it lists", reported)
+      return String(format: "meldet 0x%02X (ungelistet)", reported)
     }
-    return "current input unknown"
+    return "aktueller Eingang unbekannt"
   }
 
   /// The stronger warning, for when the connection in use is not in the list.
@@ -156,10 +152,8 @@ struct InputAndPowerSection: View {
       StatusRow(
         symbol: "exclamationmark.triangle.fill",
         tint: Status.warn,
-        title: "No way back from here",
-        detail: "The connection you are using is not among the inputs this display lists, "
-          + "so there is nothing here to switch back to. Only the monitor's own buttons "
-          + "can return you to it."
+        title: "Aktive Verbindung nicht gelistet",
+        detail: "Diese Verbindung fehlt in der Eingangsliste – zum Zurückwechseln werden die Monitortasten benötigt."
       )
       .transition(.blurReplace)
     }
@@ -169,7 +163,7 @@ struct InputAndPowerSection: View {
 
   private var power: some View {
     VStack(alignment: .leading, spacing: Layout.tight) {
-      Text("Power")
+      Text("Ruhezustand")
         .font(TypeScale.rowTitle)
 
       HStack(spacing: Layout.tight) {
@@ -181,7 +175,7 @@ struct InputAndPowerSection: View {
         }
       }
 
-      Text("The Mac stays awake; only the display sleeps.")
+      Text("Der Mac bleibt wach – nur das Display geht schlafen.")
         .font(TypeScale.detail)
         .foregroundStyle(.secondary)
     }

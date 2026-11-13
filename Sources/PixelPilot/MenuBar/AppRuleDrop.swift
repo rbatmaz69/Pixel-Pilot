@@ -126,10 +126,7 @@ struct AppRuleDropSheet: View {
         noPresets.entrance(index: 1)
       } else {
         presetChips.entrance(index: 1)
-        CardFooter(
-          "Applied whenever \(application.name) is the frontmost app, and undone by "
-            + "whichever rule matches next."
-        )
+        CardFooter("Aktiv, sobald \(application.name) im Vordergrund arbeitet.")
         .entrance(index: 2)
       }
     }
@@ -145,7 +142,7 @@ struct AppRuleDropSheet: View {
         Text(application.name)
           .font(TypeScale.cardTitle)
           .lineLimit(1)
-        Text(existing == nil ? "Choose a preset for it" : "Change its preset")
+        Text(existing == nil ? "Passendes Preset wählen" : "Preset ändern")
           .font(TypeScale.detail)
           .foregroundStyle(.secondary)
       }
@@ -156,7 +153,7 @@ struct AppRuleDropSheet: View {
         Image(systemName: "xmark")
       }
       .buttonStyle(.soft)
-      .help("Close")
+      .help("Schließen")
     }
   }
 
@@ -201,12 +198,11 @@ struct AppRuleDropSheet: View {
       StatusRow(
         symbol: "square.stack.3d.up.slash",
         tint: Status.warn,
-        title: "No presets yet",
-        detail: "A rule points at a preset, so there has to be one first. Set the displays "
-          + "the way you want them, then capture it."
+        title: "Noch keine Presets",
+        detail: "Lege zuerst ein Preset aus deiner aktuellen Licht-Abstimmung an."
       )
 
-      Button("Open Settings…", action: onOpenSettings)
+      Button("Einstellungen öffnen…", action: onOpenSettings)
         .buttonStyle(.soft(Status.warn))
         .font(TypeScale.detail.weight(.medium))
         .padding(.leading, 22)

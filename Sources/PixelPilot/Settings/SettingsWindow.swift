@@ -24,25 +24,25 @@ enum AppPage: String, CaseIterable, Hashable {
 
   var title: String {
     switch self {
-    case .general: "General"
+    case .general: "Allgemein"
     case .updates: "Updates"
-    case .keys: "Keys"
-    case .presets: "Presets"
-    case .schedule: "Schedule"
-    case .apps: "Apps"
-    case .shortcuts: "Shortcuts"
+    case .keys: "Tasten & Fokus"
+    case .presets: "Licht-Szenen"
+    case .schedule: "Zeitplan"
+    case .apps: "App-Regeln"
+    case .shortcuts: "Kurzbefehle"
     }
   }
 
   var summary: String {
     switch self {
-    case .general: "Colour, style, open at login"
-    case .updates: "New versions, and what they cost"
-    case .keys: "Media keys, permissions, detection"
-    case .presets: "Saved brightness and volume sets"
-    case .schedule: "Changes through the day"
-    case .apps: "A preset per application"
-    case .shortcuts: "Global keyboard shortcuts"
+    case .general: "Studio-Stil, Akzentfarbe & Autostart"
+    case .updates: "Neue Versionen & Release Notes"
+    case .keys: "Medientasten, Rechte & Fokus-Dimmung"
+    case .presets: "Gespeicherte Licht- & Ton-Szenen"
+    case .schedule: "Automatischer Tagesverlauf"
+    case .apps: "Szenen pro Anwendung"
+    case .shortcuts: "Globale Tastenkürzel"
     }
   }
 
@@ -151,7 +151,7 @@ struct SettingsWindow: View {
         Button {
           model.identifyDisplays()
         } label: {
-          Label("Identify", systemImage: "number.circle")
+          Label("Identifizieren", systemImage: "number.circle")
             .font(TypeScale.detail.weight(.medium))
         }
         .buttonStyle(.soft)
@@ -163,7 +163,7 @@ struct SettingsWindow: View {
           ForEach(model.displays) { display in
             SidebarRow(
               title: display.name,
-              summary: display.isBuiltin ? "Built-in" : display.routeDescription,
+              summary: display.isBuiltin ? "Integriert" : display.routeDescription,
               trailingText: "\(Int((display.brightness * 100).rounded()))%"
             ) {
               ZStack {
@@ -182,14 +182,14 @@ struct SettingsWindow: View {
           }
 
           SidebarRow(
-            title: "Remembered",
-            summary: "Displays seen before, connected or not",
+            title: "Bekannte Displays",
+            summary: "Früher verbundene Monitore",
             symbolName: "externaldrive.badge.checkmark"
           )
           .tag(SettingsRoute.remembered)
         }
 
-        Section("App") {
+        Section("Studio") {
           ForEach(AppPage.allCases, id: \.self) { app in
             SidebarRow(
               title: app.title,
@@ -222,11 +222,11 @@ struct SettingsWindow: View {
   private var sidebarFooter: some View {
     HStack(spacing: 6) {
       AccentDot(accent: Status.ok, size: 6)
-      Text("0.0% CPU while idle")
+      Text("0,0 % CPU im Leerlauf")
         .font(.system(size: 10.5, weight: .medium, design: .rounded).monospacedDigit())
         .foregroundStyle(.secondary)
       Spacer()
-      Text("HIG Studio")
+      Text("Warm Studio")
         .font(TypeScale.editorialAccent)
         .foregroundStyle(.tertiary)
     }
@@ -280,7 +280,7 @@ struct SettingsWindow: View {
       }
     case .remembered:
       RememberedDisplays(model: model)
-        .navigationTitle("Remembered displays")
+        .navigationTitle("Bekannte Displays")
     case let .app(app):
       appPage(app).navigationTitle(app.title)
     }
@@ -301,9 +301,8 @@ struct SettingsWindow: View {
 
   private var noDisplays: some View {
     CharacterfulEmptyState(
-      title: "Looking for displays",
-      message: "Nothing is answering on the DDC bus yet. External monitors appear here "
-        + "as soon as they are connected."
+      title: "Suche nach Displays…",
+      message: "Externe Monitore erscheinen hier automatisch, sobald sie angeschlossen sind."
     ) {
       SearchingRadar()
     }

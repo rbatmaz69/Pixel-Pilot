@@ -26,7 +26,7 @@ struct SystemVolumeRow: View {
         }
         .buttonStyle(.soft)
         .disabled(!audio.isControllable)
-        .help(audio.isMuted ? "Unmute" : "Mute")
+        .help(audio.isMuted ? "Ton ein" : "Stumm")
 
         ExpressiveSlider(
           value: Binding(
@@ -82,10 +82,10 @@ struct SystemVolumeRow: View {
     .buttonStyle(.soft)
     .menuIndicator(.hidden)
     .fixedSize()
-    .help(audio.currentDeviceName.map { "Output: \($0)" } ?? "Choose audio output")
+    .help(audio.currentDeviceName.map { "Ausgang: \($0)" } ?? "Audio-Ausgang wählen")
   }
 
   private func label(for device: SystemVolume.OutputDevice) -> String {
-    device.hasSettableVolume ? device.name : "\(device.name) — fixed level"
+    device.hasSettableVolume ? device.name : "\(device.name) – fester Pegel"
   }
 }

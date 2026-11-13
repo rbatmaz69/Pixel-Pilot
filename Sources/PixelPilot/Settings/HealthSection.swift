@@ -28,7 +28,7 @@ struct HealthSection: View {
   private var marks: [PixelDefect] { display.pixelDefects }
 
   var body: some View {
-    PanelCard(title: "Health", systemImage: "waveform.path.ecg", accent: display.accent) {
+    PanelCard(title: "Panel-Pflege & Diagnose", systemImage: "waveform.path.ecg", accent: display.accent) {
       VStack(alignment: .leading, spacing: Layout.normal) {
         careSealBanner
 
@@ -54,17 +54,13 @@ struct HealthSection: View {
       RepairSheet(model: model, display: display, isPresented: $isRepairing)
     }
     .confirmationDialog(
-      "Clear the marks on this display?",
+      "Markierungen auf diesem Display löschen?",
       isPresented: $isClearingMarks
     ) {
-      Button("Clear", role: .destructive) { model.clearMarks(on: display) }
-      Button("Cancel", role: .cancel) {}
+      Button("Löschen", role: .destructive) { model.clearMarks(on: display) }
+      Button("Abbrechen", role: .cancel) {}
     } message: {
-      // Naming what is lost rather than asking "are you sure". Finding a single
-      // bad pixel again means walking the patterns again.
-      Text("The \(marks.count) marked \(marks.count == 1 ? "spot" : "spots") go. "
-        + "Reanimating then works the whole screen rather than the spots you found, "
-        + "and finding them again means walking the patterns again.")
+      Text("\(marks.count) markierte \(marks.count == 1 ? "Stelle wird" : "Stellen werden") entfernt.")
     }
   }
 
@@ -161,10 +157,8 @@ struct HealthSection: View {
   private var neverChecked: some View {
     StatusRow(
       symbol: "questionmark.circle",
-      title: "Never checked",
-      detail: "Walking the test patterns takes a couple of minutes and says whether this "
-        + "panel has dead or stuck pixels, banding, backlight bleed — or is simply not "
-        + "running at its own resolution."
+      title: "Noch nicht geprüft",
+      detail: "Ein Durchgang durch die Testbilder prüft auf Pixelfehler, Banding und Ausleuchtung."
     )
   }
 
@@ -173,7 +167,7 @@ struct HealthSection: View {
       symbol: symbol(for: report.overall),
       tint: tint(for: report.overall),
       title: report.overall.displayName,
-      detail: "\(report.headline) · checked "
+      detail: "\(report.headline) · geprüft am "
         + report.date.formatted(date: .abbreviated, time: .omitted)
     )
   }
@@ -198,17 +192,15 @@ struct HealthSection: View {
 
   private var actions: some View {
     HStack(spacing: Layout.snug) {
-      Button(display.healthReport == nil ? "Run health check" : "Check again") {
+      Button(display.healthReport == nil ? "Prüfung starten" : "Erneut prüfen") {
         model.runHealthCheck(on: display)
       }
       .buttonStyle(.soft(display.accent))
 
-      // The ellipsis is not decoration: this one opens a sheet, and the sheet
-      // is where the warning is.
-      Button("Reanimate stuck pixels…") { isRepairing = true }
+      Button("Pixel reanimieren…") { isRepairing = true }
         .buttonStyle(.soft)
 
-      Button("Show test patterns") { model.showTestPatterns(on: display) }
+      Button("Testbilder zeigen") { model.showTestPatterns(on: display) }
         .buttonStyle(.soft)
     }
   }
@@ -216,24 +208,22 @@ struct HealthSection: View {
   private var marksRow: some View {
     VStack(alignment: .leading, spacing: Layout.tight) {
       Text(marksTitle).font(TypeScale.rowTitle)
-      Text("Marked by hand while the patterns were up, and kept for this monitor — "
-        + "as fractions of the screen, so they still point at the same glass after a "
-        + "resolution change.")
+      Text("Manuell markiert und relativ zur Bildschirmfläche gespeichert.")
         .font(TypeScale.detail)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
 
       HStack(spacing: Layout.snug) {
-        Button("Show marks") { model.showMarks(on: display) }
+        Button("Markierungen zeigen") { model.showMarks(on: display) }
           .buttonStyle(.soft(display.accent))
-        Button("Clear marks", role: .destructive) { isClearingMarks = true }
+        Button("Markierungen löschen", role: .destructive) { isClearingMarks = true }
           .buttonStyle(.soft)
       }
     }
   }
 
   private var marksTitle: String {
-    let count = marks.count == 1 ? "1 marked area" : "\(marks.count) marked areas"
+    let count = marks.count == 1 ? "1 markierte Stelle" : "\(marks.count) markierte Stellen"
     let summary = PixelDefects.summary(marks)
     return summary.isEmpty ? count : "\(count) — \(summary)"
   }

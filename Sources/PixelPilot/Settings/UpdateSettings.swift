@@ -49,7 +49,7 @@ struct UpdateSettings: View {
   // MARK: - This version
 
   private var versionCard: some View {
-    PanelCard(title: "This version", systemImage: "shippingbox") {
+    PanelCard(title: "Aktuelle Version", systemImage: "shippingbox") {
       VStack(alignment: .leading, spacing: Layout.normal) {
         Text("Geprüfte Releases direkt von GitHub — ohne Hintergrund-Daemon und mit 0,0 % Idle-CPU.")
           .font(TypeScale.editorialAccent)
@@ -81,47 +81,44 @@ struct UpdateSettings: View {
     case let .available(release):
       switch updater.installCapability {
       case .canInstall:
-        Button("Download \(SemanticVersion(release.tag)?.description ?? release.tag)") {
+        Button("\(SemanticVersion(release.tag)?.description ?? release.tag) laden") {
           updater.download(release)
         }
         .buttonStyle(SoftButtonStyle(isProminent: true))
       case .notWritable:
-        // No install button at all rather than one that cannot work. The
-        // sentence under the row says why, and the releases page is the way
-        // through.
-        Button("Open the releases page") { openURL(release.pageURL) }
+        Button("Release-Seite öffnen") { openURL(release.pageURL) }
           .buttonStyle(.soft)
       }
-      Button("Skip this one") { updater.skip(release) }
+      Button("Überspringen") { updater.skip(release) }
         .buttonStyle(.soft)
 
     case let .downloading(_, fraction):
       Text("\(Int(fraction * 100))%")
         .font(TypeScale.readout)
         .foregroundStyle(.secondary)
-      Button("Stop") { updater.cancel() }
+      Button("Stopp") { updater.cancel() }
         .buttonStyle(.soft)
 
     case .verifying:
-      Button("Stop") { updater.cancel() }
+      Button("Stopp") { updater.cancel() }
         .buttonStyle(.soft)
 
     case let .readyToInstall(release, app):
-      Button("Install and restart") {
+      Button("Installieren & neu starten") {
         updater.install(release, from: app) { model.quitForHandoff() }
       }
       .buttonStyle(SoftButtonStyle(isProminent: true))
-      Button("Not now") { updater.cancel() }
+      Button("Später") { updater.cancel() }
         .buttonStyle(.soft)
 
     case .checking, .installing:
       ProgressView().controlSize(.small)
 
     default:
-      Button("Check now") { updater.check(force: true) }
+      Button("Jetzt prüfen") { updater.check(force: true) }
         .buttonStyle(.soft)
       if let skipped = updater.skippedVersion {
-        Button("Stop skipping \(skipped)") {
+        Button("\(skipped) nicht mehr überspringen") {
           updater.unskip()
           updater.check(force: true)
         }
@@ -152,15 +149,15 @@ struct UpdateSettings: View {
 
   private var statusTitle: String {
     switch updater.phase {
-    case .checking: "Asking GitHub…"
+    case .checking: "Suche auf GitHub…"
     case let .available(release):
-      "\(SemanticVersion(release.tag)?.description ?? release.tag) is available"
-    case .downloading: "Downloading…"
-    case .verifying: "Checking what arrived…"
-    case .readyToInstall: "Ready to install"
-    case .installing: "Installing…"
-    case .upToDate: "Up to date"
-    case .failed: "Could not check for updates"
+      "Version \(SemanticVersion(release.tag)?.description ?? release.tag) verfügbar"
+    case .downloading: "Wird geladen…"
+    case .verifying: "Wird überprüft…"
+    case .readyToInstall: "Bereit zur Installation"
+    case .installing: "Installiert…"
+    case .upToDate: "Aktuell"
+    case .failed: "Update-Prüfung fehlgeschlagen"
     case .idle: "Version \(Updater.currentVersionString)"
     }
   }
@@ -171,31 +168,28 @@ struct UpdateSettings: View {
       return message
 
     case .readyToInstall:
-      return "Downloaded and checked against the checksum GitHub published for it. "
-        + "Installing quits the app and opens the new one."
+      return "Geladen und per Prüfsumme verifiziert. Startet die App beim Installieren neu."
 
     case let .available(release):
       let published = release.publishedAt.map {
-        " Published \($0.formatted(date: .abbreviated, time: .omitted))."
+        " Veröffentlicht am \($0.formatted(date: .abbreviated, time: .omitted))."
       } ?? ""
       let blocked = updater.installCapability == .notWritable
-        ? " This copy is not somewhere it can replace itself — it is at "
-          + "\(Bundle.main.bundleURL.deletingLastPathComponent().path), which this app cannot "
-          + "write to. Download it from the releases page and put it in Applications by hand."
+        ? " Schreibgeschützter Ort (\(Bundle.main.bundleURL.deletingLastPathComponent().path)) — bitte manuell in Programme kopieren."
         : ""
-      return "You have \(Updater.currentVersionString)." + published + blocked
+      return "Installiert: \(Updater.currentVersionString)." + published + blocked
 
     default:
-      let version = "Version \(Updater.currentVersionString) (build \(Updater.currentBuildString))."
-      guard let last = updater.lastCheck else { return version + " Not checked yet." }
-      return version + " Checked \(last.formatted(date: .abbreviated, time: .shortened))."
+      let version = "Version \(Updater.currentVersionString) (Build \(Updater.currentBuildString))."
+      guard let last = updater.lastCheck else { return version + " Noch nicht geprüft." }
+      return version + " Geprüft: \(last.formatted(date: .abbreviated, time: .shortened))."
     }
   }
 
   // MARK: - What is new
 
   private func notesCard(_ release: GitHubRelease) -> some View {
-    PanelCard(title: release.name ?? "What is new", systemImage: "text.alignleft") {
+    PanelCard(title: release.name ?? "Neuerungen", systemImage: "text.alignleft") {
       VStack(alignment: .leading, spacing: Layout.normal) {
         if let notes = Self.readableNotes(release.body) {
           Text(notes)
@@ -204,7 +198,7 @@ struct UpdateSettings: View {
             .fixedSize(horizontal: false, vertical: true)
         }
 
-        Button("Read the full notes on GitHub") { openURL(release.pageURL) }
+        Button("Release-Hinweise auf GitHub lesen") { openURL(release.pageURL) }
           .buttonStyle(.soft)
       }
     }
@@ -249,47 +243,32 @@ struct UpdateSettings: View {
   // MARK: - Automatic checks
 
   private var automaticCard: some View {
-    PanelCard(title: "Automatic checks", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
+    PanelCard(title: "Automatische Prüfung", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
       VStack(alignment: .leading, spacing: Layout.tight) {
-        Toggle("Check for updates automatically", isOn: Binding(
+        Toggle("Automatisch nach Updates suchen", isOn: Binding(
           get: { updater.automaticChecks },
           set: { updater.automaticChecks = $0 }
         ))
 
-        CardFooter("When the app starts, and at most once a day after that. There is no "
-          + "timer behind this — the date of the last check is stored and compared against "
-          + "the clock, which is what lets the app sit at 0.0 % CPU and still notice a "
-          + "release within a day of being run. It is one request to api.github.com asking "
-          + "which release is newest. Nothing is sent, nothing is counted, and this is the "
-          + "only thing in the app that touches the network at all.")
+        CardFooter("Einmal täglich beim Öffnen — ohne Hintergrund-Timer (0,0 % Idle-Last).")
       }
     }
   }
 
-  // MARK: - The honest part
-
   private var accessibilityCard: some View {
-    PanelCard(title: "What an update costs", systemImage: "hand.raised") {
+    PanelCard(title: "Hinweis zu Ad-hoc-Updates", systemImage: "hand.raised") {
       VStack(alignment: .leading, spacing: Layout.normal) {
         StatusRow(
           symbol: "key.slash",
           tint: Status.warn,
-          title: "The Accessibility permission has to be granted again",
-          detail: "Every release is signed ad-hoc, so its signature is different from the "
-            + "last one, and macOS ties the Accessibility grant to the signature rather "
-            + "than to the app's name or where it lives. After updating, the brightness "
-            + "keys stop working until Pixel Pilot is removed from System Settings → "
-            + "Privacy & Security → Accessibility and added back."
+          title: "Bedienungshilfen ggf. neu freigeben",
+          detail: "Bei signaturändernden Releases unter Systemeinstellungen → Datenschutz & Sicherheit → Bedienungshilfen kurz neu hinzufügen."
         )
 
-        Button("Open the Keys page") { model.showKeysSettings() }
+        Button("Tasten & Fokus öffnen") { model.showKeysSettings() }
           .buttonStyle(.soft)
 
-        CardFooter("Ending this needs a Developer ID certificate and notarisation, which "
-          + "need the paid Apple developer program. Until then it is a real cost of "
-          + "updating and it is better said here than discovered afterwards. Building "
-          + "from source does not have the problem: a development certificate is stable "
-          + "across builds, so the grant survives.")
+        CardFooter("Bei lokalen Xcode-Builds bleibt die Signatur unverändert erhalten.")
       }
     }
   }

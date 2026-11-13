@@ -20,23 +20,22 @@ struct AppRuleSettings: View {
   }
 
   private var rulesCard: some View {
-    PanelCard(title: "Per-app presets", systemImage: "app.badge") {
+    PanelCard(title: "App-spezifische Presets", systemImage: "app.badge") {
       VStack(alignment: .leading, spacing: Layout.snug) {
         Text("Rückt eine verknüpfte App in den Fokus, wechselt das Studio-Licht nahtlos mit.")
           .font(TypeScale.editorialAccent)
           .foregroundStyle(.secondary)
 
         if model.presetList.isEmpty {
-          Text("Capture a preset first — a rule chooses between presets rather than "
-            + "storing its own values.")
+          Text("Erstelle zuerst ein Preset — App-Regeln wählen zwischen vorhandenen Presets.")
             .font(TypeScale.detail)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         } else {
           if model.appRuleList.isEmpty {
             CharacterfulEmptyState(
-              title: "No rules yet",
-              message: "Pick an application and the preset it should bring with it."
+              title: "Noch keine App-Regeln",
+              message: "Wähle eine App und das passende Studio-Preset."
             ) {
               SearchingRadar(size: 56)
             }
@@ -48,7 +47,7 @@ struct AppRuleSettings: View {
               .transition(.blurReplace.combined(with: .scale(0.96, anchor: .leading)))
           }
 
-          Button("Choose an application…") { chooseApplication() }
+          Button("Programm wählen…") { chooseApplication() }
             .buttonStyle(SoftButtonStyle(isProminent: true))
             .font(TypeScale.detail.weight(.medium))
         }
@@ -63,14 +62,14 @@ struct AppRuleSettings: View {
 
       VStack(alignment: .leading, spacing: 1) {
         Text(rule.name).font(TypeScale.rowTitle)
-        Text(presetName(rule.presetID) ?? "preset missing")
+        Text(presetName(rule.presetID) ?? "Preset fehlt")
           .font(TypeScale.detail)
           .foregroundStyle(.secondary)
       }
 
       Spacer(minLength: Layout.snug)
 
-      MorphMenuPicker(title: presetName(rule.presetID) ?? "Choose") {
+      MorphMenuPicker(title: presetName(rule.presetID) ?? "Auswählen") {
         ForEach(model.presetList) { preset in
           Button {
             var updated = rule
@@ -90,24 +89,18 @@ struct AppRuleSettings: View {
       }
       .buttonStyle(.soft)
       .font(TypeScale.detail)
-      .help("Remove this rule")
+      .help("Regel entfernen")
     }
   }
 
-  /// What happens when no rule matches.
-  ///
-  /// Without this the displays would keep whatever the last rule set, which
-  /// reads as the rule having stuck rather than as no rule applying. Presets
-  /// are absolute, so there is nothing to remember and nothing to restore —
-  /// leaving an app simply means the next matching rule applies.
   private var fallbackCard: some View {
-    PanelCard(title: "Everything else", systemImage: "arrow.uturn.backward") {
+    PanelCard(title: "Standard für alle anderen", systemImage: "arrow.uturn.backward") {
       VStack(alignment: .leading, spacing: Layout.normal) {
-        ControlRow(title: "When no rule matches") {
+        ControlRow(title: "Wenn keine Regel greift") {
           MorphMenuPicker(
-            title: model.fallbackPresetID.flatMap(presetName) ?? "Do nothing"
+            title: model.fallbackPresetID.flatMap(presetName) ?? "Nichts ändern"
           ) {
-            Button("Do nothing") { model.setFallbackPreset(nil) }
+            Button("Nichts ändern") { model.setFallbackPreset(nil) }
             if !model.presetList.isEmpty { Divider() }
             ForEach(model.presetList) { preset in
               Button {
@@ -119,9 +112,7 @@ struct AppRuleSettings: View {
           }
         }
 
-        CardFooter("Switching apps is announced by macOS, so nothing runs in the background "
-          + "watching for it. Bursts of ⌘-Tab are collapsed into one change, and returning to "
-          + "an app that is already set does nothing at all.")
+        CardFooter("Reagiert ereignisgesteuert auf App-Wechsel (0 % Idle-Last).")
       }
     }
   }

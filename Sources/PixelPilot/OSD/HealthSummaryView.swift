@@ -60,9 +60,9 @@ struct HealthSummaryView: View {
         Divider()
 
         HStack {
-          Button("Done", action: onClose)
+          Button("Fertig", action: onClose)
             .buttonStyle(PlateButtonStyle(ink: .primary))
-          Text("esc, or click anywhere")
+          Text("Esc oder klicken zum Schließen")
             .font(TypeScale.detail)
             .foregroundStyle(.secondary)
         }
@@ -116,22 +116,19 @@ struct HealthSummaryView: View {
   /// between them is the entire value of having walked the patterns.
   private func detail(for pattern: TestPattern) -> String {
     switch report[pattern] {
-    case .looksRight: "Looked right"
-    case .skipped: "Not checked"
+    case .looksRight: "Sieht sauber aus"
+    case .skipped: "Übersprungen"
     case .problem:
       switch pattern.problemClass {
-      case .pixelFault: "A fault in the panel. Marking it lets the repair pass work on it."
-      case .panelQuality: "How this panel behaves. Nothing is broken and no setting changes it."
-      case .configuration:
-        "Not the display's fault — it isn't being driven at its own resolution. "
-          + "System Settings ▸ Displays."
+      case .pixelFault: "Panel-Pixelstelle — kann markiert und geübt werden."
+      case .panelQuality: "Typische Panel-Eigenschaft."
+      case .configuration: "Skalierungs-Auflösung weicht ab (Systemeinstellungen ▸ Displays)."
       }
     }
   }
 
   private var marksLine: String {
-    let count = report.defectCount == 1 ? "1 spot was marked" : "\(report.defectCount) spots were marked"
-    return "\(count) on this display. The Health card can exercise them, which sometimes "
-      + "frees a stuck pixel and can do nothing at all for a dead one."
+    let count = report.defectCount == 1 ? "1 Stelle wurde markiert" : "\(report.defectCount) Stellen wurden markiert"
+    return "\(count) — trainierbar unter Panel-Pflege."
   }
 }

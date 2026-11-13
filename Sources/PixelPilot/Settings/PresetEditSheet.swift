@@ -43,7 +43,7 @@ struct PresetEditSheet: View {
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.normal) {
       VStack(alignment: .leading, spacing: 2) {
-        Text("Edit preset")
+        Text("Preset bearbeiten")
           .font(TypeScale.sheetTitle)
         Text("Name und Symbol in der Menüleiste anpassen.")
           .font(TypeScale.editorialAccent)
@@ -59,26 +59,22 @@ struct PresetEditSheet: View {
         SymbolChipPicker(
           selection: $symbolName,
           symbols: symbols,
-          accessibilityLabel: "Preset symbol"
+          accessibilityLabel: "Preset-Symbol"
         )
       }
 
-      // What this sheet does *not* touch, said plainly. Otherwise "Edit" reads
-      // as a promise of a numbers editor, and its absence reads as an omission
-      // rather than as the design.
-      CardFooter("The values stay as they are. To change what this preset does, set the "
-        + "displays up the way you want them and press its update button.")
+      CardFooter("Lichtwerte bleiben erhalten — aktualisiere sie direkt in den Presets über „Aktualisieren“.")
 
       Spacer(minLength: 0)
 
       HStack {
-        Button("Cancel", role: .cancel, action: onCancel)
+        Button("Abbrechen", role: .cancel, action: onCancel)
           .buttonStyle(.soft)
           .keyboardShortcut(.cancelAction)
 
         Spacer()
 
-        Button("Save", action: save)
+        Button("Speichern", action: save)
           .buttonStyle(SoftButtonStyle(isProminent: true))
           .keyboardShortcut(.defaultAction)
           .disabled(trimmedName.isEmpty)

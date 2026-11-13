@@ -258,11 +258,11 @@ struct MenuBarPanel: View {
         .padding(.top, 2)
 
       VStack(alignment: .leading, spacing: Layout.tight) {
-        Text("No displays found")
+        Text("Keine Displays gefunden")
           .font(TypeScale.cardTitle)
         Text(model.isDDCAvailable
-          ? "Nothing is answering on the DDC bus yet."
-          : "DDC/CI is unavailable on this system. Software dimming is still possible.")
+          ? "Auf dem DDC-Bus antwortet derzeit kein Display."
+          : "DDC/CI ist auf diesem System nicht verfügbar. Software-Dimmen bleibt aktiv.")
           .font(TypeScale.detail)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
@@ -335,12 +335,11 @@ struct MenuBarPanel: View {
       StatusRow(
         symbol: "keyboard.badge.exclamationmark",
         tint: Status.warn,
-        title: "Brightness keys need permission",
-        detail: "Allow Pixel Pilot under Privacy & Security → Accessibility to use "
-          + "the keyboard's brightness keys."
+        title: "Helligkeitstasten benötigen Berechtigung",
+        detail: "Erlaube Pixel Pilot unter Datenschutz & Sicherheit → Bedienungshilfen."
       )
 
-      Button("Open Settings…") {
+      Button("Einstellungen öffnen…") {
         model.requestAccessibilityPermission()
       }
       .buttonStyle(.soft(Status.warn))
@@ -362,7 +361,7 @@ struct MenuBarPanel: View {
   private var footer: some View {
     HStack(spacing: Layout.tight) {
       Button(action: onOpenSettings) {
-        Label("Settings", systemImage: "gearshape")
+        Label("Einstellungen", systemImage: "gearshape")
           .labelStyle(.titleAndIcon)
           // A dot rather than a banner, a badge on the menu bar icon, or a row
           // that pushes the panel taller. An update is worth knowing about and
@@ -374,13 +373,13 @@ struct MenuBarPanel: View {
               AccentDot(accent: theme.tone, size: 6)
                 .offset(x: 4, y: -2)
                 .transition(.scale.combined(with: .opacity))
-                .accessibilityLabel("An update is available")
+                .accessibilityLabel("Ein Update ist verfügbar")
             }
           }
       }
       .help(model.updater.hasUpdate
-        ? "An update is available — displays, presets, schedule and keys"
-        : "Displays, presets, schedule and keys")
+        ? "Ein Update ist verfügbar – Displays, Szenen, Zeitplan & Tasten"
+        : "Displays, Szenen, Zeitplan & Tasten")
       .animation(motion.effectDefault, value: model.updater.hasUpdate)
 
       Spacer()
@@ -390,7 +389,7 @@ struct MenuBarPanel: View {
       } label: {
         Image(systemName: "power")
       }
-      .help("Quit Pixel Pilot")
+      .help("Pixel Pilot beenden")
     }
     .buttonStyle(.soft)
     .font(.callout)
@@ -453,7 +452,7 @@ private struct DisplayControlGroup: View {
               .symbolEffect(.bounce, value: display.isMuted)
           }
           .buttonStyle(.soft(display.accent))
-          .help(display.isMuted ? "Unmute" : "Mute")
+          .help(display.isMuted ? "Ton ein" : "Stumm")
         }
       }
     }
@@ -500,7 +499,7 @@ private struct DisplayControlGroup: View {
         Image(systemName: "a.circle")
           .font(.caption)
           .foregroundStyle(.secondary)
-          .help("Following the built-in display")
+          .help("Folgt dem integrierten Display")
           .transition(.blurReplace)
       }
 
@@ -543,7 +542,7 @@ private struct DisplayControlGroup: View {
       Image(systemName: "circle.slash")
         .font(.caption)
         .foregroundStyle(.secondary)
-        .help("Warmth off")
+        .help("Farbwärme aus")
         .transition(.blurReplace)
     case let .kelvin(kelvin):
       // The same function that drives the hardware, so the dot is the colour
