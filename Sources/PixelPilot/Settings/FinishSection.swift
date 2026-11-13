@@ -30,56 +30,47 @@ struct FinishSection: View {
   var body: some View {
     PanelCard(title: "Papier- & Matt-Finish", systemImage: "doc.plaintext", accent: display.accent) {
       VStack(alignment: .leading, spacing: Layout.normal) {
-        Toggle("Diesem Display ein Papier-Finish geben", isOn: Binding(
-          get: { isFinished },
-          set: { display.setToneCurve($0 ? .paper : nil) }
-        ))
+        SegmentedMorphPicker(
+          selection: Binding(
+            get: { display.toneCurve },
+            set: { display.setToneCurve($0) }
+          ),
+          options: [
+            (nil as ToneCurve?, "Aus"),
+            (ToneCurve.paper, "Paper"),
+            (ToneCurve.matte, "Matte"),
+            (ToneCurve.ink, "Ink"),
+          ],
+          accent: display.accent
+        )
 
-        if isFinished {
+        if let active = display.toneCurve {
           VStack(alignment: .leading, spacing: Layout.normal) {
-            picker
+            Text(active.namedFinish.map(describe) ?? "Individuell abgestimmt.")
+              .font(TypeScale.editorialAccent)
+              .foregroundStyle(.secondary)
+
+            HStack(spacing: Layout.tight) {
+              finishMetricPill(label: "Schwarzanhebung", value: "+\(percent(active.blackLift))")
+              finishMetricPill(label: "Weißpunkt-Decke", value: percent(active.whiteCeiling))
+              finishMetricPill(label: "Weichzeichnung", value: String(format: "%.2f", active.softness))
+            }
+
             detailToggle
+
             if showsDetail {
               sliders.transition(.blurReplace.combined(with: .scale(0.97, anchor: .top)))
             }
           }
           .transition(.blurReplace.combined(with: .scale(0.97, anchor: .top)))
+        } else {
+          Text("Unveränderte Tonwertkurve — wähle Paper, Matte oder Ink für weniger Spiegel-Kontrast.")
+            .font(TypeScale.detail)
+            .foregroundStyle(.secondary)
         }
-
-        CardFooter(isFinished
-          ? "Hebt Schwarztöne sanft an und beruhigt Spitzenlichter – wie Tinte auf warmem Papier."
-          : "Ohne Finish bleibt die Tonwertkurve exakt wie von macOS vorgegeben.")
       }
       .animation(motion.spatialDefault, value: isFinished)
       .animation(motion.spatialDefault, value: showsDetail)
-    }
-  }
-
-  /// The three named finishes. Nothing is highlighted once the sliders below
-  /// have been moved, and that is the intended reading — the curve is no longer
-  /// one of these, and lighting a segment that no longer describes it would be
-  /// the picker lying about what the screen is doing.
-  private var picker: some View {
-    VStack(alignment: .leading, spacing: Layout.tight) {
-      SegmentedMorphPicker(
-        selection: Binding(
-          get: { curve },
-          set: { display.setToneCurve($0) }
-        ),
-        options: ToneCurve.named.map { (value: $0.curve, title: $0.name) },
-        accent: display.accent
-      )
-
-      Text(curve.namedFinish.map(describe) ?? "Individuell abgestimmt.")
-        .font(TypeScale.editorialAccent)
-        .foregroundStyle(.secondary)
-
-      HStack(spacing: Layout.tight) {
-        finishMetricPill(label: "Schwarzanhebung", value: "+\(percent(curve.blackLift))")
-        finishMetricPill(label: "Weißpunkt-Decke", value: percent(curve.whiteCeiling))
-        finishMetricPill(label: "Weichzeichnung", value: String(format: "%.2f", curve.softness))
-      }
-      .padding(.top, 2)
     }
   }
 

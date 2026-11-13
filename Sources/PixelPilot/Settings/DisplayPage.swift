@@ -27,15 +27,12 @@ struct DisplayPage: View {
         card(0) { studioHeroCard }
         card(1) { controls }
           .accentWave(index: 0, trigger: groupChangeTick, accent: display.accent)
-        // Directly under Controls: the card above answers "what do I want this
-        // screen to do", this one answers "is this screen alright", and
-        // everything below is configuration.
-        card(2) { HealthSection(model: model, display: display) }
+        card(2) { ColorSection(display: display) }
+        card(3) { FinishSection(display: display) }
+        card(4) { HealthSection(model: model, display: display) }
         if !display.isBuiltin {
-          card(3) { InputAndPowerSection(display: display) }
+          card(5) { InputAndPowerSection(display: display) }
         }
-        card(4) { ColorSection(display: display) }
-        card(5) { FinishSection(display: display) }
         card(6) { configuration }
         card(7) { diagnostics }
       }
