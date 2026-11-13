@@ -86,28 +86,56 @@ Pixel Pilot verbindet **100 % treue Apple Human Interface Guidelines (HIG)** in 
 
 ## 5. GitHub Meilensteine & Issues (Implementierungs-Reihenfolge)
 
-### [M1: Design System Foundation — Warm Studio Craft & Apple HIG](https://github.com/rbatmaz69/Pixel-Pilot/milestone/1)
+> **Aktueller Stand:** Phase 1 (`M1–M5`, Issues `#2–#17`) wurde vollständig umgesetzt und gemerged. Basierend auf der Usability-, Farb-, Feature- & Gimmick-Analyse folgen in Phase 2 die Meilensteine `M6–M9` (Issues `#34–#45`).
+
+### Phase 1 — Basis-Redesign (Abgeschlossen, PRs `#18–#33` gemerged)
+
+#### [M1: Design System Foundation — Warm Studio Craft & Apple HIG](https://github.com/rbatmaz69/Pixel-Pilot/milestone/1) ✔︎
 - **[Issue #2](https://github.com/rbatmaz69/Pixel-Pilot/issues/2)**: `[Design System]` Warm Studio Paper & Dark Walnut Farbpalette + Liquid Glass Opacity in `AppTheme.swift` & `Preferences.swift`
 - **[Issue #3](https://github.com/rbatmaz69/Pixel-Pilot/issues/3)**: `[Design System]` Strikte Apple HIG Corner-Radii (`12/14/10/6/5pt`) & Typografie-Hierarchie in `Theme.swift`
 - **[Issue #4](https://github.com/rbatmaz69/Pixel-Pilot/issues/4)**: `[Motion]` Kritisch gedämpfte macOS-Animationen & `0ms` NSButton-Press-Physik in `Motion.swift`
 - **[Issue #5](https://github.com/rbatmaz69/Pixel-Pilot/issues/5)**: `[Design System]` Ablösung der `AmbientBackdrop`-Blobs & Einführung von Tageszeit-Ambient-Tint
 
-### [M2: Tactile Analog Hardware Controls & Core Components](https://github.com/rbatmaz69/Pixel-Pilot/milestone/2)
+#### [M2: Tactile Analog Hardware Controls & Core Components](https://github.com/rbatmaz69/Pixel-Pilot/milestone/2) ✔︎
 - **[Issue #6](https://github.com/rbatmaz69/Pixel-Pilot/issues/6)**: `[Controls]` Taktiler Control-Center-Pill-Slider mit Leica-Skalengravur, `25/50/75%`-Detents & rotierender Sonne (`ExpressiveSlider.swift`)
 - **[Issue #7](https://github.com/rbatmaz69/Pixel-Pilot/issues/7)**: `[Components]` Native macOS `Form(.grouped)`-Container (`10pt`) mit `1px` Specular Rim & `6pt` Push-Buttons (`Components.swift`, `Controls.swift`)
 - **[Issue #8](https://github.com/rbatmaz69/Pixel-Pilot/issues/8)**: `[Components]` Warme analoge Glas-LED-Indikatoren (`AccentDot`) & `NSSwitch` / `SegmentedControl` (`6pt/5pt`)
 
-### [M3: Menu Bar Popover & Interactive Horizontal HUD Pill](https://github.com/rbatmaz69/Pixel-Pilot/milestone/3)
+#### [M3: Menu Bar Popover & Interactive Horizontal HUD Pill](https://github.com/rbatmaz69/Pixel-Pilot/milestone/3) ✔︎
 - **[Issue #9](https://github.com/rbatmaz69/Pixel-Pilot/issues/9)**: `[Menu Bar]` Persönlicher Tageszeit-Companion-Header, `14pt/10pt` Control-Center-Module & Popover-Unfold (`MenuBarPanel.swift`, `MenuBarPanelWindow.swift`)
 - **[Issue #10](https://github.com/rbatmaz69/Pixel-Pilot/issues/10)**: `[Menu Bar]` Atmosphärische Licht-Szenen-Karten (Presets) mit Live-Ghost-Preview-Brücke auf den Slidern
 - **[Issue #11](https://github.com/rbatmaz69/Pixel-Pilot/issues/11)**: `[OSD / HUD]` Umbau von `OSDView.swift` zur kompakten horizontalen Control-Center-Pill (`296pt`) mit Maus-Scrubbing
 
-### [M4: Settings Window, Living Mini-Monitors & Display Studio Hero](https://github.com/rbatmaz69/Pixel-Pilot/milestone/4)
+#### [M4: Settings Window, Living Mini-Monitors & Display Studio Hero](https://github.com/rbatmaz69/Pixel-Pilot/milestone/4) ✔︎
 - **[Issue #12](https://github.com/rbatmaz69/Pixel-Pilot/issues/12)**: `[Settings & DisplayMap]` Full-Height macOS Sidebar (`6pt` Rows) & `DisplayMap.swift` mit physischen Monitor-Silhouetten
 - **[Issue #13](https://github.com/rbatmaz69/Pixel-Pilot/issues/13)**: `[DisplayPage]` Live Studio-Monitor Hero-Card mit echtem macOS-Wallpaper, Backlight-Bleed & Paper-Finish (`DisplayPage.swift`)
 - **[Issue #14](https://github.com/rbatmaz69/Pixel-Pilot/issues/14)**: `[DisplayPage & Health]` „In Bestform“ Panel-Fürsorge-Siegel, Farb-/Konfigurations-Gruppen & VCP-Diagnose (`HealthSection.swift`, `ColorSection.swift`)
 
-### [M5: Tageshorizont (DayArc), Detail-Tabs, Sheets, Overlays & Tests](https://github.com/rbatmaz69/Pixel-Pilot/milestone/5)
+#### [M5: Tageshorizont (DayArc), Detail-Tabs, Sheets, Overlays & Tests](https://github.com/rbatmaz69/Pixel-Pilot/milestone/5) ✔︎
 - **[Issue #15](https://github.com/rbatmaz69/Pixel-Pilot/issues/15)**: `[Schedule]` „Tageshorizont“ (`DayArc`) als interaktives Horizont-Panorama mit Hügellandschaft & Sonnen-/Mond-Orb (`ScheduleSettings.swift`)
 - **[Issue #16](https://github.com/rbatmaz69/Pixel-Pilot/issues/16)**: `[Settings & Sheets]` Licht-Szenen, App-Begleiter, 15 Kurzbefehle, Tasten/Fokus, Updates & Top-Down Sheets
 - **[Issue #17](https://github.com/rbatmaz69/Pixel-Pilot/issues/17)**: `[Onboarding & Overlays]` Warm Studio Willkommens-Tour (`OnboardingSteps.swift`), Vollbild-Overlays & Swift-6-Unit-Test-Suite (`ThemeTests.swift`, `PanelPresentationTests.swift`)
+
+---
+
+### Phase 2 — Usability-Upgrade, Echte Mockup-Farben, Display-Anordnung & Studio-Gimmicks (`M6–M9`)
+
+#### [M6: 100 % Warm Studio Paper & Dark Walnut Farbtreue & Deutsche Studio-Sprache](https://github.com/rbatmaz69/Pixel-Pilot/milestone/6)
+- **[Issue #34](https://github.com/rbatmaz69/Pixel-Pilot/issues/34)**: `[Design System & Colors]` Echte „Warm Studio Paper“ & „Dark Walnut“ Oberflächen ohne bunte Flächen-Einfärbung in `AppTheme` & `CardSurface`
+- **[Issue #35](https://github.com/rbatmaz69/Pixel-Pilot/issues/35)**: `[General & Appearance]` Verschlankung von `GeneralSettings.swift` auf `☀︎ Warm Paper · 🌙 Dark Walnut · Automatisch` & Liquid Glass Deckkraft
+- **[Issue #36](https://github.com/rbatmaz69/Pixel-Pilot/issues/36)**: `[Localization & Copy]` 100 % durchgängige warme deutsche Studio-Sprache & Streichung langer englischer `CardFooter`-Textwände
+
+#### [M7: Radikale Entschlackung, Vereintes Licht-Atelier & Popover-Direkt-Usability](https://github.com/rbatmaz69/Pixel-Pilot/milestone/7)
+- **[Issue #37](https://github.com/rbatmaz69/Pixel-Pilot/issues/37)**: `[DisplayPage Simplification]` Radikale Entschlackung von `DisplayPage.swift` — Wegfall von *„Brightness via“* & *„Timing“* aus der Hauptansicht
+- **[Issue #38](https://github.com/rbatmaz69/Pixel-Pilot/issues/38)**: `[Unified Light Atelier]` Verschmelzung von Helligkeit, Kontrast, Ton, Kelvin-Farbwärme & Papier-Finish zu einem direkten „Licht- & Ton-Atelier“
+- **[Issue #39](https://github.com/rbatmaz69/Pixel-Pilot/issues/39)**: `[Menu Bar Direct Usability]` Schnellzugriff auf Farbwärme (Kelvin), Papier-Finish & Monitor-Aktionen direkt im Menüleisten-Popover
+
+#### [M8: Interaktive 2D-Monitor-Anordnung (Studio Desk), Echtes Wallpaper & HiDPI-Switch](https://github.com/rbatmaz69/Pixel-Pilot/milestone/8)
+- **[Issue #40](https://github.com/rbatmaz69/Pixel-Pilot/issues/40)**: `[CoreGraphics Display Arrangement]` `DisplayArrangementController` für native 2D-Monitor-Anordnung, Kanten-Snapping & Hauptmonitor-Wechsel
+- **[Issue #41](https://github.com/rbatmaz69/Pixel-Pilot/issues/41)**: `[Interactive Studio Desk UI]` Interaktiver „Anordnen ↔︎ Licht“-Modus in `DisplayMap` & Studio-Schreibtisch mit Drag & Drop & physischem Highlight-Rahmen
+- **[Issue #42](https://github.com/rbatmaz69/Pixel-Pilot/issues/42)**: `[Real Wallpaper & Resolution Switcher]` Echtes macOS-Schreibtischbild in `StudioWallpaperCanvas` + HiDPI-/Hz-Schnellwahl in der Hero-Card
+
+#### [M9: Lebendige Animationen & Einzigartige „Studio Craft“-Gimmicks](https://github.com/rbatmaz69/Pixel-Pilot/milestone/9)
+- **[Issue #43](https://github.com/rbatmaz69/Pixel-Pilot/issues/43)**: `[Gimmick: 2D Studio Light Pad]` Interaktives 2D-Licht-Pad direkt im Studio-Hero-Monitor (`X = Kelvin`, `Y = Helligkeit`) & Pointer-Parallax-Glasreflexion
+- **[Issue #44](https://github.com/rbatmaz69/Pixel-Pilot/issues/44)**: `[Gimmick: Menu Bar Scroll & Status Readout]` Zero-Click-Dimming per Scrollrad/Trackpad auf dem Menüleisten-Icon & Option-Klick-Szenenwechsel
+- **[Issue #45](https://github.com/rbatmaz69/Pixel-Pilot/issues/45)**: `[Animations & Studio Polish]` Analoge Sonnen-Rotation (`0°–180°`) im Slider, leuchtende Detent-Kerben, Companion-Orb-Stimmungswechsel & Tests
