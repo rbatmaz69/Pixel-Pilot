@@ -316,7 +316,10 @@ private struct CardSurface: ViewModifier {
         }
       }
       .overlay {
-        shape.strokeBorder(theme.rim(for: accent).opacity(isRaised ? 1.35 : 1), lineWidth: 1)
+        let borderColor = theme.style == .vivid
+          ? theme.rim(for: accent).opacity(isRaised ? 1.35 : 1)
+          : (isRaised ? theme.groupBorder.blended(with: accent, by: 0.35) : theme.groupBorder)
+        shape.strokeBorder(borderColor, lineWidth: 1)
       }
       .animation(motion.effectFast, value: isRaised)
   }
@@ -329,10 +332,13 @@ private struct CardSurface: ViewModifier {
 
     shape
       .fill(fill)
-      // The theme says what the app is; the wash says which display this card
-      // belongs to. Two layers rather than one blended colour, so the accent
-      // stays the same strength whichever theme is underneath it.
-      .overlay { shape.fill(theme.wash(for: accent)) }
+      .overlay {
+        // Cards remain neutral Warm Paper / Dark Walnut without full-surface
+        // accent washes unless the explicit Vivid style is active.
+        if theme.style == .vivid {
+          shape.fill(theme.wash(for: accent))
+        }
+      }
       .animation(motion.effectFast, value: isRaised)
   }
 }
