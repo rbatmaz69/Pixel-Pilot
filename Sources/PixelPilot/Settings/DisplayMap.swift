@@ -222,6 +222,7 @@ struct DisplayMap: View {
       Color(.sRGB, red: 0.11, green: 0.095, blue: 0.085)
 
       StudioWallpaperCanvas(
+        displayID: display.displayID,
         accent: display.accent,
         brightness: level,
         warmthFraction: warmth,
@@ -572,9 +573,11 @@ struct DisplayMap: View {
 /// Reusable living studio wallpaper canvas used in `DisplayMap` mini-monitors
 /// and the `DisplayPage` Live Studio-Monitor Hero-Card.
 ///
-/// Renders a warm Sonoma/Sequoia-inspired horizon landscape modulated by live
-/// brightness, warmth, and paper finish, with zero timers (`0.0% CPU while idle`).
+/// Renders the user's cached macOS desktop wallpaper thumbnail (via `WallpaperCache`,
+/// falling back gracefully to a Sonoma/Sequoia warm studio horizon when unavailable),
+/// modulated by live brightness, warmth, and paper finish with `0.0% idle CPU`.
 struct StudioWallpaperCanvas: View {
+  var displayID: CGDirectDisplayID? = nil
   let accent: Color
   var brightness: Double
   var warmthFraction: Double = 0.5
@@ -594,61 +597,15 @@ struct StudioWallpaperCanvas: View {
 
     GeometryReader { geo in
       ZStack {
-        // Warm sunset/studio sky gradient
-        LinearGradient(
-          colors: [
-            Color(.sRGB, red: 0.18, green: 0.20, blue: 0.34).blended(with: accent, by: 0.28),
-            Color(.sRGB, red: 0.76, green: 0.42, blue: 0.24).blended(with: accent, by: 0.22),
-            Color(.sRGB, red: 0.95, green: 0.68, blue: 0.36),
-          ],
-          startPoint: .top,
-          endPoint: .bottom
-        )
-
-        // Glowing horizon sun orb
-        Circle()
-          .fill(
-            RadialGradient(
-              colors: [
-                Color(.sRGB, red: 1.0, green: 0.94, blue: 0.78, opacity: 0.92),
-                Color(.sRGB, red: 0.98, green: 0.64, blue: 0.28, opacity: 0.45),
-                .clear,
-              ],
-              center: .center,
-              startRadius: 0,
-              endRadius: isCompact ? 18 : 42
-            )
-          )
-          .frame(width: isCompact ? 36 : 84, height: isCompact ? 36 : 84)
-          .offset(x: geo.size.width * 0.14, y: -geo.size.height * 0.06)
-
-        // Layered warm studio hills at bottom
-        Path { path in
-          let w = geo.size.width
-          let h = geo.size.height
-          path.move(to: CGPoint(x: 0, y: h * 0.72))
-          path.addQuadCurve(
-            to: CGPoint(x: w * 0.58, y: h * 0.68),
-            control: CGPoint(x: w * 0.28, y: h * 0.54)
-          )
-          path.addQuadCurve(
-            to: CGPoint(x: w, y: h * 0.64),
-            control: CGPoint(x: w * 0.82, y: h * 0.76)
-          )
-          path.addLine(to: CGPoint(x: w, y: h))
-          path.addLine(to: CGPoint(x: 0, y: h))
-          path.closeSubpath()
+        if let displayID, let nsImage = WallpaperCache.shared.thumbnail(for: displayID) {
+          Image(nsImage: nsImage)
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+        } else {
+          studioHorizonArtwork(in: geo.size)
         }
-        .fill(
-          LinearGradient(
-            colors: [
-              Color(.sRGB, red: 0.22, green: 0.15, blue: 0.14),
-              Color(.sRGB, red: 0.12, green: 0.09, blue: 0.08),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-          )
-        )
 
         // Kelvin warmth veil
         Rectangle()
@@ -666,5 +623,62 @@ struct StudioWallpaperCanvas: View {
       }
     }
     .allowsHitTesting(false)
+  }
+
+  private func studioHorizonArtwork(in size: CGSize) -> some View {
+    ZStack {
+      LinearGradient(
+        colors: [
+          Color(.sRGB, red: 0.18, green: 0.20, blue: 0.34).blended(with: accent, by: 0.28),
+          Color(.sRGB, red: 0.76, green: 0.42, blue: 0.24).blended(with: accent, by: 0.22),
+          Color(.sRGB, red: 0.95, green: 0.68, blue: 0.36),
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+      )
+
+      Circle()
+        .fill(
+          RadialGradient(
+            colors: [
+              Color(.sRGB, red: 1.0, green: 0.94, blue: 0.78, opacity: 0.92),
+              Color(.sRGB, red: 0.98, green: 0.64, blue: 0.28, opacity: 0.45),
+              .clear,
+            ],
+            center: .center,
+            startRadius: 0,
+            endRadius: isCompact ? 18 : 42
+          )
+        )
+        .frame(width: isCompact ? 36 : 84, height: isCompact ? 36 : 84)
+        .offset(x: size.width * 0.14, y: -size.height * 0.06)
+
+      Path { path in
+        let w = size.width
+        let h = size.height
+        path.move(to: CGPoint(x: 0, y: h * 0.72))
+        path.addQuadCurve(
+          to: CGPoint(x: w * 0.58, y: h * 0.68),
+          control: CGPoint(x: w * 0.28, y: h * 0.54)
+        )
+        path.addQuadCurve(
+          to: CGPoint(x: w, y: h * 0.64),
+          control: CGPoint(x: w * 0.82, y: h * 0.76)
+        )
+        path.addLine(to: CGPoint(x: w, y: h))
+        path.addLine(to: CGPoint(x: 0, y: h))
+        path.closeSubpath()
+      }
+      .fill(
+        LinearGradient(
+          colors: [
+            Color(.sRGB, red: 0.22, green: 0.15, blue: 0.14),
+            Color(.sRGB, red: 0.12, green: 0.09, blue: 0.08),
+          ],
+          startPoint: .top,
+          endPoint: .bottom
+        )
+      )
+    }
   }
 }
