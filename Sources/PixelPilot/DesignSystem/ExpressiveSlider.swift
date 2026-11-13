@@ -142,8 +142,8 @@ struct ExpressiveSlider: View {
               ? (trackStyle == nil ? theme.sliderGlyphInk.opacity(0.82) : Color.white.opacity(0.92))
               : Color.secondary
           )
-          .rotationEffect(.degrees(rotatesGlyph ? fraction * 90 : 0))
-          .scaleEffect(rotatesGlyph ? (0.92 + 0.14 * fraction) : 1.0)
+          .rotationEffect(.degrees(rotatesGlyph ? fraction * 180 : 0))
+          .scaleEffect(rotatesGlyph ? (0.92 + 0.16 * fraction) : 1.0)
           .padding(.leading, 8)
           .allowsHitTesting(false)
       }
@@ -190,18 +190,19 @@ struct ExpressiveSlider: View {
       // Prominent quarter detent marks (25% / 50% / 75%)
       ForEach(interiorDetents, id: \.self) { detent in
         let detentX = knobX(for: detent, width: width)
-        let isLatched = latchedDetent == detent && isDragging
+        let isSnapped = abs(fraction - detent) <= 0.015 || (latchedDetent == detent && isDragging)
         let isCovered = detentX < fillWidth
         Capsule(style: .continuous)
           .fill(
-            isLatched
+            isSnapped
               ? theme.studioAccent
               : (isCovered
                 ? theme.sliderGlyphInk.opacity(isDragging || isHovered ? 0.42 : 0.22)
                 : Color.primary.opacity(isDragging || isHovered ? 0.42 : 0.22))
           )
-          .frame(width: isLatched ? 2 : 1.25, height: isLatched ? 8 : 5.5)
-          .offset(x: detentX - (isLatched ? 1 : 0.625), y: metrics.trackHeight / 2 - (isLatched ? 5.5 : 4.5))
+          .frame(width: isSnapped ? 2 : 1.25, height: isSnapped ? 8.5 : 5.5)
+          .shadow(color: isSnapped ? theme.studioAccent.opacity(0.55) : .clear, radius: 3)
+          .offset(x: detentX - (isSnapped ? 1 : 0.625), y: metrics.trackHeight / 2 - (isSnapped ? 6 : 4.5))
       }
     }
     .frame(width: width, height: metrics.trackHeight, alignment: .leading)

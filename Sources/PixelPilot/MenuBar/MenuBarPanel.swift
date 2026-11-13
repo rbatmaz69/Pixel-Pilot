@@ -92,31 +92,41 @@ struct MenuBarPanel: View {
   /// Warm personal time-of-day studio greeting banner at the top of the popover.
   private var companionBanner: some View {
     HStack(spacing: Layout.snug) {
-      ZStack {
-        Circle()
-          .fill(
-            RadialGradient(
-              colors: [
-                Color.white.opacity(0.92),
-                mood.orbColor,
-                mood.orbColor.blended(with: .black, by: 0.18),
-              ],
-              center: UnitPoint(x: 0.34, y: 0.30),
-              startRadius: 0,
-              endRadius: 15
+      Button {
+        let cases = AmbientMoodPreference.allCases
+        let currentIndex = cases.firstIndex(of: ThemeStore.shared.ambientMoodPreference) ?? 0
+        ThemeStore.shared.ambientMoodPreference = cases[(currentIndex + 1) % cases.count]
+        Haptics.confirm()
+        model.bumpGroupChangeTick()
+      } label: {
+        ZStack {
+          Circle()
+            .fill(
+              RadialGradient(
+                colors: [
+                  Color.white.opacity(0.92),
+                  mood.orbColor,
+                  mood.orbColor.blended(with: .black, by: 0.18),
+                ],
+                center: UnitPoint(x: 0.34, y: 0.30),
+                startRadius: 0,
+                endRadius: 15
+              )
             )
-          )
-          .frame(width: 26, height: 26)
-          .overlay {
-            Circle()
-              .strokeBorder(Color.white.opacity(0.35), lineWidth: 0.75)
-          }
-          .shadow(color: mood.orbColor.opacity(0.45), radius: 5)
+            .frame(width: 26, height: 26)
+            .overlay {
+              Circle()
+                .strokeBorder(Color.white.opacity(0.35), lineWidth: 0.75)
+            }
+            .shadow(color: mood.orbColor.opacity(0.45), radius: 5)
 
-        Image(systemName: mood.symbolName)
-          .font(.system(size: 11, weight: .semibold))
-          .foregroundStyle(.white)
+          Image(systemName: mood.symbolName)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white)
+        }
       }
+      .buttonStyle(.plain)
+      .help("Studio-Lichtstimmung wechseln (\(ThemeStore.shared.ambientMoodPreference.displayName))")
 
       VStack(alignment: .leading, spacing: 1) {
         Text(mood.greetingTitle)
