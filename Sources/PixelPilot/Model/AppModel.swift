@@ -1086,6 +1086,48 @@ final class AppModel {
   /// `MenuBarPanel` uses to reach the settings window. Set in `install()`.
   var onTogglePanel: (() -> Void)?
 
+  /// Notifies `StatusItemController` when the menu bar percentage toggle or
+  /// displayed brightness changes.
+  @ObservationIgnored var onStatusItemChanged: (() -> Void)?
+
+  var showsMenuBarPercentage: Bool {
+    get { preferences.global.showsMenuBarPercentage }
+    set {
+      preferences.updateGlobal { $0.showsMenuBarPercentage = newValue }
+      onStatusItemChanged?()
+    }
+  }
+
+  func bumpGroupChangeTick() {
+    groupChangeTick += 1
+  }
+
+  /// Scrolls every display's brightness when `isSyncingBrightness` is active,
+  /// or the given display alone, and shows the appropriate HUD.
+  func adjustScrolledBrightness(by delta: Double, on display: DisplayViewModel) -> Double {
+    if isSyncingBrightness, canSyncBrightness {
+      let next = min(1, max(0, masterBrightness + delta))
+      setMasterBrightness(next)
+      presentMasterBrightness(next, on: display)
+      onStatusItemChanged?()
+      return next
+    } else {
+      let next = display.adjustBrightness(by: delta)
+      presentScrolledBrightness(next, on: display)
+      onStatusItemChanged?()
+      return next
+    }
+  }
+
+  func commitScrolledBrightness(on display: DisplayViewModel?) {
+    if isSyncingBrightness, canSyncBrightness {
+      commitMasterBrightness()
+    } else {
+      display?.commitBrightness()
+    }
+    onStatusItemChanged?()
+  }
+
   /// Only worth offering when there is more than one thing to gang.
   var canSyncBrightness: Bool { displays.count > 1 }
 

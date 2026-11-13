@@ -93,6 +93,14 @@ struct GeneralSettings: View {
           }
         }
 
+        Toggle(
+          "Helligkeit in der Menüleiste anzeigen (%)",
+          isOn: Binding(
+            get: { model.showsMenuBarPercentage },
+            set: { model.showsMenuBarPercentage = $0 }
+          )
+        )
+
         CardFooter(
           "Warm Paper nutzt warmes Elfenbeinpapier mit Espresso-Typografie; "
             + "Dark Walnut kombiniert tiefes Walnussholz mit feinen Lichtkanten. "

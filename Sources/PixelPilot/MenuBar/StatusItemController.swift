@@ -28,6 +28,8 @@ final class StatusItemController: NSObject {
   /// meaningful movement.
   private var scrollAccumulator: Double = 0
   private var scrollMonitor: Any?
+  private var latchedScrollDetent: Double?
+  private var scrollAtBoundary = false
 
   /// When the panel last dismissed itself by losing key status.
   ///
@@ -57,6 +59,8 @@ final class StatusItemController: NSObject {
     // The shortcut that opens the panel does exactly what clicking the icon
     // does, including the guard against a click that just dismissed it.
     model.onTogglePanel = { [weak self] in self?.togglePanel() }
+    model.onStatusItemChanged = { [weak self] in self?.updateStatusButtonTitle() }
+    updateStatusButtonTitle()
 
     installScrollHandling(on: item)
     installDropHandling(on: item)
@@ -65,6 +69,12 @@ final class StatusItemController: NSObject {
   // MARK: - The panel
 
   @objc private func togglePanel() {
+    if NSApp.currentEvent?.modifierFlags.contains(.option) == true {
+      Haptics.confirm()
+      model.stepPreset(forward: true)
+      updateStatusButtonTitle()
+      return
+    }
     if panel.isOpen {
       panel.close()
     } else if Date().timeIntervalSince(lastAutoDismiss) < Self.reopenGuard {
@@ -93,6 +103,7 @@ final class StatusItemController: NSObject {
       )
     }
     updateHighlight()
+    updateStatusButtonTitle()
   }
 
   private func updateHighlight() {
@@ -123,6 +134,17 @@ final class StatusItemController: NSObject {
   }
 
   private func handleScroll(_ event: NSEvent) {
+    if event.phase == .ended || event.phase == .cancelled
+      || event.momentumPhase == .ended || event.momentumPhase == .cancelled
+    {
+      scrollAccumulator = 0
+      latchedScrollDetent = nil
+      scrollAtBoundary = false
+      model.commitScrolledBrightness(on: displayUnderStatusItem)
+      updateStatusButtonTitle()
+      return
+    }
+
     // A trackpad reports precise deltas in points and a wheel reports notches,
     // and the two are two orders of magnitude apart. One divisor for both would
     // make the wheel useless or the trackpad unusable.
@@ -134,15 +156,46 @@ final class StatusItemController: NSObject {
     let step = model.preferences.global.keyStep
     guard abs(scrollAccumulator) >= step else { return }
 
-    let direction: Double = scrollAccumulator > 0 ? 1 : -1
+    let delta = (scrollAccumulator > 0 ? 1.0 : -1.0) * step
     scrollAccumulator = 0
 
     // The display the icon is on, not the one under the pointer — the pointer
     // is over the menu bar, so `focusedDisplay` would give the same answer
     // today, but only by accident of where the menu bar happens to be.
     guard let display = displayUnderStatusItem, display.isReady else { return }
-    let value = display.adjustBrightness(by: direction * step)
-    model.presentScrolledBrightness(value, on: display)
+    let value = model.adjustScrolledBrightness(by: delta, on: display)
+
+    let atEnd = value <= 0.001 || value >= 0.999
+    if atEnd, !scrollAtBoundary { Haptics.endStop() }
+    scrollAtBoundary = atEnd
+
+    let detent = SliderDetents.nearest(
+      to: value,
+      among: SliderDetents.quarters,
+      tolerance: step * 0.6
+    )
+    if let detent, detent != latchedScrollDetent, !atEnd { Haptics.detent() }
+    latchedScrollDetent = detent
+
+    updateStatusButtonTitle()
+  }
+
+  /// Updates the optional monospaced `%` readout next to the sun icon in the menu bar.
+  func updateStatusButtonTitle() {
+    guard let button = statusItem?.button else { return }
+    guard model.showsMenuBarPercentage,
+          let display = displayUnderStatusItem ?? model.displays.first
+    else {
+      button.title = ""
+      button.imagePosition = .imageOnly
+      return
+    }
+    let pct = Int((display.brightness * 100).rounded())
+    let attributes: [NSAttributedString.Key: Any] = [
+      .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium),
+    ]
+    button.imagePosition = .imageLeading
+    button.attributedTitle = NSAttributedString(string: " \(pct)%", attributes: attributes)
   }
 
   // MARK: - Dropping an application on the icon
@@ -191,6 +244,7 @@ final class StatusItemController: NSObject {
       )
     )
     updateHighlight()
+    updateStatusButtonTitle()
   }
 
   private var displayUnderStatusItem: DisplayViewModel? {

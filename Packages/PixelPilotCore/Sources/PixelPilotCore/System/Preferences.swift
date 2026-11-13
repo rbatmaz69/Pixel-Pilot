@@ -409,6 +409,10 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   /// Optional manual override for the time-of-day studio atmosphere.
   public var ambientMoodOverride: AmbientMoodPreference = .auto
 
+  /// Whether the menu bar status item displays the primary/active display's
+  /// live brightness percentage next to the sun icon.
+  public var showsMenuBarPercentage: Bool = false
+
   /// Whether the app asks GitHub for a newer release on its own.
   ///
   /// On by default, and it is the one thing in this app that reaches the
@@ -488,6 +492,9 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
     ambientMoodOverride = (try? container.decodeIfPresent(
       AmbientMoodPreference.self, forKey: .ambientMoodOverride
     )) ?? fallback.ambientMoodOverride
+    showsMenuBarPercentage = try container.decodeIfPresent(
+      Bool.self, forKey: .showsMenuBarPercentage
+    ) ?? fallback.showsMenuBarPercentage
     // `try?` for the composite, same reasoning as `DisplaySettings.timing`.
     schedule = (try? container.decodeIfPresent(DaySchedule.self, forKey: .schedule)) ?? fallback.schedule
     latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)

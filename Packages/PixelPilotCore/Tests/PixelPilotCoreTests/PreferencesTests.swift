@@ -318,6 +318,16 @@ struct PreferencesTests {
     #expect(fallback.ambientMoodOverride == .auto)
   }
 
+  @Test("Menu bar percentage toggle round-trips and defaults to false on legacy blobs")
+  func menuBarPercentageRoundTrips() {
+    let defaults = makeDefaults()
+    let preferences = Preferences(defaults: defaults)
+    #expect(!preferences.global.showsMenuBarPercentage)
+
+    preferences.updateGlobal { $0.showsMenuBarPercentage = true }
+    #expect(Preferences(defaults: defaults).global.showsMenuBarPercentage)
+  }
+
   /// What a build predating the style wrote. Everything it *did* write has to
   /// come through, and the style has to land on the look that build had.
   @Test("A blob written before the style keeps its settings")
