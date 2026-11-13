@@ -471,12 +471,10 @@ struct LabeledReadout<Content: View>: View {
   }
 }
 
-/// The per-display colour dot.
+/// Warm analog glass LED indicator (`.glass-led`) for displays and status badges.
 ///
-/// While the display is not answering yet, a ripple runs out of it. That loop
-/// only exists while this view does — closing the panel takes the whole
-/// hierarchy with it — and it is replaced by a static ring under reduced
-/// motion, where a repeating pulse is exactly the thing being asked about.
+/// Features a top-left radial specular highlight (`UnitPoint(x: 0.32, y: 0.28)`),
+/// a fine glass rim, and a warm ambient bloom when active.
 struct AccentDot: View {
   let accent: Color
   var isReady: Bool = true
@@ -487,10 +485,25 @@ struct AccentDot: View {
 
   var body: some View {
     Circle()
-      .fill(theme.fill(for: accent))
+      .fill(
+        RadialGradient(
+          colors: [
+            Color.white.opacity(0.92),
+            theme.lifted(accent),
+            accent,
+          ],
+          center: UnitPoint(x: 0.32, y: 0.28),
+          startRadius: 0,
+          endRadius: size * 0.72
+        )
+      )
       .frame(width: size, height: size)
+      .overlay {
+        Circle()
+          .strokeBorder(Color.white.opacity(0.38), lineWidth: 0.75)
+      }
       .overlay { ring }
-      .shadow(color: theme.glow(for: accent, active: isReady), radius: 4)
+      .shadow(color: theme.glow(for: accent, active: isReady), radius: 5)
       .opacity(isReady ? 1 : 0.55)
       .animation(motion.effectDefault, value: isReady)
   }
