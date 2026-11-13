@@ -122,24 +122,9 @@ final class MenuBarPanelWindow: NSObject {
     // standing out past every corner, which is what this looked like.
     background.maskImage = Self.roundedMask(radius: Layout.radiusPanel)
 
-    // And this clips everything drawn **on top of** the material, which the
-    // mask above does not touch — `maskImage` shapes the effect and nothing
-    // else. It was a corner radius on the effect view's own layer, which looked
-    // like it worked and did not: AppKit owns that layer, rebuilds it when the
-    // mask is installed, and the `masksToBounds` set on it stops holding. The
-    // tint then painted the square corners in the theme's own colour, so the
-    // artefact came back wearing the accent instead of the desktop.
-    //
-    // A plain view's layer has no such argument with anyone. It resizes with
-    // the window, so the clip follows the shape while the panel is unrolling
-    // rather than only at rest.
-    let clip = NSView()
-    clip.wantsLayer = true
-    clip.layer?.cornerRadius = Layout.radiusPanel
-    clip.layer?.cornerCurve = .circular
-    clip.layer?.masksToBounds = true
-    clip.layer?.borderWidth = 1
-    clip.layer?.borderColor = NSColor(theme.groupBorder).cgColor
+    let clip = PopoverClipView()
+    clip.radius = Layout.radiusPanel
+    clip.borderColor = NSColor(theme.groupBorder).cgColor
 
     // Where the material survives, the desktop blurring through it is real
     // depth, and this is the one surface in the app that has something behind
@@ -221,6 +206,7 @@ final class MenuBarPanelWindow: NSObject {
     self.hostingView = hosting
 
     self.restingFrame = place(panel, hosting: hosting, under: anchor)
+    applyShape(to: background, clip: clip)
 
     guard !OverlayPanel.reduceMotion else {
       panel.setFrame(restingFrame, display: false)
@@ -305,7 +291,7 @@ final class MenuBarPanelWindow: NSObject {
     // arrangement exists to avoid.
     hosting.setFrameOrigin(CGPoint(
       x: 0,
-      y: clip.bounds.height - hosting.frame.height
+      y: clip.bounds.height - PopoverShape.arrowHeight - hosting.frame.height
     ))
 
     // The one transform, and it only ever acts on the overshoot. Vertical, and
@@ -314,7 +300,8 @@ final class MenuBarPanelWindow: NSObject {
     // layer-backed view and changing it shifts the layer by half its own height
     // the moment the frame is next set.
     let stretch = PanelPresentation.contentStretch(frame: frame, target: restingFrame)
-    var transform = CATransform3DMakeTranslation(0, hosting.frame.height * (1 - stretch) / 2, 0)
+    let contentHeight = hosting.frame.height
+    var transform = CATransform3DMakeTranslation(0, contentHeight * (1 - stretch) / 2, 0)
     transform = CATransform3DScale(transform, 1, stretch, 1)
     hosting.layer?.transform = transform
 
@@ -339,17 +326,26 @@ final class MenuBarPanelWindow: NSObject {
     guard newSize != .zero else { return }
 
     let topY = restingFrame.maxY
+    let windowHeight = newSize.height + PopoverShape.arrowHeight
     let updatedFrame = CGRect(
       x: restingFrame.minX,
-      y: topY - newSize.height,
+      y: topY - windowHeight,
       width: newSize.width,
-      height: newSize.height
+      height: windowHeight
     )
     guard abs(updatedFrame.height - restingFrame.height) > 0.5
       || abs(updatedFrame.width - restingFrame.width) > 0.5 else { return }
 
+    let widthChanged = abs(updatedFrame.width - restingFrame.width) > 0.5
     restingFrame = updatedFrame
-    hosting.frame = CGRect(origin: .zero, size: newSize)
+    hosting.frame = CGRect(
+      origin: CGPoint(x: 0, y: updatedFrame.height - PopoverShape.arrowHeight - newSize.height),
+      size: newSize
+    )
+    if widthChanged, let background = panel.contentView as? NSVisualEffectView,
+       let clip = hosting.superview as? PopoverClipView {
+      applyShape(to: background, clip: clip)
+    }
 
     if OverlayPanel.reduceMotion {
       panel.setFrame(updatedFrame, display: true)
@@ -391,20 +387,40 @@ final class MenuBarPanelWindow: NSObject {
     hosting.frame = CGRect(origin: .zero, size: size)
 
     guard let anchorWindow = anchor.window else {
-      return CGRect(origin: .zero, size: size)
+      anchorMidX = size.width / 2
+      return CGRect(origin: .zero, size: CGSize(width: size.width, height: size.height + PopoverShape.arrowHeight))
     }
     let anchorFrame = anchorWindow.convertToScreen(anchor.convert(anchor.bounds, to: nil))
     let screen = anchorWindow.screen ?? NSScreen.main
 
+    // Centred on the icon, so the arrow sits in the middle of the panel
+    // wherever there is room for it to.
     var x = anchorFrame.midX - size.width / 2
     if let visible = screen?.visibleFrame {
       // Keep it on screen when the status item is near a corner, which is where
-      // it usually is once a few other menu bar apps are installed.
+      // it usually is once a few other menu bar apps are installed. The arrow
+      // then moves along the edge to keep pointing at the icon.
       x = min(max(visible.minX + 8, x), visible.maxX - size.width - 8)
     }
+    anchorMidX = anchorFrame.midX
 
+    let height = size.height + PopoverShape.arrowHeight
     return CGRect(
-      x: x, y: anchorFrame.minY - size.height - 6, width: size.width, height: size.height
+      x: x, y: anchorFrame.minY - height - 2, width: size.width, height: height
+    )
+  }
+
+  /// Where the icon's centre is on screen; the arrow points at it.
+  private var anchorMidX: CGFloat = 0
+
+  /// Shapes both the blur and the clip so the arrow points at the icon.
+  private func applyShape(to background: NSVisualEffectView, clip: PopoverClipView) {
+    let tip = PopoverShape.clampedTip(
+      anchorMidX - restingFrame.minX, width: restingFrame.width, radius: Layout.radiusPanel
+    )
+    clip.tipX = tip
+    background.maskImage = PopoverShape.maskImage(
+      width: restingFrame.width, radius: Layout.radiusPanel, tipX: tip
     )
   }
 
@@ -439,4 +455,138 @@ extension MenuBarPanelWindow: NSWindowDelegate {
 /// `NSPanel` refuses key status while borderless unless asked.
 final class KeyablePanel: NSPanel {
   override var canBecomeKey: Bool { true }
+}
+
+/// The popover outline: a rounded body with a small arrow on its top edge that
+/// points up at the status item, like a system `NSPopover`.
+enum PopoverShape {
+  static let arrowHeight: CGFloat = 9
+  static let arrowHalfWidth: CGFloat = 11
+
+  /// Keeps the tip clear of the rounded corners whatever the panel's position.
+  static func clampedTip(_ tipX: CGFloat, width: CGFloat, radius: CGFloat) -> CGFloat {
+    let lower = radius + arrowHalfWidth + 2
+    let upper = width - radius - arrowHalfWidth - 2
+    guard upper > lower else { return width / 2 }
+    return min(max(tipX, lower), upper)
+  }
+
+  /// Path in a bottom-left origin (AppKit, unflipped) rectangle.
+  static func path(in rect: CGRect, radius: CGFloat, tipX: CGFloat) -> CGPath {
+    let arrowH = min(arrowHeight, max(0, rect.height - radius * 2))
+    let body = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - arrowH)
+    let r = max(0, min(radius, body.height / 2, body.width / 2))
+    let tip = clampedTip(tipX, width: rect.width, radius: r) + rect.minX
+    let half = arrowHalfWidth
+    let p = CGMutablePath()
+
+    p.move(to: CGPoint(x: body.minX + r, y: body.minY))
+    p.addLine(to: CGPoint(x: body.maxX - r, y: body.minY))
+    p.addArc(tangent1End: CGPoint(x: body.maxX, y: body.minY),
+             tangent2End: CGPoint(x: body.maxX, y: body.minY + r), radius: r)
+    p.addLine(to: CGPoint(x: body.maxX, y: body.maxY - r))
+    p.addArc(tangent1End: CGPoint(x: body.maxX, y: body.maxY),
+             tangent2End: CGPoint(x: body.maxX - r, y: body.maxY), radius: r)
+
+    if arrowH > 0.5 {
+      // Soft shoulders and a softly rounded tip, the way the system draws it.
+      p.addLine(to: CGPoint(x: tip + half, y: body.maxY))
+      p.addCurve(
+        to: CGPoint(x: tip + 1.6, y: body.maxY + arrowH - 0.9),
+        control1: CGPoint(x: tip + half * 0.55, y: body.maxY),
+        control2: CGPoint(x: tip + 3.2, y: body.maxY + arrowH - 2.4)
+      )
+      p.addQuadCurve(
+        to: CGPoint(x: tip - 1.6, y: body.maxY + arrowH - 0.9),
+        control: CGPoint(x: tip, y: body.maxY + arrowH + 0.4)
+      )
+      p.addCurve(
+        to: CGPoint(x: tip - half, y: body.maxY),
+        control1: CGPoint(x: tip - 3.2, y: body.maxY + arrowH - 2.4),
+        control2: CGPoint(x: tip - half * 0.55, y: body.maxY)
+      )
+    }
+
+    p.addLine(to: CGPoint(x: body.minX + r, y: body.maxY))
+    p.addArc(tangent1End: CGPoint(x: body.minX, y: body.maxY),
+             tangent2End: CGPoint(x: body.minX, y: body.maxY - r), radius: r)
+    p.addLine(to: CGPoint(x: body.minX, y: body.minY + r))
+    p.addArc(tangent1End: CGPoint(x: body.minX, y: body.minY),
+             tangent2End: CGPoint(x: body.minX + r, y: body.minY), radius: r)
+    p.closeSubpath()
+    return p
+  }
+
+  /// Mask for the behind-window blur. Drawn at the panel's exact width with
+  /// everything but one row stretch-locked, so it follows the panel's height
+  /// through the unroll without being redrawn per frame.
+  static func maskImage(width: CGFloat, radius: CGFloat, tipX: CGFloat) -> NSImage {
+    let height = arrowHeight + radius * 2 + 1
+    let size = NSSize(width: max(width, radius * 2 + 1), height: height)
+    let image = NSImage(size: size, flipped: false) { rect in
+      NSColor.black.set()
+      let path = NSBezierPath(cgPath: path(in: rect, radius: radius, tipX: tipX))
+      path.fill()
+      return true
+    }
+    image.capInsets = NSEdgeInsets(
+      top: arrowHeight + radius, left: size.width - radius - 1, bottom: radius, right: radius
+    )
+    image.resizingMode = .stretch
+    return image
+  }
+}
+
+/// Clips the panel's contents to `PopoverShape` and strokes its outline on top.
+/// Reshaped in `layout()`, which runs only while the window's frame changes.
+final class PopoverClipView: NSView {
+  var radius: CGFloat = Layout.radiusPanel { didSet { needsLayout = true } }
+  var tipX: CGFloat = 0 { didSet { needsLayout = true } }
+  var borderColor: CGColor = NSColor.separatorColor.cgColor {
+    didSet { borderLayer.strokeColor = borderColor }
+  }
+
+  private let maskLayer = CAShapeLayer()
+  private let borderLayer = CAShapeLayer()
+  private let borderView = PassthroughView()
+
+  override init(frame frameRect: NSRect) {
+    super.init(frame: frameRect)
+    wantsLayer = true
+    layer?.mask = maskLayer
+    borderView.wantsLayer = true
+    borderLayer.fillColor = nil
+    borderLayer.lineWidth = 1
+    borderView.layer?.addSublayer(borderLayer)
+    borderView.autoresizingMask = [.width, .height]
+    addSubview(borderView)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  /// Keeps the outline above content added after it.
+  override func didAddSubview(_ subview: NSView) {
+    super.didAddSubview(subview)
+    if subview !== borderView {
+      addSubview(borderView, positioned: .above, relativeTo: nil)
+    }
+  }
+
+  override func layout() {
+    super.layout()
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    borderView.frame = bounds
+    let shape = PopoverShape.path(in: bounds, radius: radius, tipX: tipX)
+    maskLayer.frame = bounds
+    maskLayer.path = shape
+    borderLayer.frame = bounds
+    borderLayer.path = PopoverShape.path(in: bounds.insetBy(dx: 0.5, dy: 0.5), radius: radius - 0.5, tipX: tipX - 0.5)
+    CATransaction.commit()
+  }
+}
+
+private final class PassthroughView: NSView {
+  override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

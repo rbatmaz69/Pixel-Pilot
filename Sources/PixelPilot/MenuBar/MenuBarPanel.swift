@@ -33,8 +33,6 @@ struct MenuBarPanel: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
-      companionBanner
-
       if model.displays.isEmpty {
         emptyState
       } else {
@@ -87,96 +85,6 @@ struct MenuBarPanel: View {
     }
     .onAppear { model.refreshPermissions() }
     .onDisappear { previewTask?.cancel() }
-  }
-
-  /// Warm personal time-of-day studio greeting banner at the top of the popover.
-  private var companionBanner: some View {
-    HStack(spacing: Layout.snug) {
-      Button {
-        let cases = AmbientMoodPreference.allCases
-        let currentIndex = cases.firstIndex(of: ThemeStore.shared.ambientMoodPreference) ?? 0
-        ThemeStore.shared.ambientMoodPreference = cases[(currentIndex + 1) % cases.count]
-        Haptics.confirm()
-        model.bumpGroupChangeTick()
-      } label: {
-        ZStack {
-          Circle()
-            .fill(
-              RadialGradient(
-                colors: [
-                  Color.white.opacity(0.92),
-                  mood.orbColor,
-                  mood.orbColor.blended(with: .black, by: 0.18),
-                ],
-                center: UnitPoint(x: 0.34, y: 0.30),
-                startRadius: 0,
-                endRadius: 15
-              )
-            )
-            .frame(width: 26, height: 26)
-            .overlay {
-              Circle()
-                .strokeBorder(Color.white.opacity(0.35), lineWidth: 0.75)
-            }
-            .shadow(color: mood.orbColor.opacity(0.45), radius: 5)
-
-          Image(systemName: mood.symbolName)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.white)
-        }
-      }
-      .buttonStyle(.plain)
-      .help("Studio-Lichtstimmung wechseln (\(ThemeStore.shared.ambientMoodPreference.displayName))")
-
-      VStack(alignment: .leading, spacing: 1) {
-        Text(mood.greetingTitle)
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(.primary)
-          .lineLimit(1)
-        Text(mood.greetingSubtitle)
-          .font(TypeScale.editorialAccent)
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-      }
-
-      Spacer(minLength: 4)
-
-      HStack(spacing: 5) {
-        AccentDot(accent: theme.studioAccent, size: 6)
-        Text(Preferences.shared.global.schedule.isEnabled ? "Tageshorizont" : "Studio")
-          .font(.system(size: 10, weight: .semibold))
-          .foregroundStyle(.secondary)
-      }
-      .padding(.horizontal, 7)
-      .padding(.vertical, 3)
-      .background(
-        Capsule(style: .continuous)
-          .fill(theme.recessedWell)
-      )
-      .overlay(
-        Capsule(style: .continuous)
-          .strokeBorder(theme.groupBorder, lineWidth: 1)
-      )
-    }
-    .padding(.horizontal, Layout.snug)
-    .padding(.vertical, 8)
-    .background {
-      RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous)
-        .fill(
-          LinearGradient(
-            colors: [
-              theme.studioAccent.opacity(theme.isDark ? 0.14 : 0.10),
-              theme.onGlassSurface,
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          )
-        )
-    }
-    .overlay {
-      RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous)
-        .strokeBorder(theme.groupBorder, lineWidth: 1)
-    }
   }
 
   /// Arms or cancels the preset preview.
@@ -431,8 +339,8 @@ private struct DisplayControlGroup: View {
 
     var title: String {
       switch self {
-      case let .input(value): "Zu \(InputSource.name(for: value)) wechseln?"
-      case let .power(mode): "In „\(mode.displayName)“ versetzen?"
+      case let .input(value): "Zu \(InputLabel.full(for: value)) wechseln?"
+      case let .power(mode): "\(PowerLabel.name(for: mode))?"
       }
     }
   }
@@ -675,68 +583,98 @@ private struct DisplayControlGroup: View {
 
       // Video-Eingänge & Ruhezustand für externe Monitore
       let standbyModes = display.availablePowerModes.filter { $0 != .on }
-      if !display.isBuiltin && (!display.availableInputs.isEmpty || !standbyModes.isEmpty) {
+      if !display.isBuiltin && !display.availableInputs.isEmpty {
         VStack(alignment: .leading, spacing: 6) {
-          Text("EINGANG & STANDBY")
+          Text("EINGANG")
+            .font(.system(size: 9.5, weight: .bold))
+            .tracking(0.5)
+            .foregroundStyle(.secondary)
+
+          let inputCount = display.availableInputs.count
+          let columnCount = inputCount == 4 ? 2 : min(3, max(1, inputCount))
+          LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: columnCount),
+            alignment: .leading,
+            spacing: 5
+          ) {
+            ForEach(display.availableInputs, id: \.self) { value in
+              let isCurrent = value == display.currentInput
+              let isPending = pendingAction == .input(value)
+              DrawerChip(
+                title: InputLabel.short(for: value),
+                systemImage: isCurrent ? "checkmark.circle.fill" : InputLabel.symbol(for: value),
+                tint: display.accent,
+                isSelected: isCurrent,
+                isHighlighted: isPending
+              ) {
+                guard !isCurrent else { return }
+                pendingAction = .input(value)
+                Haptics.detent()
+              }
+              .help(isCurrent ? "\(InputLabel.full(for: value)) · aktiv" : "Zu \(InputLabel.full(for: value)) wechseln")
+            }
+          }
+        }
+      }
+
+      if !display.isBuiltin && !standbyModes.isEmpty {
+        VStack(alignment: .leading, spacing: 6) {
+          Text("BILDSCHIRM")
             .font(.system(size: 9.5, weight: .bold))
             .tracking(0.5)
             .foregroundStyle(.secondary)
 
           HStack(spacing: 5) {
-            ForEach(display.availableInputs, id: \.self) { value in
-              Button(InputSource.name(for: value)) {
-                pendingAction = .input(value)
-                Haptics.detent()
-              }
-              .buttonStyle(.soft(display.accent))
-              .controlSize(.mini)
-              .disabled(value == display.currentInput)
-            }
-
-            Spacer(minLength: 0)
-
             ForEach(standbyModes, id: \.self) { mode in
-              Button(mode.displayName) {
+              DrawerChip(
+                title: PowerLabel.name(for: mode),
+                systemImage: PowerLabel.symbol(for: mode),
+                tint: Status.warn,
+                isSelected: false,
+                isHighlighted: pendingAction == .power(mode)
+              ) {
                 pendingAction = .power(mode)
                 Haptics.detent()
               }
-              .buttonStyle(.soft(Status.warn))
-              .controlSize(.mini)
+              .help(PowerLabel.help(for: mode))
             }
-          }
-
-          if let pendingAction {
-            HStack(spacing: 6) {
-              Text(pendingAction.title)
-                .font(TypeScale.detail.weight(.medium))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-              Spacer(minLength: 0)
-              Button("Ausführen") {
-                switch pendingAction {
-                case let .input(value): display.switchInput(to: value)
-                case let .power(mode): display.setPowerMode(mode)
-                }
-                self.pendingAction = nil
-                Haptics.confirm()
-              }
-              .buttonStyle(.soft(Status.warn))
-              .controlSize(.mini)
-              Button("Abbrechen") {
-                self.pendingAction = nil
-              }
-              .buttonStyle(.soft)
-              .controlSize(.mini)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-              RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
-                .fill(Status.warn.opacity(theme.isDark ? 0.16 : 0.10))
-            )
-            .transition(.blurReplace)
           }
         }
+      }
+
+      if !display.isBuiltin, let pendingAction {
+        VStack(alignment: .leading, spacing: 6) {
+          Text(pendingAction.title)
+            .font(TypeScale.detail.weight(.medium))
+            .foregroundStyle(.primary)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+          HStack(spacing: 6) {
+            Spacer(minLength: 0)
+            Button("Abbrechen") {
+              self.pendingAction = nil
+            }
+            .buttonStyle(.soft)
+            .controlSize(.small)
+            Button("Ausführen") {
+              switch pendingAction {
+              case let .input(value): display.switchInput(to: value)
+              case let .power(mode): display.setPowerMode(mode)
+              }
+              self.pendingAction = nil
+              Haptics.confirm()
+            }
+            .buttonStyle(.soft(Status.warn))
+            .controlSize(.small)
+          }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+          RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+            .fill(Status.warn.opacity(theme.isDark ? 0.16 : 0.10))
+        )
+        .transition(.blurReplace)
       }
     }
     .padding(.top, 2)
@@ -884,5 +822,119 @@ private struct MoodSceneCard: View {
     .help("Licht-Szene „\(preset.name)“ anwenden")
     .onHover(perform: onHoverChange)
     .animation(motion.effectFast, value: isPreviewed)
+  }
+}
+
+/// One evenly sized, single-line choice inside the studio drawer — an icon and
+/// a short label that never wraps, so a row of inputs reads at a glance.
+private struct DrawerChip: View {
+  let title: String
+  let systemImage: String
+  let tint: Color
+  let isSelected: Bool
+  var isHighlighted: Bool = false
+  let action: () -> Void
+
+  @Environment(\.theme) private var theme
+  @Environment(\.motion) private var motion
+  @State private var isHovered = false
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 5) {
+        Image(systemName: systemImage)
+          .font(.system(size: 11, weight: .semibold))
+          .symbolRenderingMode(.hierarchical)
+        Text(title)
+          .font(.system(size: 11, weight: .semibold, design: .rounded))
+          .lineLimit(1)
+          .minimumScaleFactor(0.85)
+      }
+      .foregroundStyle(isSelected || isHighlighted ? tint : Color.primary.opacity(0.82))
+      .frame(maxWidth: .infinity, minHeight: 30)
+      .padding(.horizontal, 8)
+      .background(
+        RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+          .fill(
+            isSelected || isHighlighted
+              ? tint.opacity(theme.isDark ? 0.22 : 0.14)
+              : (isHovered ? Color.primary.opacity(0.08) : theme.recessedWell)
+          )
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+          .strokeBorder(
+            isSelected || isHighlighted ? tint.opacity(0.55) : theme.groupBorder,
+            lineWidth: 1
+          )
+      )
+      .contentShape(RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous))
+    }
+    .buttonStyle(.plain)
+    .onHover { isHovered = $0 }
+    .animation(motion.effectFast, value: isHovered)
+    .animation(motion.effectFast, value: isHighlighted)
+    .accessibilityLabel(title)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
+  }
+}
+
+/// Short, readable labels and icons for MCCS input codes.
+enum InputLabel {
+  static func short(for value: UInt8) -> String {
+    switch value {
+    case 0x0F: "DP 1"
+    case 0x10: "DP 2"
+    case 0x11: "HDMI 1"
+    case 0x12: "HDMI 2"
+    case 0x1B: "USB-C"
+    default: InputSource.name(for: value)
+    }
+  }
+
+  static func full(for value: UInt8) -> String {
+    InputSource.name(for: value)
+  }
+
+  static func symbol(for value: UInt8) -> String {
+    switch value {
+    case 0x1B: "cable.connector"
+    case 0x0F, 0x10: "rectangle.connected.to.line.below"
+    case 0x11, 0x12: "tv"
+    default: "cable.connector.horizontal"
+    }
+  }
+}
+
+/// German labels for DDC power modes.
+enum PowerLabel {
+  static func name(for mode: PowerMode) -> String {
+    switch mode {
+    case .on: "Einschalten"
+    case .standby: "Standby"
+    case .suspend: "Ruhezustand"
+    case .off: "Bildschirm aus"
+    case .powerOff: "Ausschalten"
+    }
+  }
+
+  static func symbol(for mode: PowerMode) -> String {
+    switch mode {
+    case .on: "power"
+    case .standby, .suspend: "moon.zzz"
+    case .off: "moon.zzz"
+    case .powerOff: "power"
+    }
+  }
+
+  static func help(for mode: PowerMode) -> String {
+    switch mode {
+    case .powerOff:
+      "Schaltet den Monitor komplett aus – einschalten nur am Gerät selbst"
+    case .off:
+      "Bildschirm schlafen legen – wacht bei Signal wieder auf"
+    default:
+      "Monitor in den \(name(for: mode)) versetzen"
+    }
   }
 }
