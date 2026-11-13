@@ -222,12 +222,30 @@ final class AppModel {
       let identifier = (notification.userInfo?[NSWorkspace.applicationUserInfoKey]
         as? NSRunningApplication)?.bundleIdentifier
       MainActor.assumeIsolated {
-        self?.refreshPermissions()
+        self?.refreshPermissionsAndFollowUp()
         self?.frontmostAppChanged(to: identifier)
         // Three jobs on this observer now. The attention controller needs the
         // same event for a different reason: to re-point its window observer at
         // whichever application is now in front.
         self?.attention.frontmostAppChanged()
+      }
+    }
+    NotificationCenter.default.addObserver(
+      forName: NSApplication.didBecomeActiveNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      Task { @MainActor [weak self] in
+        self?.refreshPermissionsAndFollowUp()
+      }
+    }
+    NotificationCenter.default.addObserver(
+      forName: NSWindow.didBecomeKeyNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      Task { @MainActor [weak self] in
+        self?.refreshPermissions()
       }
     }
     refreshPermissions()
@@ -348,6 +366,8 @@ final class AppModel {
     return mediaKeysActive || hidKeysActive
   }
 
+  private(set) var requestedInputMonitoringInSession = false
+
   /// Re-reads both permissions and restarts whatever can now run.
   ///
   /// Has to be called rather than computed. Both checks are function calls into
@@ -363,10 +383,24 @@ final class AppModel {
     accessibilityGranted = accessibility
     inputMonitoringGranted = inputMonitoring
 
+    if inputMonitoring {
+      requestedInputMonitoringInSession = false
+    }
+
     // A grant that arrives while running is useless until the listeners are
     // started, and they were refused the last time they tried.
     if changed {
       startMediaKeys()
+    }
+  }
+
+  /// Checks permissions now and once more 500 ms later so TCC database writes
+  /// triggered when leaving System Settings have time to settle.
+  private func refreshPermissionsAndFollowUp() {
+    refreshPermissions()
+    Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .milliseconds(500))
+      self?.refreshPermissions()
     }
   }
 
@@ -386,21 +420,16 @@ final class AppModel {
   }
 
   func requestInputMonitoringPermission() {
+    requestedInputMonitoringInSession = true
     HIDMediaKeyMonitor.requestTrust()
     HIDMediaKeyMonitor.openInputMonitoringSettings()
   }
 
   /// True when a permission has been granted but the listener it unlocks is
-  /// still not running.
-  ///
-  /// macOS decides HID access at the moment the connection is opened, and a
-  /// process that was refused stays refused for its lifetime — so granting
-  /// Input Monitoring to a running app changes nothing until it restarts.
-  /// Without saying this, the app looks broken precisely when the user has just
-  /// done everything right.
+  /// still not running, or when macOS requires a relaunch to apply Input Monitoring.
   var needsRelaunchForPermissions: Bool {
     guard preferences.global.mediaKeysEnabled else { return false }
-    return (inputMonitoringGranted && !hidKeysActive)
+    return (preferences.global.hidMediaKeysEnabled && inputMonitoringGranted && !hidKeysActive)
       || (accessibilityGranted && !mediaKeysActive)
   }
 

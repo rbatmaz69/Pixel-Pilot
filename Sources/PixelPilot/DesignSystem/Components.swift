@@ -424,7 +424,7 @@ struct PermissionRow: View {
       detail: detail
     ) {
       if !isGranted {
-        Button("Open Settings…", action: action)
+        Button("Einstellungen öffnen…", action: action)
           .buttonStyle(.soft(Status.warn))
           .font(TypeScale.detail.weight(.medium))
           .transition(.blurReplace)

@@ -99,12 +99,13 @@ final class HIDMediaKeyMonitor {
 
   /// Input Monitoring, which is not the same grant as Accessibility.
   static var isTrusted: Bool {
-    IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+    CGPreflightListenEventAccess()
+      || IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
   }
 
   @discardableResult
   static func requestTrust() -> Bool {
-    IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+    CGRequestListenEventAccess() || IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
   }
 
   static func openInputMonitoringSettings() {

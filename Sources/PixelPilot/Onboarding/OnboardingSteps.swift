@@ -157,6 +157,22 @@ struct OnboardingFlow: View {
         action: model.requestInputMonitoringPermission
       )
 
+      if model.needsRelaunchForPermissions
+        || (model.requestedInputMonitoringInSession && !model.inputMonitoringGranted)
+      {
+        StatusRow(
+          symbol: "arrow.clockwise.circle.fill",
+          tint: Status.info,
+          title: "Neustart zum Übernehmen erforderlich",
+          detail: "Falls du die Eingabeüberwachung gerade aktiviert hast, startet die App sie hiermit neu."
+        ) {
+          Button("Neu starten") { model.relaunch() }
+            .buttonStyle(.soft(Status.info))
+            .font(TypeScale.detail.weight(.medium))
+        }
+        .transition(.blurReplace)
+      }
+
       CardFooter("Beide optional — Regler und Menüleiste funktionieren immer.")
     }
   }

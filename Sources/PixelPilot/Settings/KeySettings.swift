@@ -131,17 +131,24 @@ struct KeySettings: View {
           CardFooter("Nach einem Update ggf. den alten Eintrag in den Systemeinstellungen mit „−“ neu hinzufügen.")
         }
 
-        if model.needsRelaunchForPermissions {
+        if model.needsRelaunchForPermissions
+          || (model.requestedInputMonitoringInSession && !model.inputMonitoringGranted)
+        {
           Divider()
           StatusRow(
             symbol: "arrow.clockwise.circle.fill",
             tint: Status.info,
             title: "Neustart zum Aktivieren erforderlich",
-            detail: "Die Berechtigung wurde erteilt und wird beim nächsten Start aktiv."
+            detail: "macOS übernimmt die Eingabeüberwachung oft erst nach einem kurzen App-Neustart."
           ) {
-            Button("Neu starten") { model.relaunch() }
-              .buttonStyle(.soft(Status.info))
-              .font(TypeScale.detail.weight(.medium))
+            HStack(spacing: Layout.tight) {
+              Button("Prüfen") { model.refreshPermissions() }
+                .buttonStyle(.soft)
+                .font(TypeScale.detail.weight(.medium))
+              Button("Neu starten") { model.relaunch() }
+                .buttonStyle(.soft(Status.info))
+                .font(TypeScale.detail.weight(.medium))
+            }
           }
           .transition(.blurReplace)
         }

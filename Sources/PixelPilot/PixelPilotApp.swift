@@ -46,7 +46,13 @@ final class PixelPilotMain: NSObject, NSApplicationDelegate {
     statusItem.install()
     // After the status item exists, so the introduction can point at an icon
     // that is actually in the menu bar while it is being talked about.
-    windows.showOnboardingIfNeeded()
+    // Defer one beat so macOS finishes launching the LSUIElement app before
+    // WindowCoordinator switches activation policy to `.regular` and brings
+    // the onboarding window cleanly to the front.
+    Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .milliseconds(150))
+      self?.windows.showOnboardingIfNeeded()
+    }
 
     startUpdates()
   }

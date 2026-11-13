@@ -98,7 +98,7 @@ final class WindowCoordinator: NSObject {
     }
 
     let window = makeWindow(
-      title: "Welcome to Pixel Pilot",
+      title: "Willkommen bei Pixel Pilot",
       autosaveName: "onboarding",
       minSize: CGSize(width: 560, height: 460),
       defaultSize: CGSize(width: 560, height: 460),
@@ -110,6 +110,7 @@ final class WindowCoordinator: NSObject {
         self?.onboardingWindow?.close()
       }
     )
+    window.center()
     onboardingWindow = window
     present(window)
   }
@@ -270,10 +271,6 @@ final class WindowCoordinator: NSObject {
     // without activating would come up behind whatever the user is in.
     NSApp.activate(ignoringOtherApps: true)
     window.makeKeyAndOrderFront(nil)
-    // And again regardless, because activation is a request rather than an
-    // instruction — the system can decline it for an accessory app, and then
-    // `makeKeyAndOrderFront` alone leaves the window sitting behind whatever is
-    // in front. This orders it above other applications' windows either way.
     window.orderFrontRegardless()
   }
 }
