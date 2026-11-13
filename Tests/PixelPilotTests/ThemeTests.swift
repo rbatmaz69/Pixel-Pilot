@@ -412,6 +412,14 @@ struct ThemeTests {
       #expect(mood.topTint(isDark: false).srgb.alpha <= 0.08)
       #expect(mood.topTint(isDark: true).srgb.alpha <= 0.08)
     }
+
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+    let eveningDate = Date(timeIntervalSince1970: 21 * 3600)
+    #expect(AmbientDaylightMood.resolve(for: .morning, date: eveningDate, calendar: calendar) == .morning)
+    #expect(AmbientDaylightMood.resolve(for: .afternoon, date: eveningDate, calendar: calendar) == .afternoon)
+    #expect(AmbientDaylightMood.resolve(for: .evening, date: eveningDate, calendar: calendar) == .evening)
+    #expect(AmbientDaylightMood.resolve(for: .auto, date: eveningDate, calendar: calendar) == .evening)
   }
 
   @Test("Control Center Pill Slider uses 26pt pill track and circular 20pt thumb")

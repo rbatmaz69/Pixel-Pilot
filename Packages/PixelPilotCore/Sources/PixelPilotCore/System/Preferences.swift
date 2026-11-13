@@ -191,9 +191,9 @@ public enum ThemeMode: String, Codable, Sendable, CaseIterable {
 
   public var displayName: String {
     switch self {
-    case .system: "Automatic"
-    case .light: "Warm Paper"
-    case .dark: "Dark Walnut"
+    case .system: "Automatisch"
+    case .light: "☀︎ Warm Paper"
+    case .dark: "🌙 Dark Walnut"
     }
   }
 }
@@ -237,6 +237,23 @@ public enum ThemeStyle: String, Codable, Sendable, CaseIterable {
     case .glass: "Translucent, soft-edged, the colour kept quiet."
     case .vivid: "Every surface carries the colour at strength."
     case .flat: "No material and no gradients — colour and clear edges."
+    }
+  }
+}
+
+/// Time-of-day atmosphere preference for studio surfaces and popover banners.
+public enum AmbientMoodPreference: String, Codable, Sendable, CaseIterable {
+  case auto
+  case morning
+  case afternoon
+  case evening
+
+  public var displayName: String {
+    switch self {
+    case .auto: "Automatisch mit dem Sonnenstand"
+    case .morning: "🌅 Morgenlicht"
+    case .afternoon: "☀️ Goldener Nachmittag"
+    case .evening: "🌙 Abendglut"
     }
   }
 }
@@ -390,6 +407,9 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   /// the desktop material behind them. Clamped to `0.55 ... 0.98`.
   public var glassOpacity: Double = GlobalSettings.defaultGlassOpacity
 
+  /// Optional manual override for the time-of-day studio atmosphere.
+  public var ambientMoodOverride: AmbientMoodPreference = .auto
+
   /// Whether the app asks GitHub for a newer release on its own.
   ///
   /// On by default, and it is the one thing in this app that reaches the
@@ -455,8 +475,8 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
     themeBackdropToneIndex = try container.decodeIfPresent(
       Int.self, forKey: .themeBackdropToneIndex
     )
-    themeMode = try container.decodeIfPresent(ThemeMode.self, forKey: .themeMode) ?? fallback.themeMode
-    themeStyle = try container.decodeIfPresent(ThemeStyle.self, forKey: .themeStyle)
+    themeMode = (try? container.decodeIfPresent(ThemeMode.self, forKey: .themeMode)) ?? fallback.themeMode
+    themeStyle = (try? container.decodeIfPresent(ThemeStyle.self, forKey: .themeStyle))
       ?? fallback.themeStyle
     if let rawGlassOpacity = try container.decodeIfPresent(Double.self, forKey: .glassOpacity) {
       glassOpacity = min(
@@ -466,6 +486,9 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
     } else {
       glassOpacity = fallback.glassOpacity
     }
+    ambientMoodOverride = (try? container.decodeIfPresent(
+      AmbientMoodPreference.self, forKey: .ambientMoodOverride
+    )) ?? fallback.ambientMoodOverride
     // `try?` for the composite, same reasoning as `DisplaySettings.timing`.
     schedule = (try? container.decodeIfPresent(DaySchedule.self, forKey: .schedule)) ?? fallback.schedule
     latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
