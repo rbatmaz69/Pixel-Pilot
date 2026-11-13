@@ -20,6 +20,11 @@ struct DisplayPage: View {
   let groupChangeTick: Int
 
   @State private var displayModeRefreshTick = 0
+  @State private var padDragPoint: CGPoint? = nil
+  @State private var lastPadBrightnessDetent: Double? = nil
+  @State private var lastPadKelvinDetent: Double? = nil
+  @State private var heroHoverNorm: CGPoint? = nil
+  @State private var heroCardSize: CGSize = .init(width: 560, height: 180)
 
   var body: some View {
     ScrollView {
@@ -84,11 +89,41 @@ struct DisplayPage: View {
     .padding(Layout.loose)
     .frame(maxWidth: .infinity, alignment: .leading)
     .cardSurface(accent: display.accent, radius: Layout.radiusHero)
+    .background {
+      GeometryReader { geo in
+        Color.clear
+          .onAppear { heroCardSize = geo.size }
+          .onChange(of: geo.size) { _, newSize in heroCardSize = newSize }
+      }
+    }
+    .onContinuousHover { phase in
+      guard controlActive != .inactive else {
+        heroHoverNorm = nil
+        return
+      }
+      switch phase {
+      case let .active(location):
+        let w = max(heroCardSize.width, 1)
+        let h = max(heroCardSize.height, 1)
+        heroHoverNorm = CGPoint(
+          x: min(1, max(0, location.x / w)),
+          y: min(1, max(0, location.y / h))
+        )
+      case .ended:
+        heroHoverNorm = nil
+      }
+    }
+    .animation(motion.effectFast, value: heroHoverNorm == nil)
     .accessibilityElement(children: .contain)
   }
 
   private var studioMonitorStage: some View {
     let clampedBrightness = min(1, max(0, display.brightness))
+    let isScrubbing = padDragPoint != nil
+    let hoverDx = (heroHoverNorm?.x ?? 0.5) - 0.5
+    let hoverDy = (heroHoverNorm?.y ?? 0.5) - 0.5
+    let haloWarmth = 1 - warmthFraction
+
     return ZStack {
       // Studio wall backdrop
       RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous)
@@ -114,80 +149,23 @@ struct DisplayPage: View {
         .fill(
           RadialGradient(
             colors: [
-              display.accent.opacity(0.14 + 0.36 * clampedBrightness),
-              theme.studioAccent.opacity(0.06 + 0.18 * (1 - warmthFraction)),
+              display.accent.opacity((isScrubbing ? 0.24 : 0.14) + 0.36 * clampedBrightness),
+              theme.studioAccent.opacity((isScrubbing ? 0.14 : 0.06) + 0.22 * haloWarmth),
               .clear,
             ],
             center: .center,
             startRadius: 4,
-            endRadius: 96
+            endRadius: isScrubbing ? 112 : 96
           )
         )
         .frame(width: 196, height: 120)
-        .offset(y: -6)
+        .scaleEffect(isScrubbing ? 1.16 : 1.0)
+        .offset(x: hoverDx * 6, y: -6 + hoverDy * 4)
+        .animation(motion.effectFast, value: isScrubbing)
 
       // Physical monitor silhouette (MacBook with notch/lip vs External Display with stand)
       VStack(spacing: 0) {
-        ZStack {
-          StudioWallpaperCanvas(
-            displayID: display.displayID,
-            accent: display.accent,
-            brightness: display.brightness,
-            warmthFraction: warmthFraction,
-            finish: display.toneCurve,
-            isCompact: false
-          )
-
-          // MacBook camera notch at top center for built-in displays
-          if display.isBuiltin {
-            VStack(spacing: 0) {
-              UnevenRoundedRectangle(
-                topLeadingRadius: 0,
-                bottomLeadingRadius: 3,
-                bottomTrailingRadius: 3,
-                topTrailingRadius: 0,
-                style: .continuous
-              )
-              .fill(Color.black.opacity(0.88))
-              .frame(width: 28, height: 5)
-              Spacer(minLength: 0)
-            }
-          }
-
-          // Bottom-right live brightness readout pill on glass
-          VStack {
-            Spacer()
-            HStack {
-              Spacer()
-              Text(percent(display.brightness))
-                .font(TypeScale.detail.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(.white.opacity(0.95))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(
-                  Capsule(style: .continuous)
-                    .fill(Color.black.opacity(0.48))
-                )
-            }
-            .padding(6)
-          }
-        }
-        .frame(width: 158, height: 94)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .overlay(
-          RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .strokeBorder(Color.black.opacity(0.82), lineWidth: 2)
-        )
-        .overlay(
-          RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
-        )
-        .shadow(
-          color: display.accent.opacity(0.12 + 0.24 * clampedBrightness),
-          radius: 12,
-          y: 3
-        )
+        studioMonitorScreen(clampedBrightness: clampedBrightness, hoverDx: hoverDx, hoverDy: hoverDy)
 
         if display.isBuiltin {
           // MacBook aluminum base lip
@@ -219,6 +197,205 @@ struct DisplayPage: View {
       RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous)
         .strokeBorder(theme.groupBorder, lineWidth: 1)
     )
+  }
+
+  private func studioMonitorScreen(
+    clampedBrightness: Double,
+    hoverDx: Double,
+    hoverDy: Double
+  ) -> some View {
+    let screenSize = CGSize(width: 158, height: 94)
+    let isScrubbing = padDragPoint != nil
+    let pillText: String = if isScrubbing {
+      "☀︎ \(percent(display.brightness)) · \(Int((display.colorTemperatureKelvin ?? ColorTemperature.neutralKelvin).rounded())) K"
+    } else {
+      percent(display.brightness)
+    }
+    let bezelShape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+    let bezelStroke: Color = isScrubbing ? theme.studioAccent.opacity(0.9) : Color.black.opacity(0.82)
+    let shadowColor = display.accent.opacity(0.12 + 0.24 * clampedBrightness)
+    let shadowRadius: CGFloat = isScrubbing ? 15 : 12
+    let shadowX: CGFloat = heroHoverNorm == nil ? 0 : -hoverDx * 7
+    let shadowY: CGFloat = heroHoverNorm == nil ? 3 : 3 - hoverDy * 4
+
+    return ZStack {
+      StudioWallpaperCanvas(
+        displayID: display.displayID,
+        accent: display.accent,
+        brightness: display.brightness,
+        warmthFraction: warmthFraction,
+        finish: display.toneCurve,
+        isCompact: false
+      )
+
+      if let hoverNorm = heroHoverNorm {
+        specularGlassGlint(at: hoverNorm, size: screenSize)
+      }
+
+      if let pt = padDragPoint {
+        lightPadCrosshair(at: pt, size: screenSize)
+      }
+
+      if display.isBuiltin {
+        macBookNotchOverlay
+      }
+
+      monitorReadoutPill(text: pillText, isScrubbing: isScrubbing)
+    }
+    .frame(width: screenSize.width, height: screenSize.height)
+    .clipShape(bezelShape)
+    .overlay(bezelShape.strokeBorder(bezelStroke, lineWidth: 2))
+    .overlay(bezelShape.strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5))
+    .shadow(color: shadowColor, radius: shadowRadius, x: shadowX, y: shadowY)
+    .contentShape(.rect)
+    .onTapGesture(count: 2) {
+      cyclePaperFinish()
+    }
+    .gesture(lightPadGesture(in: screenSize))
+    .help("Ziehen: Y = Helligkeit, X = Farbtemperatur · Doppelklick: Papier-Finish")
+  }
+
+  private var macBookNotchOverlay: some View {
+    VStack(spacing: 0) {
+      UnevenRoundedRectangle(
+        topLeadingRadius: 0,
+        bottomLeadingRadius: 3,
+        bottomTrailingRadius: 3,
+        topTrailingRadius: 0,
+        style: .continuous
+      )
+      .fill(Color.black.opacity(0.88))
+      .frame(width: 28, height: 5)
+      Spacer(minLength: 0)
+    }
+  }
+
+  private func monitorReadoutPill(text: String, isScrubbing: Bool) -> some View {
+    VStack {
+      Spacer()
+      HStack {
+        Spacer()
+        Text(text)
+          .font(TypeScale.detail.weight(.semibold))
+          .monospacedDigit()
+          .foregroundStyle(.white.opacity(0.95))
+          .padding(.horizontal, 6)
+          .padding(.vertical, 2)
+          .background(
+            Capsule(style: .continuous)
+              .fill(Color.black.opacity(isScrubbing ? 0.68 : 0.48))
+          )
+      }
+      .padding(6)
+    }
+  }
+
+  private func specularGlassGlint(at norm: CGPoint, size: CGSize) -> some View {
+    let shiftX = (norm.x - 0.5) * size.width * 0.45
+    let shiftY = (norm.y - 0.5) * size.height * 0.35
+    return Rectangle()
+      .fill(
+        LinearGradient(
+          colors: [
+            .clear,
+            Color.white.opacity(0.14),
+            Color.white.opacity(0.05),
+            .clear,
+          ],
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        )
+      )
+      .frame(width: size.width * 1.4, height: size.height * 1.4)
+      .offset(x: shiftX, y: shiftY)
+      .blendMode(.screen)
+      .allowsHitTesting(false)
+  }
+
+  private func lightPadCrosshair(at point: CGPoint, size: CGSize) -> some View {
+    let warmMix = 1 - warmthFraction
+    let orbCore = Color(.sRGB, red: 1.0, green: 0.96 - 0.14 * warmMix, blue: 0.88 - 0.42 * warmMix)
+    return ZStack(alignment: .topLeading) {
+      Path { path in
+        path.move(to: CGPoint(x: 0, y: point.y))
+        path.addLine(to: CGPoint(x: size.width, y: point.y))
+        path.move(to: CGPoint(x: point.x, y: 0))
+        path.addLine(to: CGPoint(x: point.x, y: size.height))
+      }
+      .stroke(Color.white.opacity(0.32), style: StrokeStyle(lineWidth: 0.75, dash: [3, 2]))
+
+      Circle()
+        .fill(
+          RadialGradient(
+            colors: [orbCore, theme.studioAccent.opacity(0.65), .clear],
+            center: .center,
+            startRadius: 1,
+            endRadius: 11
+          )
+        )
+        .frame(width: 22, height: 22)
+        .overlay(
+          Circle()
+            .strokeBorder(Color.white.opacity(0.9), lineWidth: 1.2)
+            .frame(width: 9, height: 9)
+        )
+        .position(point)
+    }
+    .allowsHitTesting(false)
+  }
+
+  private func lightPadGesture(in size: CGSize) -> some Gesture {
+    DragGesture(minimumDistance: 2)
+      .onChanged { value in
+        guard display.isReady else { return }
+        let clampedX = min(size.width, max(0, value.location.x))
+        let clampedY = min(size.height, max(0, value.location.y))
+        padDragPoint = CGPoint(x: clampedX, y: clampedY)
+
+        let normX = Double(clampedX / max(size.width, 1))
+        let normY = Double(1 - clampedY / max(size.height, 1))
+
+        let kelvin = KelvinTrack.warmRange.lowerBound
+          + normX * (KelvinTrack.warmRange.upperBound - KelvinTrack.warmRange.lowerBound)
+
+        let bDetent = SliderDetents.nearest(
+          to: normY,
+          among: SliderDetents.quarters,
+          tolerance: 0.03
+        )
+        if let bDetent, bDetent != lastPadBrightnessDetent {
+          Haptics.detent()
+        }
+        lastPadBrightnessDetent = bDetent
+
+        let kDetents = [3500.0, 4500.0, 5500.0]
+        let kDetent = kDetents.first { abs(kelvin - $0) <= 130 }
+        if let kDetent, kDetent != lastPadKelvinDetent {
+          Haptics.detent()
+        }
+        lastPadKelvinDetent = kDetent
+
+        display.setBrightness(normY)
+        display.setColorTemperature(kelvin >= 6450 ? nil : kelvin)
+      }
+      .onEnded { _ in
+        padDragPoint = nil
+        lastPadBrightnessDetent = nil
+        lastPadKelvinDetent = nil
+        display.commitBrightness()
+      }
+  }
+
+  private func cyclePaperFinish() {
+    guard display.isReady else { return }
+    let next: ToneCurve? = switch display.toneCurve?.namedFinish {
+    case nil: .paper
+    case "Paper": .matte
+    case "Matte": .ink
+    default: nil
+    }
+    display.setToneCurve(next)
+    Haptics.confirm()
   }
 
   private var studioHeroTelemetry: some View {
