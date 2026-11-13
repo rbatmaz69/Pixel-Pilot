@@ -207,6 +207,10 @@ struct SettingsWindow: View {
       Divider()
       sidebarFooter
     }
+    .background {
+      theme.sidebarSurface
+        .ignoresSafeArea()
+    }
     .background(alignment: .top) {
       theme.ambientDaylightGradient()
         .frame(height: 120)

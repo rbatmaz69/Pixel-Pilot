@@ -177,11 +177,19 @@ private struct ThemeRecipe: Equatable, Sendable {
 /// which is also why `ThemeStore` holds one of these rather than making a new
 /// one per access.
 struct AppTheme: Equatable, Sendable {
-  /// Warm Studio Paper & Dark Walnut anchor constants.
+  /// Warm Studio Paper & Dark Walnut mockup palette constants.
   static let warmPaperSink = Color(.sRGB, red: 1.0, green: 0.992, blue: 0.976) // #FFFDF9
   static let darkWalnutSink = Color(.sRGB, red: 0.025, green: 0.020, blue: 0.016) // #060504
+  static let warmPaperWindowTop = Color(.sRGB, red: 0.969, green: 0.953, blue: 0.925) // #F7F3EC
   static let warmPaperWindow = Color(.sRGB, red: 0.961, green: 0.945, blue: 0.914) // #F5F1E9
+  static let warmPaperSidebar = Color(.sRGB, red: 0.933, green: 0.910, blue: 0.871) // #EEE8DE
+  static let warmPaperCard = Color(.sRGB, red: 1.0, green: 0.992, blue: 0.976) // #FFFDF9
+  static let warmPaperCardRaised = Color(.sRGB, red: 1.0, green: 0.996, blue: 0.988) // #FFFEFC
+  static let darkWalnutWindowTop = Color(.sRGB, red: 0.114, green: 0.098, blue: 0.090) // #1D1917
   static let darkWalnutWindow = Color(.sRGB, red: 0.106, green: 0.094, blue: 0.086) // #1B1816
+  static let darkWalnutSidebar = Color(.sRGB, red: 0.153, green: 0.133, blue: 0.118) // #27221E
+  static let darkWalnutCard = Color(.sRGB, red: 0.149, green: 0.133, blue: 0.118) // #26221E
+  static let darkWalnutCardRaised = Color(.sRGB, red: 0.176, green: 0.157, blue: 0.139) // #2D2823
   static let warmEspressoInk = Color(.sRGB, red: 0.125, green: 0.114, blue: 0.102) // #201D1A
   static let warmCreamInk = Color(.sRGB, red: 0.980, green: 0.965, blue: 0.941) // #FAF6F0
   static let studioAmberLight = Color(.sRGB, red: 0.851, green: 0.420, blue: 0.122) // #D96B1F
@@ -221,28 +229,15 @@ struct AppTheme: Equatable, Sendable {
   /// only line in a card that says which colour the app is set to.
   let rim: Color
 
-  /// Body text, and the tinted near-white or near-black it resolves to.
+  /// Body text, and the warm espresso or cream ink it resolves to.
   let primaryText: Color
 
   /// Each palette tone as type, already checked against `surface`.
-  ///
-  /// Worked out here, once, rather than at the call site. `legible(on:)` walks
-  /// a loop of `NSColor` conversions, and the readouts that need it are redrawn
-  /// on every frame of a slider drag — which is exactly the kind of cost this
-  /// app is built to refuse. Eight entries covers every accent that can appear,
-  /// because the palette is what accents come from.
   private let paletteInk: [Color]
 
   /// The strengths this theme's style asks for, kept for the roles below.
   private let recipe: ThemeRecipe
 
-  /// - Parameter backdropTone: What the field is made of. `nil` follows the
-  ///   accent, which is both the default and what the whole interface looked
-  ///   like before the two could differ.
-  /// - Parameter style: How much of those tones a surface carries. Defaulted,
-  ///   and the default is the look the app shipped with — so every caller that
-  ///   does not care about styles keeps the theme it always had.
-  /// - Parameter glassOpacity: Translucency of glass surfaces (`0.55 ... 0.98`).
   init(
     tone: Color,
     backdropTone: Color? = nil,
@@ -265,49 +260,55 @@ struct AppTheme: Equatable, Sendable {
 
     let sink: Color = Self.sink(isDark: isDark)
 
-    // Each amount is a *target*, not a result. See `settled(_:resolvedBy:)`:
-    // a style may ask for more colour than a particular tone can carry and
-    // still leave room for legible type, and the answer to that is to give it
-    // slightly less rather than to let the text fail.
-    //
-    // The light theme's amounts are inverted on purpose: there the field
-    // carries more colour than the cards, so a card reads as lifted off it
-    // rather than sunk into it. Doing it the other way round is what makes a
-    // light interface look like a form.
-    func settled(_ amount: Double, resolvedBy resolve: (Color) -> Color = { $0 }) -> Color {
-      Self.settled(field, toward: sink, from: amount, isDark: isDark, resolvedBy: resolve)
+    switch style {
+    case .glass:
+      // 100% Warm Studio Paper (Light) and Dark Walnut (Dark) neutral surfaces
+      // without tinting window fields or cards with the accent hue.
+      let baseTop = isDark ? Self.darkWalnutWindowTop : Self.warmPaperWindowTop
+      let baseBottom = isDark ? Self.darkWalnutWindow : Self.warmPaperWindow
+      let baseSurface = isDark ? Self.darkWalnutCard : Self.warmPaperCard
+      let baseRaised = isDark ? Self.darkWalnutCardRaised : Self.warmPaperCardRaised
+      backdropTop = baseTop
+      backdropBottom = baseBottom
+      surface = baseSurface
+      surfaceRaised = baseRaised
+      onGlassSurface = baseSurface.opacity(isDark ? 0.72 : 0.78)
+      primaryText = (isDark ? Self.warmCreamInk : Self.warmEspressoInk)
+        .legible(on: baseSurface, ratio: 7)
+
+    case .flat:
+      let baseWindow = isDark ? Self.darkWalnutWindow : Self.warmPaperWindow
+      let baseSurface = isDark ? Self.darkWalnutCard : Self.warmPaperCard
+      let baseRaised = isDark ? Self.darkWalnutCardRaised : Self.warmPaperCardRaised
+      backdropTop = baseWindow
+      backdropBottom = baseWindow
+      surface = baseSurface
+      surfaceRaised = baseRaised
+      onGlassSurface = baseSurface
+      primaryText = (isDark ? Self.warmCreamInk : Self.warmEspressoInk)
+        .legible(on: baseSurface, ratio: 7)
+
+    case .vivid:
+      func settled(_ amount: Double, resolvedBy resolve: (Color) -> Color = { $0 }) -> Color {
+        Self.settled(field, toward: sink, from: amount, isDark: isDark, resolvedBy: resolve)
+      }
+      backdropTop = settled(recipe.backdropTop)
+      backdropBottom = settled(recipe.backdropBottom)
+      surface = settled(recipe.surface)
+      surfaceRaised = settled(recipe.surfaceRaised)
+      let panelField = backdropTop
+      let panelAlpha = recipe.onGlassOpacity
+      onGlassSurface = settled(recipe.onGlassSurface) {
+        $0.opacity(panelAlpha).over(panelField)
+      }
+      .opacity(panelAlpha)
+      let ink: Color = isDark
+        ? field.blended(with: .white, by: 0.88)
+        : field.blended(with: .black, by: 0.86)
+      primaryText = ink.legible(on: surface, ratio: 7)
     }
 
-    backdropTop = settled(recipe.backdropTop)
-    backdropBottom = settled(recipe.backdropBottom)
-    surface = settled(recipe.surface)
-    surfaceRaised = settled(recipe.surfaceRaised)
-
-    // Resolved against what is actually behind it. A translucent card in the
-    // menu bar panel is not the colour it is declared to be — the field shows
-    // through the part the alpha leaves — and under a style that puts real
-    // colour into both, the composite lands a good deal further from the sink
-    // than the declared colour does. Clamping the declaration rather than the
-    // composite would report success and hand back an unreadable card.
-    let panelField = backdropTop
-    let panelAlpha = recipe.onGlassOpacity
-    onGlassSurface = settled(recipe.onGlassSurface) {
-      $0.opacity(panelAlpha).over(panelField)
-    }
-    .opacity(panelAlpha)
-
-    // The accent's, not the field's. Once the two can differ, the card's edge
-    // is the largest thing left carrying the accent, and it is what keeps a
-    // chosen accent visible against a field made of something else.
     rim = tone.opacity(recipe.rimOpacity)
-
-    // Tinted near-white or near-black, held to a contrast ratio rather than a
-    // fixed blend: some tones are lighter than others, and a blend that looks
-    // right on amber can leave blue a touch dim.
-    let ink: Color = isDark
-      ? field.blended(with: .white, by: 0.88)
-      : field.blended(with: .black, by: 0.86)
-    primaryText = ink.legible(on: surface, ratio: 7)
 
     let cardSurface = surface
     paletteInk = AccentPalette.tones.map {
@@ -534,13 +535,13 @@ struct AppTheme: Equatable, Sendable {
   var specularRim: Color {
     isDark
       ? Color(.sRGB, red: 1.0, green: 0.973, blue: 0.933, opacity: 0.07)
-      : Color.white.opacity(0.90)
+      : Color.white.opacity(0.85)
   }
 
   /// 1px warm border for `Form(.grouped)`-style containers (`10pt` radius).
   var groupBorder: Color {
     isDark
-      ? Color(.sRGB, red: 1.0, green: 0.961, blue: 0.910, opacity: 0.10)
+      ? Color(.sRGB, red: 1.0, green: 0.973, blue: 0.933, opacity: 0.10)
       : Color(.sRGB, red: 0.188, green: 0.141, blue: 0.094, opacity: 0.11)
   }
 
@@ -554,8 +555,28 @@ struct AppTheme: Equatable, Sendable {
   /// Recessed track well for Control Center pill sliders and segmented controls.
   var recessedWell: Color {
     isDark
-      ? Color(.sRGB, red: 0.031, green: 0.024, blue: 0.020, opacity: 0.48)
+      ? Color(.sRGB, red: 0.0, green: 0.0, blue: 0.0, opacity: 0.34)
       : Color(.sRGB, red: 0.188, green: 0.141, blue: 0.094, opacity: 0.14)
+  }
+
+  /// Subtle recessed card/chip well (`rgba(48,36,24,0.065)` light / `rgba(0,0,0,0.24)` dark).
+  var subtleWell: Color {
+    isDark
+      ? Color(.sRGB, red: 0.0, green: 0.0, blue: 0.0, opacity: 0.24)
+      : Color(.sRGB, red: 0.188, green: 0.141, blue: 0.094, opacity: 0.065)
+  }
+
+  /// Warm secondary ink matching mockup contrast (`rgba(42, 34, 26, 0.62)` light).
+  var secondaryInk: Color {
+    isDark
+      ? Color(.sRGB, red: 0.980, green: 0.965, blue: 0.941, opacity: 0.64)
+      : Color(.sRGB, red: 0.165, green: 0.133, blue: 0.102, opacity: 0.62)
+  }
+
+  /// Sidebar wash matching Warm Paper (`#EEE8DE`) and Dark Walnut (`#27221E`) sidebar tokens.
+  var sidebarSurface: Color {
+    let base = isDark ? Self.darkWalnutSidebar : Self.warmPaperSidebar
+    return usesMaterial ? base.opacity(glassOpacity) : base
   }
 
   /// Crisp warm ivory/white fill bar for Control Center pill sliders.

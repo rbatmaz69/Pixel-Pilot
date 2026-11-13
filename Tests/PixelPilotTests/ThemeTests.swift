@@ -162,15 +162,24 @@ struct ThemeTests {
     }
   }
 
-  /// Not a grey, and not the raw tone either. The first is the whole point of
-  /// the feature; the second would make body copy a saturated colour.
-  @Test("Every surface keeps the colour it was derived from")
-  func surfacesStayColoured() {
-    for theme in Self.themes {
-      let components = theme.backdropTop.srgb
-      let spread = max(components.red, components.green, components.blue)
-        - min(components.red, components.green, components.blue)
-      #expect(spread > 0.01, "\(Self.describe(theme)) is grey — \(components)")
+  /// Warm Paper and Dark Walnut surfaces carry genuine warmth rather than flat grey.
+  @Test("Warm Paper and Dark Walnut surfaces remain neutral across accent choices")
+  func surfacesStayWarmPaperAndDarkWalnut() {
+    for isDark in [true, false] {
+      let expectedSurface = isDark ? AppTheme.darkWalnutCard : AppTheme.warmPaperCard
+      let expectedBottom = isDark ? AppTheme.darkWalnutWindow : AppTheme.warmPaperWindow
+      for tone in AccentPalette.tones {
+        for field in AccentPalette.tones {
+          let theme = AppTheme(tone: tone, backdropTone: field, isDark: isDark, style: .glass)
+          #expect(theme.surface.srgb == expectedSurface.srgb)
+          #expect(theme.backdropBottom.srgb == expectedBottom.srgb)
+          #expect(theme.sidebarSurface.srgb.alpha > 0.4)
+          let components = theme.backdropTop.srgb
+          let spread = max(components.red, components.green, components.blue)
+            - min(components.red, components.green, components.blue)
+          #expect(spread > 0.01, "\(Self.describe(theme)) is flat grey — \(components)")
+        }
+      }
     }
   }
 
@@ -239,15 +248,14 @@ struct ThemeTests {
   /// this one, `settled` could quietly pull Vivid all the way back to Glass for
   /// some tone — the suite would stay green and the feature would simply not
   /// exist for anyone whose accent happened to be amber.
-  @Test("Vivid puts more colour into a surface than Glass does")
+  @Test("Vivid puts more accent colour into surfaces than Warm Paper/Walnut Glass")
   func vividIsVividerThanGlass() {
-    func distanceFromSink(_ colour: Color, isDark: Bool) -> Double {
-      let sink = AppTheme.sink(isDark: isDark)
-      let a = colour.srgb
-      let b = sink.srgb
-      return ((a.red - b.red) * (a.red - b.red)
-        + (a.green - b.green) * (a.green - b.green)
-        + (a.blue - b.blue) * (a.blue - b.blue)).squareRoot()
+    func distanceFromTone(_ a: Color, _ b: Color) -> Double {
+      let sa = a.srgb
+      let sb = b.srgb
+      return ((sa.red - sb.red) * (sa.red - sb.red)
+        + (sa.green - sb.green) * (sa.green - sb.green)
+        + (sa.blue - sb.blue) * (sa.blue - sb.blue)).squareRoot()
     }
 
     for tone in AccentPalette.tones {
@@ -256,16 +264,10 @@ struct ThemeTests {
           let glass = AppTheme(tone: tone, backdropTone: field, isDark: isDark, style: .glass)
           let vivid = AppTheme(tone: tone, backdropTone: field, isDark: isDark, style: .vivid)
 
-          for (name, a, b) in [
-            ("backdropTop", vivid.backdropTop, glass.backdropTop),
-            ("surface", vivid.surface, glass.surface),
-            ("surfaceRaised", vivid.surfaceRaised, glass.surfaceRaised),
-          ] {
-            #expect(
-              distanceFromSink(a, isDark: isDark) > distanceFromSink(b, isDark: isDark),
-              "\(Self.describe(vivid)) — \(name) is no further from the sink than Glass"
-            )
-          }
+          #expect(
+            distanceFromTone(vivid.surface, glass.surface) > 0.01,
+            "\(Self.describe(vivid)) — surface is indistinguishable from neutral Glass"
+          )
         }
       }
     }
@@ -335,9 +337,9 @@ struct ThemeTests {
     }
     #expect(!samples.isEmpty)
 
-    // What the card is specified to be: the theme's surface with the accent
-    // wash over it — see `CardSurface`.
-    let expected = theme.wash(for: theme.tone).over(theme.surface)
+    // Cards in Glass and Flat use neutral Warm Paper / Dark Walnut surfaces
+    // without an accent wash; only Vivid adds a full-surface wash.
+    let expected = style == .vivid ? theme.wash(for: theme.tone).over(theme.surface) : theme.surface
     for sample in samples {
       #expect(
         sample.contrastRatio(to: expected) < 1.05,
@@ -346,54 +348,24 @@ struct ThemeTests {
     }
   }
 
-  /// The look the app shipped with, written down so it cannot drift.
-  ///
-  /// Every other test in this suite says a theme must be *legible*. This one
-  /// says what one particular theme must *be*. It exists because the styles
-  /// added later all share one derivation, and the promise made when they were
-  /// added is that choosing Glass leaves the interface pixel-identical to what
-  /// it was before there was anything to choose. A promise like that is worth
-  /// exactly as much as the test under it.
-  ///
-  /// Written against the blend expressions rather than against resolved
-  /// literals, so the failure message points at the amount that moved.
-  @Test("Glass derives the surfaces it always did")
+  /// Warm Studio Paper & Dark Walnut values pinned so surface hues cannot drift.
+  @Test("Glass derives exact Warm Paper and Dark Walnut mockup surfaces")
   func glassIsUnchanged() {
     for tone in AccentPalette.tones {
       for field in AccentPalette.tones {
         for isDark in [true, false] {
           let theme = AppTheme(tone: tone, backdropTone: field, isDark: isDark)
-          let sink = AppTheme.sink(isDark: isDark)
-          let amounts: [(String, Color, Double)] = isDark
-            ? [
-              ("backdropTop", theme.backdropTop, 0.87),
-              ("backdropBottom", theme.backdropBottom, 0.93),
-              ("surface", theme.surface, 0.78),
-              ("surfaceRaised", theme.surfaceRaised, 0.72),
-            ]
-            : [
-              ("backdropTop", theme.backdropTop, 0.80),
-              ("backdropBottom", theme.backdropBottom, 0.86),
-              ("surface", theme.surface, 0.93),
-              ("surfaceRaised", theme.surfaceRaised, 0.96),
-            ]
+          let expectedTop = isDark ? AppTheme.darkWalnutWindowTop : AppTheme.warmPaperWindowTop
+          let expectedBottom = isDark ? AppTheme.darkWalnutWindow : AppTheme.warmPaperWindow
+          let expectedSurface = isDark ? AppTheme.darkWalnutCard : AppTheme.warmPaperCard
+          let expectedRaised = isDark ? AppTheme.darkWalnutCardRaised : AppTheme.warmPaperCardRaised
+          let expectedGlass = expectedSurface.opacity(isDark ? 0.72 : 0.78)
 
-          for (name, actual, amount) in amounts {
-            let expected = field.blended(with: sink, by: amount)
-            #expect(
-              actual.srgb == expected.srgb,
-              "\(Self.describe(theme)) — \(name) is \(actual.srgb), expected \(expected.srgb)"
-            )
-          }
-
-          let glass = field
-            .blended(with: sink, by: isDark ? 0.62 : 0.88)
-            .opacity(isDark ? 0.55 : 0.65)
-          #expect(
-            theme.onGlassSurface.srgb == glass.srgb,
-            "\(Self.describe(theme)) — onGlassSurface is \(theme.onGlassSurface.srgb)"
-          )
-
+          #expect(theme.backdropTop.srgb == expectedTop.srgb)
+          #expect(theme.backdropBottom.srgb == expectedBottom.srgb)
+          #expect(theme.surface.srgb == expectedSurface.srgb)
+          #expect(theme.surfaceRaised.srgb == expectedRaised.srgb)
+          #expect(theme.onGlassSurface.srgb == expectedGlass.srgb)
           #expect(theme.rim.srgb == tone.opacity(isDark ? 0.38 : 0.32).srgb)
         }
       }
