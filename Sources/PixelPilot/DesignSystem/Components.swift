@@ -38,18 +38,6 @@ struct PanelCard<Content: View>: View {
     .padding(Layout.normal)
     .frame(maxWidth: .infinity, alignment: .leading)
     .cardSurface(accent: tone, isRaised: isHovered)
-    // Lift by translation and shadow, never by scale.
-    //
-    // These cards contain sliders, and a `scaleEffect` changes the coordinate
-    // space `ExpressiveSlider` maps `gesture.location.x` into — the handle
-    // would land somewhere other than the pointer. The scroll transition below
-    // already refused a scale for this exact reason; a hover effect is not a
-    // good enough excuse to make the trade the second time.
-    //
-    // One point, and none of it under reduced motion: a card that twitches
-    // under the pointer is precisely what that setting is asking to stop.
-    .offset(y: isHovered && !motion.isReduced ? -1 : 0)
-    .animation(motion.spatialFast, value: isHovered)
     .onHover { isHovered = $0 }
   }
 }
@@ -111,10 +99,6 @@ struct DisclosureCard<Content: View>: View {
     .padding(Layout.normal)
     .frame(maxWidth: .infinity, alignment: .leading)
     .cardSurface(accent: tone, isRaised: isHovered)
-    .offset(y: isHovered && !motion.isReduced ? -1 : 0)
-    .animation(motion.spatialFast, value: isHovered)
-    // Spatial rather than an effect curve: the card below this one has to
-    // travel, and that is a change of position however it was triggered.
     .animation(motion.spatialDefault, value: isExpanded)
     .onHover { isHovered = $0 }
   }
@@ -122,9 +106,8 @@ struct DisclosureCard<Content: View>: View {
 
 /// The icon, the title, and whatever the card puts on the right of them.
 ///
-/// Shared by `PanelCard` and `DisclosureCard` because the two must be the same
-/// heading — a card that folds should not announce itself in a different voice
-/// from the card above it.
+/// Uses a `20×20pt` rounded-square category badge (`5pt` `Layout.radiusSegment`
+/// corner radius) matching macOS System Settings.
 private struct CardHeader<Trailing: View>: View {
   let title: String
   let systemImage: String
@@ -138,8 +121,15 @@ private struct CardHeader<Trailing: View>: View {
       Image(systemName: systemImage)
         .font(.caption.weight(.semibold))
         .foregroundStyle(theme.ink(for: tone))
-        .frame(width: 22, height: 22)
-        .background(Circle().fill(theme.wash(for: tone)))
+        .frame(width: 20, height: 20)
+        .background(
+          RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+            .fill(theme.wash(for: tone))
+        )
+        .overlay(
+          RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+            .strokeBorder(theme.rim(for: tone).opacity(0.45), lineWidth: 0.75)
+        )
       Text(title)
         .font(TypeScale.cardTitle)
         .foregroundStyle(.primary)
@@ -312,18 +302,23 @@ private struct CardSurface: ViewModifier {
   func body(content: Content) -> some View {
     content
       .background { surface }
-      .overlay {
-        shape.strokeBorder(theme.rim(for: accent).opacity(isRaised ? 1.6 : 1), lineWidth: 1)
+      .overlay(alignment: .top) {
+        if theme.usesMaterial {
+          shape
+            .strokeBorder(
+              LinearGradient(
+                colors: [theme.specularRim, .clear],
+                startPoint: .top,
+                endPoint: .bottom
+              ),
+              lineWidth: 1
+            )
+        }
       }
-      // An effect, so it must not overshoot — a rim that rings reads as a
-      // flicker rather than as the card noticing the pointer.
+      .overlay {
+        shape.strokeBorder(theme.rim(for: accent).opacity(isRaised ? 1.35 : 1), lineWidth: 1)
+      }
       .animation(motion.effectFast, value: isRaised)
-      .shadow(
-        color: theme.glow(for: accent, active: isRaised).opacity(0.55),
-        radius: isRaised ? 14 : 0,
-        y: isRaised ? 4 : 0
-      )
-      .animation(motion.effectDefault, value: isRaised)
   }
 
   @ViewBuilder
@@ -677,6 +672,13 @@ struct SoftButtonStyle: ButtonStyle {
           RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
             .fill(fill)
         }
+        .overlay {
+          RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+            .strokeBorder(
+              isProminent ? tone.opacity(0.50) : theme.groupBorder,
+              lineWidth: 1
+            )
+        }
         // Native macOS NSButton physics: 0ms instantaneous press highlight,
         // 120ms ease-out release, and zero scale shrinkage.
         .animation(configuration.isPressed ? nil : motion.effectFast,
@@ -689,10 +691,13 @@ struct SoftButtonStyle: ButtonStyle {
 
     private var fill: AnyShapeStyle {
       if isProminent {
+        if configuration.isPressed {
+          return AnyShapeStyle(tone.blended(with: .black, by: 0.14))
+        }
         return AnyShapeStyle(theme.fill(for: tone))
       }
       if configuration.isPressed {
-        return AnyShapeStyle(tone.opacity(0.26))
+        return AnyShapeStyle(tone.opacity(0.22))
       }
       return AnyShapeStyle(isHovered ? theme.wash(for: tone) : Color.primary.opacity(0.06))
     }
