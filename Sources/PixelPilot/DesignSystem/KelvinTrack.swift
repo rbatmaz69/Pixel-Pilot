@@ -13,10 +13,41 @@ enum KelvinTrack {
   /// turning warmth on and seeing nothing happen reads as broken.
   static let defaultKelvin: Double = 4500
 
+  /// Direct Studio-Atelier warmth range (`2700 K` Candlelight up to `6500 K` Neutral).
+  static let warmRange: ClosedRange<Double> = 2700 ... ColorTemperature.neutralKelvin
+
   static func fraction(of kelvin: Double) -> Double {
     let range = ColorTemperature.range
     return (kelvin - range.lowerBound) / (range.upperBound - range.lowerBound)
   }
+
+  static func warmFraction(of kelvin: Double) -> Double {
+    let span = warmRange.upperBound - warmRange.lowerBound
+    guard span > 0 else { return 1 }
+    return min(1, max(0, (kelvin - warmRange.lowerBound) / span))
+  }
+
+  /// Spectral gradient across the direct `2700 K … 6500 K` warm atelier range.
+  static let warmGradient: LinearGradient = {
+    let stops = stride(from: warmRange.lowerBound,
+                       through: warmRange.upperBound,
+                       by: 200).map { kelvin -> Gradient.Stop in
+      let point = ColorTemperature.whitePoint(kelvin: kelvin)
+      return Gradient.Stop(
+        color: Color(red: point.red, green: point.green, blue: point.blue),
+        location: warmFraction(of: kelvin)
+      )
+    }
+    return LinearGradient(stops: stops, startPoint: .leading, endPoint: .trailing)
+  }()
+
+  static let warmDetents: [Double] = [
+    0,
+    warmFraction(of: 3500),
+    warmFraction(of: 4500),
+    warmFraction(of: 5500),
+    1,
+  ]
 
   /// The neutral point is the one place on this track worth finding again, and
   /// the two ends are worth feeling. Quarters of a Kelvin range mean nothing.

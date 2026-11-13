@@ -14,31 +14,26 @@ struct ColorSection: View {
 
   @Environment(\.motion) private var motion
 
-  private var isWarmed: Bool { display.colorTemperatureKelvin != nil }
+  private static let neutralCutoff: Double = 6450
 
-  private static let defaultKelvin = KelvinTrack.defaultKelvin
+  private var sliderKelvin: Double {
+    let raw = display.colorTemperatureKelvin ?? ColorTemperature.neutralKelvin
+    return min(KelvinTrack.warmRange.upperBound, max(KelvinTrack.warmRange.lowerBound, raw))
+  }
+
+  private var isNeutral: Bool {
+    display.colorTemperatureKelvin == nil
+  }
 
   var body: some View {
     PanelCard(title: "Farbwärme & Weißpunkt", systemImage: "thermometer.sun", accent: display.accent) {
       VStack(alignment: .leading, spacing: Layout.normal) {
-        Toggle("Farbwärme auf diesem Display anpassen", isOn: Binding(
-          get: { isWarmed },
-          set: { display.setColorTemperature($0 ? Self.defaultKelvin : nil) }
-        ))
-
-        if isWarmed {
-          slider.transition(.blurReplace.combined(with: .scale(0.97, anchor: .top)))
-        }
+        slider
 
         if display.isFightingSomethingOverColor {
           nightShiftWarning.transition(.blurReplace)
         }
-
-        CardFooter(isWarmed
-          ? "Die Farbwärme wirkt weich über die Farbtabelle des Displays."
-          : "Ohne aktive Farbwärme bleibt der Weißpunkt exakt auf Standard.")
       }
-      .animation(motion.spatialDefault, value: isWarmed)
       .animation(motion.spatialDefault, value: display.isFightingSomethingOverColor)
     }
   }
@@ -50,25 +45,45 @@ struct ColorSection: View {
           .font(TypeScale.rowTitle)
           .foregroundStyle(.secondary)
         Spacer()
-        Text("\(Int((display.colorTemperatureKelvin ?? Self.defaultKelvin).rounded())) K")
-          .font(TypeScale.readout)
-          .foregroundStyle(display.accent)
-          .contentTransition(.numericText(value: display.colorTemperatureKelvin ?? 0))
-          .animation(motion.effectFast, value: display.colorTemperatureKelvin)
+        if let active = display.colorTemperatureKelvin {
+          Text("\(Int(active.rounded())) K")
+            .font(TypeScale.readout)
+            .foregroundStyle(display.accent)
+            .contentTransition(.numericText(value: active))
+            .animation(motion.effectFast, value: active)
+        } else {
+          Text("6500 K · Neutral")
+            .font(TypeScale.readout)
+            .foregroundStyle(.secondary)
+        }
       }
 
       ExpressiveSlider(
         value: Binding(
-          get: { display.colorTemperatureKelvin ?? Self.defaultKelvin },
-          set: { display.setColorTemperature($0) }
+          get: { sliderKelvin },
+          set: { newValue in
+            if newValue >= Self.neutralCutoff {
+              if display.colorTemperatureKelvin != nil {
+                display.setColorTemperature(nil)
+              }
+            } else {
+              display.setColorTemperature(newValue)
+            }
+          }
         ),
-        range: ColorTemperature.range,
+        range: KelvinTrack.warmRange,
         accent: display.accent,
-        trackStyle: AnyShapeStyle(KelvinTrack.gradient),
-        detents: KelvinTrack.detents
+        trackStyle: AnyShapeStyle(KelvinTrack.warmGradient),
+        detents: KelvinTrack.warmDetents
       )
 
-      KelvinTrack.scaleLabels
+      HStack {
+        Text("2700 K Kerzenlicht").font(TypeScale.detail).foregroundStyle(.secondary)
+        Spacer()
+        Text("4500 K Studio").font(TypeScale.detail).foregroundStyle(.secondary)
+        Spacer()
+        Text("6500 K Neutral").font(TypeScale.detail).foregroundStyle(.secondary)
+      }
 
       HStack(spacing: Layout.tight) {
         ForEach(
@@ -80,10 +95,16 @@ struct ColorSection: View {
           ],
           id: \.0
         ) { preset in
-          let current = display.colorTemperatureKelvin ?? Self.defaultKelvin
-          let isSelected = abs(current - preset.0) < 60
+          let isSelected = if preset.0 >= Self.neutralCutoff {
+            isNeutral
+          } else if let active = display.colorTemperatureKelvin {
+            abs(active - preset.0) < 60
+          } else {
+            false
+          }
           Button(preset.1) {
-            display.setColorTemperature(preset.0)
+            display.setColorTemperature(preset.0 >= Self.neutralCutoff ? nil : preset.0)
+            Haptics.detent()
           }
           .buttonStyle(.soft(isSelected ? display.accent : .secondary))
           .controlSize(.small)

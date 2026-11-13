@@ -16,11 +16,15 @@ struct InputAndPowerSection: View {
 
   var body: some View {
     PanelCard(title: "Eingang & Ruhezustand", systemImage: "cable.connector", accent: display.accent) {
-      VStack(alignment: .leading, spacing: Layout.normal) {
-        inputs
-        if !display.availablePowerModes.isEmpty {
-          Divider()
-          power
+      if display.availableInputs.isEmpty {
+        compactRow
+      } else {
+        VStack(alignment: .leading, spacing: Layout.normal) {
+          inputs
+          if !display.availablePowerModes.isEmpty {
+            Divider()
+            power
+          }
         }
       }
     }
@@ -67,62 +71,57 @@ struct InputAndPowerSection: View {
 
   // MARK: - Inputs
 
-  @ViewBuilder
+  private var compactRow: some View {
+    HStack(spacing: Layout.snug) {
+      Button {
+        Task { await display.readCapabilityString() }
+      } label: {
+        if display.isReadingCapabilityString {
+          HStack(spacing: Layout.tight) {
+            ProgressView().controlSize(.small)
+            Text("Lese Eingänge…")
+          }
+        } else {
+          Label("Eingänge einlesen", systemImage: "arrow.trianglehead.2.clockwise")
+        }
+      }
+      .buttonStyle(.soft(display.accent))
+      .disabled(display.isReadingCapabilityString)
+      .animation(.default, value: display.isReadingCapabilityString)
+
+      Spacer(minLength: 0)
+
+      ForEach(display.availablePowerModes.filter { $0 != .on }, id: \.self) { mode in
+        Button(mode.displayName) { pendingPowerMode = mode }
+          .buttonStyle(.soft(Status.warn))
+      }
+    }
+  }
+
   private var inputs: some View {
-    if display.availableInputs.isEmpty {
-      VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: Layout.tight) {
+      HStack {
         Text("Eingangsquelle")
-          .font(.callout.weight(.medium))
-        Text(display.isReadingCapabilityString
-          ? "Eingangsliste des Monitors wird gelesen…"
-          : "Liest einmalig die vom Monitor gemeldeten Video-Eingänge ein.")
-          .font(.caption)
+          .font(TypeScale.rowTitle)
+        Spacer()
+        Text(currentInputDescription)
+          .font(TypeScale.detail)
           .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-
-        Button {
-          Task { await display.readCapabilityString() }
-        } label: {
-          if display.isReadingCapabilityString {
-            HStack(spacing: Layout.tight) {
-              ProgressView().controlSize(.small)
-              Text("Lese…")
-            }
-            .transition(.blurReplace)
-          } else {
-            Text("Eingänge einlesen")
-              .transition(.blurReplace)
-          }
-        }
-        .buttonStyle(.soft(display.accent))
-        .disabled(display.isReadingCapabilityString)
-        .animation(.default, value: display.isReadingCapabilityString)
       }
-    } else {
-      VStack(alignment: .leading, spacing: Layout.tight) {
-        HStack {
-          Text("Eingangsquelle")
-            .font(TypeScale.rowTitle)
-          Spacer()
-          Text(currentInputDescription)
-            .font(TypeScale.detail)
-            .foregroundStyle(.secondary)
-        }
 
-        // A row of buttons rather than a picker: a picker implies the selection
-        // reflects reality, and here we usually cannot tell which input is live.
-        HStack(spacing: Layout.tight) {
-          ForEach(display.availableInputs, id: \.self) { value in
-            Button(InputSource.name(for: value)) {
-              pendingInput = value
-            }
-            .buttonStyle(.soft(display.accent))
-            .disabled(value == display.currentInput)
+      // A row of buttons rather than a picker: a picker implies the selection
+      // reflects reality, and here we usually cannot tell which input is live.
+      HStack(spacing: Layout.tight) {
+        ForEach(display.availableInputs, id: \.self) { value in
+          Button(InputSource.name(for: value)) {
+            pendingInput = value
           }
+          .buttonStyle(.soft(display.accent))
+          .disabled(value == display.currentInput)
         }
-
-        unlistedInputWarning
       }
+
+      unlistedInputWarning
     }
   }
 
