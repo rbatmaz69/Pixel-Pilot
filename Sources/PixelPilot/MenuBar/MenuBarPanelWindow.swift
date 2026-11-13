@@ -120,14 +120,10 @@ final class MenuBarPanelWindow: NSObject {
     let clip = NSView()
     clip.wantsLayer = true
     clip.layer?.cornerRadius = Layout.radiusPanel
-    // Circular rather than continuous, and that is the one place in this app
-    // where that is the right answer. This has to line up exactly with the mask
-    // above, and a mask is an image: the only rounding it can express is the
-    // one `NSBezierPath` drew into it. A squircle here and an arc there differ
-    // by a fraction of a point through the corner — which is precisely enough
-    // to read as a seam.
     clip.layer?.cornerCurve = .circular
     clip.layer?.masksToBounds = true
+    clip.layer?.borderWidth = 1
+    clip.layer?.borderColor = NSColor(theme.groupBorder).cgColor
 
     // Where the material survives, the desktop blurring through it is real
     // depth, and this is the one surface in the app that has something behind
