@@ -73,6 +73,27 @@ struct ColorSection: View {
       )
 
       KelvinTrack.scaleLabels
+
+      HStack(spacing: Layout.tight) {
+        ForEach(
+          [
+            (3500.0, "3500 K Abendglut"),
+            (4500.0, "4500 K Leselicht"),
+            (5500.0, "5500 K Studio"),
+            (6500.0, "6500 K Neutral"),
+          ],
+          id: \.0
+        ) { preset in
+          let current = display.colorTemperatureKelvin ?? Self.defaultKelvin
+          let isSelected = abs(current - preset.0) < 60
+          Button(preset.1) {
+            display.setColorTemperature(preset.0)
+          }
+          .buttonStyle(.soft(isSelected ? display.accent : .secondary))
+          .controlSize(.small)
+        }
+      }
+      .padding(.top, 2)
     }
   }
 

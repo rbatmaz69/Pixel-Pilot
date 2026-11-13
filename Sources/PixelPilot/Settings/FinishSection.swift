@@ -75,9 +75,34 @@ struct FinishSection: View {
       )
 
       Text(curve.namedFinish.map(describe) ?? "Adjusted by hand.")
+        .font(TypeScale.editorialAccent)
+        .foregroundStyle(.secondary)
+
+      HStack(spacing: Layout.tight) {
+        finishMetricPill(label: "Schwarzanhebung", value: "+\(percent(curve.blackLift))")
+        finishMetricPill(label: "Weißpunkt-Decke", value: percent(curve.whiteCeiling))
+        finishMetricPill(label: "Weichzeichnung", value: String(format: "%.2f", curve.softness))
+      }
+      .padding(.top, 2)
+    }
+  }
+
+  private func finishMetricPill(label: String, value: String) -> some View {
+    HStack(spacing: 4) {
+      Text(label)
         .font(TypeScale.detail)
         .foregroundStyle(.secondary)
+      Text(value)
+        .font(TypeScale.detail.weight(.semibold))
+        .monospacedDigit()
+        .foregroundStyle(display.accent)
     }
+    .padding(.horizontal, 8)
+    .padding(.vertical, 3)
+    .background(
+      RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+        .fill(display.accent.opacity(0.08))
+    )
   }
 
   private func describe(_ name: String) -> String {

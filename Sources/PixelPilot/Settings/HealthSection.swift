@@ -19,6 +19,8 @@ struct HealthSection: View {
   @Bindable var display: DisplayViewModel
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
+  @Environment(\.colorScheme) private var scheme
 
   @State private var isRepairing = false
   @State private var isClearingMarks = false
@@ -28,6 +30,8 @@ struct HealthSection: View {
   var body: some View {
     PanelCard(title: "Health", systemImage: "waveform.path.ecg", accent: display.accent) {
       VStack(alignment: .leading, spacing: Layout.normal) {
+        careSealBanner
+
         if let report = display.healthReport {
           verdict(report).transition(.blurReplace)
         } else {
@@ -62,6 +66,96 @@ struct HealthSection: View {
         + "Reanimating then works the whole screen rather than the spots you found, "
         + "and finding them again means walking the patterns again.")
     }
+  }
+
+  /// Warm „In Bestform“ Panel-Fürsorge-Siegel (`.care-seal`) that replaces
+  /// sterile diagnostic tables with an appreciative studio care badge.
+  private var careSealBanner: some View {
+    let sealTint: Color = {
+      guard let report = display.healthReport else { return theme.studioAccent }
+      return tint(for: report.overall) ?? theme.studioAccent
+    }()
+    let sealTitle: String = {
+      guard let report = display.healthReport else {
+        return "Panel-Fürsorge · Bereit zur Prüfung"
+      }
+      switch report.overall {
+      case .clean: return "Panel-Fürsorge · In Bestform"
+      case .characteristics: return "Panel-Fürsorge · Charakter-Hinweise"
+      case .faults: return "Panel-Fürsorge · Aufmerksamkeit empfohlen"
+      case .incomplete: return "Panel-Fürsorge · Teilweise geprüft"
+      }
+    }()
+    let sealSubtitle: String = {
+      guard let report = display.healthReport else {
+        return "Keine auffälligen Stellen vermerkt — ein kurzer Durchlauf schafft Gewissheit."
+      }
+      switch report.overall {
+      case .clean:
+        return "Gleichmäßige Ausleuchtung, saubere Zeichnung und null markierte Pixel."
+      case .characteristics:
+        return "Typische Panel-Eigenschaften dokumentiert, keine defekten Pixel."
+      case .faults:
+        return "Markierte Bereiche können gezielt mit dem Reanimations-Zyklus gepflegt werden."
+      case .incomplete:
+        return "Der letzte Durchlauf wurde vorzeitig beendet."
+      }
+    }()
+    let badgeLabel: String = {
+      guard let report = display.healthReport else { return "BEREIT" }
+      switch report.overall {
+      case .clean: return "IN BESTFORM"
+      case .characteristics: return "HINWEIS"
+      case .faults: return "PFLEGE"
+      case .incomplete: return "OFFEN"
+      }
+    }()
+
+    return HStack(spacing: Layout.snug) {
+      ZStack {
+        RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+          .fill(sealTint.opacity(scheme == .dark ? 0.18 : 0.12))
+          .frame(width: 34, height: 34)
+        RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+          .strokeBorder(sealTint.opacity(0.35), lineWidth: 0.75)
+          .frame(width: 34, height: 34)
+        Image(systemName: display.healthReport?.overall == .clean ? "checkmark.seal.fill" : "sparkles")
+          .font(.system(size: 15, weight: .semibold))
+          .foregroundStyle(sealTint)
+      }
+
+      VStack(alignment: .leading, spacing: 2) {
+        Text(sealTitle)
+          .font(TypeScale.rowTitle)
+          .foregroundStyle(.primary)
+        Text(sealSubtitle)
+          .font(TypeScale.editorialAccent)
+          .foregroundStyle(.secondary)
+          .lineLimit(2)
+      }
+
+      Spacer(minLength: Layout.tight)
+
+      Text(badgeLabel)
+        .font(TypeScale.detail.weight(.semibold))
+        .tracking(0.5)
+        .foregroundStyle(sealTint)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+          Capsule(style: .continuous)
+            .fill(sealTint.opacity(scheme == .dark ? 0.16 : 0.10))
+        )
+    }
+    .padding(Layout.snug)
+    .background(
+      RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous)
+        .fill(theme.recessedWell)
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous)
+        .strokeBorder(sealTint.opacity(scheme == .dark ? 0.26 : 0.20), lineWidth: 1)
+    )
   }
 
   private var neverChecked: some View {
