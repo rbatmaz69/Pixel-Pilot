@@ -20,6 +20,7 @@ import SwiftUI
 struct MenuBarPanel: View {
   @Environment(\.motion) private var motion
   @Environment(\.theme) private var theme
+  @Environment(\.fitPanelHeight) private var fitPanelHeight
 
   let model: AppModel
   var onOpenSettings: () -> Void = {}
@@ -81,6 +82,9 @@ struct MenuBarPanel: View {
         .allowsHitTesting(false)
     }
     .animation(motion.spatialDefault, value: model.needsAccessibilityPermission)
+    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _, _ in
+      fitPanelHeight()
+    }
     .onAppear { model.refreshPermissions() }
     .onDisappear { previewTask?.cancel() }
   }
@@ -408,12 +412,34 @@ private struct DisplayControlGroup: View {
   /// to *me*" without anything above it having to know.
   var preview: Preset?
 
+  @State private var isStudioExpanded = false
+  @State private var pendingAction: PendingDrawerAction?
+
+  private enum PendingDrawerAction: Equatable {
+    case input(UInt8)
+    case power(PowerMode)
+
+    var title: String {
+      switch self {
+      case let .input(value): "Zu \(InputSource.name(for: value)) wechseln?"
+      case let .power(mode): "In „\(mode.displayName)“ versetzen?"
+      }
+    }
+  }
+
+  private static let neutralCutoff: Double = 6450
+
   private var previewEntry: PresetEntry? {
     preview?.entry(for: display.key)
   }
 
   /// A preset is being considered, and it says nothing about this display.
   private var isUnaffected: Bool { preview != nil && previewEntry == nil }
+
+  private var sliderKelvin: Double {
+    let raw = display.colorTemperatureKelvin ?? ColorTemperature.neutralKelvin
+    return min(KelvinTrack.warmRange.upperBound, max(KelvinTrack.warmRange.lowerBound, raw))
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
@@ -455,34 +481,19 @@ private struct DisplayControlGroup: View {
           .help(display.isMuted ? "Ton ein" : "Stumm")
         }
       }
+
+      if isStudioExpanded {
+        studioDrawer
+          .transition(.blurReplace.combined(with: .scale(0.98, anchor: .top)))
+      }
     }
     .padding(Layout.normal)
     .frame(maxWidth: .infinity, alignment: .leading)
-    // No ambient wash on this card, and that is a decision rather than an
-    // omission — it used to carry one.
-    //
-    // The wash is two blurred blobs of the display's accent, and the larger one
-    // sits 52 pt to the left of centre. On the tall column in the Displays
-    // window that reads as depth behind a lot of content. On a 70 pt card it is
-    // most of the card, so it stopped reading as light and started reading as a
-    // stain under the brightness slider — a shadow nobody could account for,
-    // which is worse than a flat surface.
-    //
-    // `cardSurface` still tints and rims the card in the display's colour, so
-    // the card is no less that display's. It has simply stopped being lit from
-    // one side.
-    //
-    // Worth noting what else went with it: `AmbientBackdrop` is the one thing
-    // in this app that moves on its own, and this was the copy of it that ran
-    // whenever the panel was open — which is the surface opened dozens of times
-    // a day. A display's page in the settings window keeps its own.
     .cardSurface(accent: display.accent)
-    // A preset that says nothing about this display steps back rather than
-    // announcing itself. "Not mentioned" is the ordinary case — a preset for
-    // the desk monitors is not a warning about the laptop — so it gets the
-    // quietest signal there is, and an opacity rather than anything that moves.
     .opacity(isUnaffected ? 0.5 : 1)
     .animation(motion.effectDefault, value: isUnaffected)
+    .animation(motion.spatialDefault, value: isStudioExpanded)
+    .animation(motion.effectFast, value: pendingAction)
   }
 
   private var header: some View {
@@ -493,8 +504,6 @@ private struct DisplayControlGroup: View {
         .font(TypeScale.cardTitle)
         .lineLimit(1)
 
-      // A slider that moves on its own is unsettling until you know why. This
-      // is the whole explanation, and it costs one glyph.
       if display.followsBuiltinBrightness {
         Image(systemName: "a.circle")
           .font(.caption)
@@ -505,7 +514,9 @@ private struct DisplayControlGroup: View {
 
       warmthSwatch
 
-      Spacer()
+      Spacer(minLength: 4)
+
+      studioDrawerTrigger
 
       EditableReadout(value: display.brightness, accent: display.accent) { value in
         display.setBrightness(value)
@@ -514,9 +525,6 @@ private struct DisplayControlGroup: View {
       .foregroundStyle(theme.ink(for: display.accent))
       .disabled(!display.isReady)
 
-      // The live figure stays put and keeps telling the truth about the screen.
-      // The arrow is the only thing making a claim about the future, which is
-      // why it is a second label rather than a replacement for the first.
       if let target = previewEntry?.brightness {
         Text("→ \(Int((target * 100).rounded()))%")
           .font(TypeScale.readout)
@@ -525,6 +533,203 @@ private struct DisplayControlGroup: View {
       }
     }
     .animation(motion.effectDefault, value: previewEntry)
+  }
+
+  private var studioDrawerTrigger: some View {
+    Button {
+      pendingAction = nil
+      isStudioExpanded.toggle()
+      Haptics.detent()
+    } label: {
+      HStack(spacing: 4) {
+        if let kelvin = display.colorTemperatureKelvin {
+          Text("\(Int(kelvin.rounded())) K")
+            .font(.system(size: 10, weight: .semibold, design: .rounded).monospacedDigit())
+        } else {
+          Image(systemName: "thermometer.sun")
+            .font(.system(size: 10, weight: .semibold))
+        }
+        if let finishName = display.toneCurve?.namedFinish {
+          Text("· \(finishName)")
+            .font(.system(size: 10, weight: .medium, design: .rounded))
+        }
+        Image(systemName: "chevron.down")
+          .font(.system(size: 8.5, weight: .bold))
+          .rotationEffect(.degrees(isStudioExpanded ? 180 : 0))
+      }
+      .foregroundStyle(isStudioExpanded || display.colorTemperatureKelvin != nil || display.toneCurve != nil
+        ? display.accent : .secondary)
+      .padding(.horizontal, 6)
+      .padding(.vertical, 3)
+      .background(
+        Capsule(style: .continuous)
+          .fill(isStudioExpanded ? display.accent.opacity(theme.isDark ? 0.22 : 0.14) : theme.recessedWell)
+      )
+      .overlay(
+        Capsule(style: .continuous)
+          .strokeBorder(isStudioExpanded ? display.accent.opacity(0.45) : theme.groupBorder, lineWidth: 0.75)
+      )
+    }
+    .buttonStyle(.plain)
+    .help(isStudioExpanded ? "Studio-Regler einklappen" : "Farbwärme, Finish & Eingang einblenden")
+    .accessibilityLabel("Studio-Regler für \(display.name)")
+  }
+
+  private var studioDrawer: some View {
+    VStack(alignment: .leading, spacing: Layout.snug) {
+      Divider()
+        .overlay(theme.separator)
+
+      // Farbwärme (Kelvin)
+      VStack(alignment: .leading, spacing: 6) {
+        HStack {
+          Text("FARBWÄRME")
+            .font(.system(size: 9.5, weight: .bold))
+            .tracking(0.5)
+            .foregroundStyle(.secondary)
+          Spacer()
+          Text(display.colorTemperatureKelvin.map { "\(Int($0.rounded())) K" } ?? "6500 K · Neutral")
+            .font(.system(size: 10.5, weight: .semibold, design: .rounded).monospacedDigit())
+            .foregroundStyle(display.colorTemperatureKelvin != nil ? display.accent : .secondary)
+        }
+
+        ExpressiveSlider(
+          value: Binding(
+            get: { sliderKelvin },
+            set: { newValue in
+              if newValue >= Self.neutralCutoff {
+                if display.colorTemperatureKelvin != nil {
+                  display.setColorTemperature(nil)
+                }
+              } else {
+                display.setColorTemperature(newValue)
+              }
+            }
+          ),
+          range: KelvinTrack.warmRange,
+          accent: display.accent,
+          trackStyle: AnyShapeStyle(KelvinTrack.warmGradient),
+          detents: KelvinTrack.warmDetents
+        )
+
+        HStack(spacing: 5) {
+          ForEach(
+            [
+              (3500.0, "3500 K"),
+              (4500.0, "4500 K"),
+              (5500.0, "5500 K"),
+              (6500.0, "Neutral"),
+            ],
+            id: \.0
+          ) { preset in
+            let isSelected = if preset.0 >= Self.neutralCutoff {
+              display.colorTemperatureKelvin == nil
+            } else if let active = display.colorTemperatureKelvin {
+              abs(active - preset.0) < 60
+            } else {
+              false
+            }
+            Button(preset.1) {
+              display.setColorTemperature(preset.0 >= Self.neutralCutoff ? nil : preset.0)
+              Haptics.detent()
+            }
+            .buttonStyle(.soft(isSelected ? display.accent : .secondary))
+            .controlSize(.mini)
+            .font(.system(size: 10, weight: .medium, design: .rounded).monospacedDigit())
+          }
+        }
+      }
+
+      // Papier- & Matt-Finish
+      VStack(alignment: .leading, spacing: 6) {
+        Text("FINISH")
+          .font(.system(size: 9.5, weight: .bold))
+          .tracking(0.5)
+          .foregroundStyle(.secondary)
+
+        SegmentedMorphPicker(
+          selection: Binding(
+            get: { display.toneCurve },
+            set: { display.setToneCurve($0) }
+          ),
+          options: [
+            (nil as ToneCurve?, "Aus"),
+            (ToneCurve.paper, "Paper"),
+            (ToneCurve.matte, "Matte"),
+            (ToneCurve.ink, "Ink"),
+          ],
+          accent: display.accent
+        )
+        .controlSize(.small)
+      }
+
+      // Video-Eingänge & Ruhezustand für externe Monitore
+      let standbyModes = display.availablePowerModes.filter { $0 != .on }
+      if !display.isBuiltin && (!display.availableInputs.isEmpty || !standbyModes.isEmpty) {
+        VStack(alignment: .leading, spacing: 6) {
+          Text("EINGANG & STANDBY")
+            .font(.system(size: 9.5, weight: .bold))
+            .tracking(0.5)
+            .foregroundStyle(.secondary)
+
+          HStack(spacing: 5) {
+            ForEach(display.availableInputs, id: \.self) { value in
+              Button(InputSource.name(for: value)) {
+                pendingAction = .input(value)
+                Haptics.detent()
+              }
+              .buttonStyle(.soft(display.accent))
+              .controlSize(.mini)
+              .disabled(value == display.currentInput)
+            }
+
+            Spacer(minLength: 0)
+
+            ForEach(standbyModes, id: \.self) { mode in
+              Button(mode.displayName) {
+                pendingAction = .power(mode)
+                Haptics.detent()
+              }
+              .buttonStyle(.soft(Status.warn))
+              .controlSize(.mini)
+            }
+          }
+
+          if let pendingAction {
+            HStack(spacing: 6) {
+              Text(pendingAction.title)
+                .font(TypeScale.detail.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+              Spacer(minLength: 0)
+              Button("Ausführen") {
+                switch pendingAction {
+                case let .input(value): display.switchInput(to: value)
+                case let .power(mode): display.setPowerMode(mode)
+                }
+                self.pendingAction = nil
+                Haptics.confirm()
+              }
+              .buttonStyle(.soft(Status.warn))
+              .controlSize(.mini)
+              Button("Abbrechen") {
+                self.pendingAction = nil
+              }
+              .buttonStyle(.soft)
+              .controlSize(.mini)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+              RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+                .fill(Status.warn.opacity(theme.isDark ? 0.16 : 0.10))
+            )
+            .transition(.blurReplace)
+          }
+        }
+      }
+    }
+    .padding(.top, 2)
   }
 
   /// What the previewed preset would do to this display's white point.
