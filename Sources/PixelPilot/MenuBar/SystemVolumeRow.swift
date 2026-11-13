@@ -12,6 +12,7 @@ struct SystemVolumeRow: View {
 
   @Environment(\.motion) private var motion
   @Environment(\.theme) private var theme
+  @State private var isDevicePickerOpen = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.tight) {
@@ -37,7 +38,12 @@ struct SystemVolumeRow: View {
         )
         .disabled(!audio.isControllable)
 
-        devicePicker
+        devicePickerButton
+      }
+
+      if isDevicePickerOpen {
+        deviceList
+          .transition(.blurReplace)
       }
 
       if let reason = audio.unavailableReason {
@@ -53,39 +59,80 @@ struct SystemVolumeRow: View {
       }
     }
     .animation(motion.spatialDefault, value: audio.unavailableReason)
+    .animation(motion.spatialDefault, value: isDevicePickerOpen)
     .onAppear { audio.refresh() }
   }
 
-  private var devicePicker: some View {
-    Menu {
-      ForEach(audio.devices) { device in
-        Button {
-          audio.selectDevice(device)
-        } label: {
-          // Marking the ones with no volume control, rather than hiding them:
-          // a device you cannot turn down is still a device you may want to
-          // send audio to.
-          if device.isDefault {
-            Label(label(for: device), systemImage: "checkmark")
-          } else {
-            Text(label(for: device))
-          }
-        }
-      }
+  private var devicePickerButton: some View {
+    Button {
+      audio.refresh()
+      isDevicePickerOpen.toggle()
+      Haptics.detent()
     } label: {
       Image(systemName: "hifispeaker.and.appletv")
+        .symbolVariant(isDevicePickerOpen ? .fill : .none)
     }
-    // The same button as the mute control beside it. The list stays AppKit's —
-    // it grows and shrinks as devices come and go, and reimplementing it would
-    // cost type-select and keyboard navigation for nothing.
-    .menuStyle(.button)
-    .buttonStyle(.soft)
-    .menuIndicator(.hidden)
+    .buttonStyle(.soft(isDevicePickerOpen ? theme.tone : .secondary))
     .fixedSize()
-    .help(audio.currentDeviceName.map { "Ausgang: \($0)" } ?? "Audio-Ausgang wählen")
+    .help(audio.currentDeviceName.map { "Audio-Ausgang: \($0)" } ?? "Audio-Ausgang wählen")
+    .accessibilityLabel("Audio-Ausgang wählen")
+    .accessibilityValue(audio.currentDeviceName ?? "")
   }
 
-  private func label(for device: SystemVolume.OutputDevice) -> String {
-    device.hasSettableVolume ? device.name : "\(device.name) – fester Pegel"
+  private var deviceList: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      if audio.devices.isEmpty {
+        Text("Keine Audio-Ausgabegeräte gefunden")
+          .font(TypeScale.detail)
+          .foregroundStyle(.secondary)
+          .padding(.horizontal, 8)
+          .padding(.vertical, 6)
+      } else {
+        ForEach(audio.devices) { device in
+          Button {
+            audio.selectDevice(device)
+            isDevicePickerOpen = false
+            Haptics.confirm()
+          } label: {
+            HStack(spacing: 7) {
+              Image(systemName: device.isDefault ? "checkmark.circle.fill" : "speaker.wave.2")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(device.isDefault ? theme.tone : .secondary)
+                .frame(width: 14)
+
+              Text(device.name)
+                .font(TypeScale.detail.weight(device.isDefault ? .semibold : .regular))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+              Spacer(minLength: 4)
+
+              if !device.hasSettableVolume {
+                Text("Fester Pegel")
+                  .font(.system(size: 9.5, weight: .medium))
+                  .foregroundStyle(.secondary)
+              }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+              RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+                .fill(device.isDefault ? theme.tone.opacity(theme.isDark ? 0.18 : 0.12) : theme.recessedWell)
+            )
+            .overlay(
+              RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+                .strokeBorder(
+                  device.isDefault ? theme.tone.opacity(0.45) : theme.groupBorder,
+                  lineWidth: 0.75
+                )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous))
+          }
+          .buttonStyle(.plain)
+        }
+      }
+    }
+    .padding(.top, 2)
   }
 }

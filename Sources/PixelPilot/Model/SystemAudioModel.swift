@@ -61,8 +61,8 @@ final class SystemAudioModel {
   /// Why the slider cannot do anything, when it cannot.
   var unavailableReason: String? {
     guard !isControllable else { return nil }
-    let name = currentDeviceName ?? "The current output device"
-    return "\(name) has a fixed output level that macOS cannot change. "
-      + "Pick a different output below to get a working slider."
+    let name = currentDeviceName ?? "Das aktuelle Ausgabegerät"
+    return "\(name) hat einen festen Ausgabepegel, den macOS nicht ändern kann. "
+      + "Wähle oben rechts ein anderes Ausgabegerät für einen aktiven Regler."
   }
 }
