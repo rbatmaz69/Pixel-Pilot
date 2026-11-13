@@ -1,6 +1,17 @@
 import AppKit
 import SwiftUI
 
+private struct PanelFitHeightKey: EnvironmentKey {
+  static let defaultValue: @MainActor @Sendable () -> Void = {}
+}
+
+extension EnvironmentValues {
+  var fitPanelHeight: @MainActor @Sendable () -> Void {
+    get { self[PanelFitHeightKey.self] }
+    set { self[PanelFitHeightKey.self] = newValue }
+  }
+}
+
 /// The popover under the status item.
 ///
 /// **The invariant this type exists to keep.** `MenuBarPanel` documents that
@@ -63,6 +74,11 @@ final class MenuBarPanelWindow: NSObject {
         // reads as a flat wash with none of the depth either layer was drawing
         // for.
         .environment(\.surfaceDepth, .onGlass)
+        .environment(\.fitPanelHeight, { [weak self] in
+          Task { @MainActor in
+            self?.fitContentHeight()
+          }
+        })
     ))
     hosting.sizingOptions = [.intrinsicContentSize]
 
@@ -311,6 +327,39 @@ final class MenuBarPanelWindow: NSObject {
     guard let panel else { return }
     apply(progress: 1)
     panel.alphaValue = 1
+    fitContentHeight()
+  }
+
+  /// Resizes the open panel smoothly when inline Studio drawers expand or collapse
+  /// inside `MenuBarPanel`, keeping the top edge pinned below the menu bar icon.
+  func fitContentHeight() {
+    guard let panel, !isClosing, !driver.isRunning, let hosting = hostingView else { return }
+    hosting.layoutSubtreeIfNeeded()
+    let newSize = hosting.fittingSize
+    guard newSize != .zero else { return }
+
+    let topY = restingFrame.maxY
+    let updatedFrame = CGRect(
+      x: restingFrame.minX,
+      y: topY - newSize.height,
+      width: newSize.width,
+      height: newSize.height
+    )
+    guard abs(updatedFrame.height - restingFrame.height) > 0.5
+      || abs(updatedFrame.width - restingFrame.width) > 0.5 else { return }
+
+    restingFrame = updatedFrame
+    hosting.frame = CGRect(origin: .zero, size: newSize)
+
+    if OverlayPanel.reduceMotion {
+      panel.setFrame(updatedFrame, display: true)
+    } else {
+      NSAnimationContext.runAnimationGroup { context in
+        context.duration = 0.22
+        context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        panel.animator().setFrame(updatedFrame, display: true)
+      }
+    }
   }
 
   private func teardown() {
