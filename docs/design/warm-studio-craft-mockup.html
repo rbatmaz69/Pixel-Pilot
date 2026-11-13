@@ -1,0 +1,3264 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Pilot — Warm Studio Craft · Native macOS HIG Prototype</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* =========================================================================
+       1. "WARM STUDIO CRAFT" + APPLE MACOS HIG SEMANTIC TOKENS
+       100% Apple HIG Geometry (12pt Window, 14pt Popover, 10pt Group, 6pt Button)
+       infused with warm studio paper, walnut dark mode & tactile analog warmth.
+       ========================================================================= */
+    :root,
+    html[data-theme="dark"] {
+      --glass-alpha: 0.82;
+      --glass-blur: 38px;
+      --ambient-tint: rgba(245, 158, 11, 0.06);
+
+      /* Typography (Warm Obsidian & Cream Ink) */
+      --mac-label: #faf6f0;
+      --mac-label-secondary: rgba(245, 238, 228, 0.68);
+      --mac-label-tertiary: rgba(245, 238, 228, 0.44);
+
+      /* Surfaces (Warm Obsidian & Dark Walnut) */
+      --mac-menubar-bg: rgba(26, 23, 20, 0.72);
+      --mac-menubar-border: rgba(255, 244, 228, 0.12);
+      --mac-popover-rgb: 36, 31, 28;
+      --mac-popover-border: rgba(255, 244, 230, 0.16);
+      --mac-popover-shadow: 0 22px 54px rgba(0, 0, 0, 0.65), 0 0 0 0.5px rgba(0, 0, 0, 0.80);
+
+      --mac-window-bg: #1b1816;
+      --mac-window-border: rgba(255, 245, 232, 0.15);
+      --mac-window-shadow: 0 28px 72px rgba(0, 0, 0, 0.72), 0 0 0 0.5px rgba(0, 0, 0, 0.85);
+      --mac-titlebar-bg: rgba(255, 248, 238, 0.025);
+
+      --mac-sidebar-rgb: 39, 34, 30;
+      --mac-sidebar-border: rgba(255, 245, 232, 0.09);
+      --mac-sidebar-hover: rgba(255, 245, 232, 0.07);
+
+      /* Form(.grouped) & Control Center Modules (Warm Specular Rim) */
+      --mac-group-bg: rgba(255, 248, 238, 0.055);
+      --mac-group-border: rgba(255, 245, 232, 0.10);
+      --mac-group-rim: inset 0 1px 0 rgba(255, 248, 238, 0.07);
+      --mac-cc-module-bg: rgba(255, 248, 238, 0.075);
+      --mac-cc-module-border: rgba(255, 245, 232, 0.11);
+      --mac-separator: rgba(255, 245, 232, 0.09);
+      --mac-subtle-well: rgba(12, 10, 8, 0.34);
+
+      /* Native NSButton & NSSegmentedControl (6px / 5px) */
+      --mac-btn-bg: linear-gradient(180deg, rgba(255, 250, 242, 0.15) 0%, rgba(255, 248, 238, 0.09) 100%);
+      --mac-btn-bg-active: rgba(255, 248, 238, 0.23);
+      --mac-btn-border: rgba(255, 245, 232, 0.17);
+      --mac-btn-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.40), inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
+
+      --mac-seg-well: rgba(10, 8, 6, 0.38);
+      --mac-seg-active-bg: rgba(255, 248, 238, 0.20);
+      --mac-seg-active-shadow: 0 1px 2.5px rgba(0, 0, 0, 0.40), 0 0 0 0.5px rgba(255, 248, 238, 0.14);
+
+      /* Tactile Control Center Pill Slider */
+      --mac-slider-well: rgba(8, 6, 5, 0.48);
+      --mac-slider-well-border: rgba(255, 245, 232, 0.11);
+      --mac-slider-well-shadow: inset 0 1.5px 3px rgba(0, 0, 0, 0.60);
+      --mac-slider-fill: linear-gradient(90deg, #f5efe6 0%, #fffdf9 100%);
+      --mac-slider-glyph: #221e1b;
+      --mac-detent-tick: rgba(255, 245, 232, 0.22);
+
+      /* Warm Amber-Craft Accent & Native Selection */
+      --mac-accent: #e07a2e;
+      --mac-accent-hover: #c9681f;
+      --mac-accent-soft: rgba(224, 122, 46, 0.18);
+
+      /* Apple HIG Critically-Damped Curves (Zero Toy Bounce) */
+      --hig-curve: cubic-bezier(0.2, 0.9, 0.25, 1);
+      --hig-fast: cubic-bezier(0.25, 1, 0.5, 1);
+
+      /* Apple HIG Radii Scale */
+      --r-window: 12px;
+      --r-popover: 14px;
+      --r-group: 10px;
+      --r-button: 6px;
+      --r-segment: 5px;
+    }
+
+    html[data-theme="light"] {
+      --ambient-tint: rgba(245, 158, 11, 0.05);
+
+      /* Typography (Warm Espresso Ink on Studio Paper — High Contrast!) */
+      --mac-label: #201d1a;
+      --mac-label-secondary: rgba(32, 29, 26, 0.66);
+      --mac-label-tertiary: rgba(32, 29, 26, 0.45);
+
+      /* Surfaces (Warm Studio Paper & Archival Parchment) */
+      --mac-menubar-bg: rgba(248, 244, 237, 0.82);
+      --mac-menubar-border: rgba(48, 36, 24, 0.12);
+      --mac-popover-rgb: 248, 244, 237;
+      --mac-popover-border: rgba(48, 36, 24, 0.15);
+      --mac-popover-shadow: 0 20px 48px rgba(42, 30, 18, 0.18), 0 0 0 0.5px rgba(48, 36, 24, 0.14);
+
+      --mac-window-bg: #f5f1e9;
+      --mac-window-border: rgba(48, 36, 24, 0.16);
+      --mac-window-shadow: 0 26px 64px rgba(42, 30, 18, 0.20), 0 0 0 0.5px rgba(48, 36, 24, 0.16);
+      --mac-titlebar-bg: rgba(255, 253, 249, 0.72);
+
+      --mac-sidebar-rgb: 238, 232, 222;
+      --mac-sidebar-border: rgba(48, 36, 24, 0.10);
+      --mac-sidebar-hover: rgba(48, 36, 24, 0.06);
+
+      /* Form(.grouped) & Control Center Modules (Warm Ivory Cards) */
+      --mac-group-bg: #fffdf9;
+      --mac-group-border: rgba(48, 36, 24, 0.11);
+      --mac-group-rim: inset 0 1px 0 rgba(255, 255, 255, 0.90), 0 1px 2px rgba(48, 36, 24, 0.04);
+      --mac-cc-module-bg: rgba(255, 253, 249, 0.88);
+      --mac-cc-module-border: rgba(48, 36, 24, 0.10);
+      --mac-separator: rgba(48, 36, 24, 0.09);
+      --mac-subtle-well: rgba(48, 36, 24, 0.06);
+
+      /* Native NSButton & NSSegmentedControl */
+      --mac-btn-bg: linear-gradient(180deg, #fffefb 0%, #f6f1e8 100%);
+      --mac-btn-bg-active: #e8e0d4;
+      --mac-btn-border: rgba(48, 36, 24, 0.18);
+      --mac-btn-shadow: 0 0.5px 1.5px rgba(48, 36, 24, 0.10), inset 0 0.5px 0 #ffffff;
+
+      --mac-seg-well: rgba(48, 36, 24, 0.085);
+      --mac-seg-active-bg: #fffdf9;
+      --mac-seg-active-shadow: 0 1px 2.5px rgba(48, 36, 24, 0.14), 0 0 0 0.5px rgba(48, 36, 24, 0.08);
+
+      /* Tactile Control Center Pill Slider (Warm Recessed Well + Crisp Ivory Bar) */
+      --mac-slider-well: rgba(48, 36, 24, 0.14);
+      --mac-slider-well-border: rgba(48, 36, 24, 0.11);
+      --mac-slider-well-shadow: inset 0 1px 2.5px rgba(48, 36, 24, 0.14);
+      --mac-slider-fill: linear-gradient(90deg, #fffaf2 0%, #ffffff 100%);
+      --mac-slider-glyph: #201d1a;
+      --mac-detent-tick: rgba(48, 36, 24, 0.18);
+
+      /* Warm Studio Accent */
+      --mac-accent: #d96b1f;
+      --mac-accent-hover: #be5914;
+      --mac-accent-soft: rgba(217, 107, 31, 0.14);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+      color: var(--mac-label);
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+      margin: 0;
+      padding: 0;
+    }
+
+    .font-rounded {
+      font-family: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .font-serif-warm {
+      font-family: ui-serif, "New York", Georgia, serif;
+    }
+
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Warm Studio Desktop Wallpaper */
+    .macos-wallpaper {
+      background:
+        radial-gradient(1100px circle at 18% 18%, rgba(234, 118, 53, 0.34), transparent 58%),
+        radial-gradient(950px circle at 82% 24%, rgba(217, 119, 6, 0.22), transparent 55%),
+        radial-gradient(800px circle at 50% 85%, rgba(120, 53, 15, 0.30), transparent 60%),
+        linear-gradient(160deg, #1c1613 0%, #261e19 52%, #14110f 100%);
+      transition: background 0.35s ease;
+    }
+
+    html[data-theme="light"] .macos-wallpaper {
+      background:
+        radial-gradient(1100px circle at 18% 16%, rgba(251, 146, 60, 0.25), transparent 55%),
+        radial-gradient(950px circle at 84% 22%, rgba(245, 158, 11, 0.18), transparent 55%),
+        linear-gradient(160deg, #efe7da 0%, #e7decb 52%, #f3ede2 100%);
+    }
+
+    /* Semantic Text Utilities */
+    .mac-text-primary { color: var(--mac-label); }
+    .mac-text-secondary { color: var(--mac-label-secondary); }
+    .mac-text-tertiary { color: var(--mac-label-tertiary); }
+
+    /* Top Menu Bar */
+    .mac-menubar {
+      background: var(--mac-menubar-bg);
+      backdrop-filter: blur(28px) saturate(180%);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      border-bottom: 0.5px solid var(--mac-menubar-border);
+      color: var(--mac-label);
+    }
+
+    /* Popover & OSD Glass Surface (Apple HIG 14px radius + Ambient Daylight Tint) */
+    .mac-popover {
+      background:
+        linear-gradient(180deg, var(--ambient-tint) 0%, transparent 65%),
+        rgba(var(--mac-popover-rgb), var(--glass-alpha));
+      backdrop-filter: blur(var(--glass-blur)) saturate(190%);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(190%);
+      border: 0.5px solid var(--mac-popover-border);
+      border-radius: var(--r-popover);
+      box-shadow: var(--mac-popover-shadow), inset 0 1px 0 rgba(255, 252, 245, 0.22);
+      color: var(--mac-label);
+    }
+
+    /* Control Center Concentric Module (10px radius inside 14px popover) */
+    .mac-cc-module {
+      background: var(--mac-cc-module-bg);
+      border: 0.5px solid var(--mac-cc-module-border);
+      border-radius: var(--r-group);
+      box-shadow: var(--mac-group-rim);
+      transition: opacity 0.16s var(--hig-fast), border-color 0.16s var(--hig-fast);
+    }
+
+    /* Standard macOS Window (Apple HIG 12px radius) */
+    .mac-window {
+      background: var(--mac-window-bg);
+      border: 0.5px solid var(--mac-window-border);
+      border-radius: var(--r-window);
+      box-shadow: var(--mac-window-shadow), inset 0 1px 0 rgba(255, 252, 245, 0.16);
+      color: var(--mac-label);
+    }
+
+    .mac-titlebar {
+      background: var(--mac-titlebar-bg);
+      border-bottom: 1px solid var(--mac-separator);
+    }
+
+    /* Full-Height Continuous Sidebar with Subtle Ambient Warmth */
+    .mac-sidebar {
+      background:
+        linear-gradient(180deg, var(--ambient-tint) 0%, transparent 55%),
+        rgba(var(--mac-sidebar-rgb), var(--glass-alpha));
+      backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+      border-right: 1px solid var(--mac-sidebar-border);
+    }
+
+    /* Sidebar Item (Apple HIG 6px radius) */
+    .mac-sidebar-item {
+      border-radius: var(--r-button);
+      padding: 6px 8px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      width: 100%;
+      text-align: left;
+      color: var(--mac-label);
+      transition: background-color 0.1s ease;
+    }
+
+    .mac-sidebar-item:hover:not(.active) {
+      background: var(--mac-sidebar-hover);
+    }
+
+    .mac-sidebar-item.active {
+      background: var(--mac-accent);
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(217, 107, 31, 0.28), inset 0 0.5px 0 rgba(255, 255, 255, 0.25);
+    }
+
+    .mac-sidebar-item.active .mac-text-secondary {
+      color: rgba(255, 250, 244, 0.86);
+    }
+
+    /* Native Form(.grouped) Container (Apple HIG 10px radius) */
+    .mac-group {
+      background: var(--mac-group-bg);
+      border: 1px solid var(--mac-group-border);
+      border-radius: var(--r-group);
+      box-shadow: var(--mac-group-rim);
+    }
+
+    .mac-divider > * + * {
+      border-top: 1px solid var(--mac-separator);
+    }
+
+    .mac-subtle-box {
+      background: var(--mac-subtle-well);
+      border: 1px solid var(--mac-separator);
+      border-radius: var(--r-button);
+    }
+
+    /* Native NSButton (Apple HIG 6px radius, instant press state, NO toy scaling!) */
+    .mac-btn {
+      background: var(--mac-btn-bg);
+      border: 0.5px solid var(--mac-btn-border);
+      box-shadow: var(--mac-btn-shadow);
+      border-radius: var(--r-button);
+      color: var(--mac-label);
+      padding: 4px 11px;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.25;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+
+    .mac-btn:active {
+      background: var(--mac-btn-bg-active);
+      transition: none; /* Instantaneous 0ms press like real AppKit NSButton */
+    }
+
+    .mac-btn-primary {
+      background: linear-gradient(180deg, #eb8638 0%, var(--mac-accent) 100%);
+      border: 0.5px solid rgba(0, 0, 0, 0.18);
+      box-shadow: 0 1px 2px rgba(217, 107, 31, 0.28), inset 0 0.5px 0 rgba(255, 255, 255, 0.32);
+      border-radius: var(--r-button);
+      color: #ffffff;
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.25;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+
+    .mac-btn-primary:active {
+      background: var(--mac-accent-hover);
+      transition: none;
+    }
+
+    .mac-btn-destructive {
+      background: rgba(225, 62, 45, 0.11);
+      border: 0.5px solid rgba(225, 62, 45, 0.28);
+      border-radius: var(--r-button);
+      color: #d93829;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    html[data-theme="dark"] .mac-btn-destructive {
+      color: #ff7b6e;
+    }
+
+    .mac-btn-destructive:active {
+      background: rgba(225, 62, 45, 0.24);
+    }
+
+    /* Native Inputs & Popups (6px radius) */
+    .mac-input, .mac-select {
+      background: var(--mac-group-bg);
+      border: 1px solid var(--mac-btn-border);
+      border-radius: var(--r-button);
+      color: var(--mac-label);
+      padding: 4px 9px;
+      font-size: 12px;
+      outline: none;
+    }
+
+    .mac-input:focus, .mac-select:focus {
+      border-color: var(--mac-accent);
+      box-shadow: 0 0 0 2.5px var(--mac-accent-soft);
+    }
+
+    /* Native NSSegmentedControl (6px well, 5px inner segment) */
+    .mac-segmented {
+      display: inline-flex;
+      padding: 2px;
+      border-radius: var(--r-button);
+      background: var(--mac-seg-well);
+      border: 0.5px solid var(--mac-separator);
+    }
+
+    .mac-segment-btn {
+      padding: 2.5px 10px;
+      border-radius: var(--r-segment);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--mac-label-secondary);
+      transition: background-color 0.14s var(--hig-fast), color 0.14s var(--hig-fast);
+      cursor: pointer;
+    }
+
+    .mac-segment-btn.active {
+      background: var(--mac-seg-active-bg);
+      box-shadow: var(--mac-seg-active-shadow);
+      color: var(--mac-label);
+      font-weight: 600;
+    }
+
+    /* =========================================================================
+       TACTILE ANALOG HARDWARE SLIDER (Dieter Rams / Leica Aperture Scale)
+       ========================================================================= */
+    .cc-slider-track {
+      position: relative;
+      height: 26px;
+      border-radius: 9999px;
+      background: var(--mac-slider-well);
+      border: 0.5px solid var(--mac-slider-well-border);
+      box-shadow: var(--mac-slider-well-shadow);
+      overflow: hidden;
+      cursor: ew-resize;
+    }
+
+    /* Fine Engraved Leica-style Aperture Scale Ticks (illuminate on hover/drag) */
+    .cc-scale-ticks {
+      position: absolute;
+      inset: 0 12px;
+      background-image: repeating-linear-gradient(
+        90deg,
+        var(--mac-detent-tick) 0px,
+        var(--mac-detent-tick) 1px,
+        transparent 1px,
+        transparent 10%
+      );
+      background-size: 100% 6px;
+      background-repeat: no-repeat;
+      background-position: center bottom 2px;
+      opacity: 0.25;
+      transition: opacity 0.18s var(--hig-fast);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .cc-slider-track:hover .cc-scale-ticks,
+    .cc-slider-track.dragging .cc-scale-ticks {
+      opacity: 0.75;
+    }
+
+    .cc-slider-fill {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      background: var(--mac-slider-fill);
+      border-radius: 9999px;
+      box-shadow:
+        0 1px 3px rgba(32, 22, 12, 0.18),
+        0 0 0 0.5px rgba(48, 36, 24, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .cc-slider-glyph {
+      position: absolute;
+      left: 9px;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      pointer-events: none;
+      z-index: 10;
+      color: var(--mac-slider-glyph);
+      font-size: 12px;
+      font-weight: 600;
+      opacity: 0.88;
+      transition: transform 0.15s ease;
+    }
+
+    .cc-slider-thumb {
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+      width: 22px;
+      border-radius: 9999px;
+      background: linear-gradient(180deg, #ffffff 0%, #f9f4eb 100%);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.32), 0 0 0 0.5px rgba(48, 36, 24, 0.16);
+      transform: translateX(-50%) scale(0.9);
+      opacity: 0;
+      transition: opacity 0.14s var(--hig-fast), transform 0.14s var(--hig-fast);
+      pointer-events: none;
+      z-index: 12;
+    }
+
+    .cc-slider-track:hover .cc-slider-thumb,
+    .cc-slider-track.dragging .cc-slider-thumb {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+
+    .cc-detent {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      width: 1.5px;
+      border-radius: 1px;
+      background: var(--mac-detent-tick);
+      z-index: 3;
+      pointer-events: none;
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+
+    .cc-detent.snapped {
+      background: var(--mac-accent);
+      transform: scaleY(1.25);
+    }
+
+    /* Warm Glowing Analog Status LED */
+    .warm-led {
+      position: relative;
+      display: inline-block;
+      border-radius: 9999px;
+      box-shadow:
+        0 0 6px var(--led-color, #f43f5e),
+        inset 0 0.5px 1px rgba(255, 255, 255, 0.65);
+    }
+
+    /* Native macOS Switch (NSSwitch with Warm Amber On-State) */
+    .mac-switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      border-radius: 9999px;
+      background: rgba(120, 112, 104, 0.32);
+      border: 0.5px solid rgba(0, 0, 0, 0.08);
+      transition: background-color 0.18s var(--hig-fast);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .mac-switch.on {
+      background: var(--mac-accent);
+    }
+
+    .mac-switch-knob {
+      position: absolute;
+      top: 1.5px;
+      left: 1.5px;
+      width: 16px;
+      height: 16px;
+      border-radius: 9999px;
+      background: #ffffff;
+      box-shadow: 0 1px 2.5px rgba(0, 0, 0, 0.30);
+      transition: transform 0.18s var(--hig-curve);
+    }
+
+    .mac-switch.on .mac-switch-knob {
+      transform: translateX(16px);
+    }
+
+    /* Mini-Monitor Wallpaper & Physical Silhouette Styling */
+    .mini-screen-wallpaper {
+      background:
+        radial-gradient(circle at 28% 30%, rgba(251, 146, 60, 0.85), transparent 55%),
+        radial-gradient(circle at 75% 65%, rgba(217, 107, 31, 0.70), transparent 60%),
+        linear-gradient(145deg, #2b1d16 0%, #4a2c1d 48%, #1f2937 100%);
+    }
+
+    /* Studio Desk Wood / Felt Surface */
+    .studio-desk-surface {
+      background:
+        radial-gradient(ellipse at 50% 42%, var(--backlight-glow, rgba(251, 146, 60, 0.35)), transparent 68%),
+        linear-gradient(180deg, rgba(48, 36, 24, 0.04) 0%, rgba(48, 36, 24, 0.11) 100%);
+    }
+
+    html[data-theme="dark"] .studio-desk-surface {
+      background:
+        radial-gradient(ellipse at 50% 42%, var(--backlight-glow, rgba(251, 146, 60, 0.35)), transparent 68%),
+        linear-gradient(180deg, rgba(16, 13, 11, 0.45) 0%, rgba(28, 22, 18, 0.75) 100%);
+    }
+
+    /* Apple HIG Popover, Sheet & OSD Animations (Critically Damped, Zero Bounce) */
+    .popover-animate {
+      transform-origin: top right;
+      transition:
+        transform 0.18s var(--hig-curve),
+        opacity 0.15s var(--hig-fast);
+    }
+
+    .popover-hidden {
+      transform: scale(0.97) translateY(-4px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .sheet-animate {
+      transform-origin: top center;
+      animation: mac-sheet-drop 0.20s var(--hig-curve);
+    }
+
+    @keyframes mac-sheet-drop {
+      0% {
+        opacity: 0;
+        transform: translateY(-12px) scale(0.985);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .osd-animate {
+      transition:
+        transform 0.20s var(--hig-curve),
+        opacity 0.16s var(--hig-fast);
+    }
+
+    .osd-hidden {
+      transform: scale(0.96) translateY(6px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* 1px Checkerboard Pattern */
+    .pattern-checkerboard {
+      background-image:
+        linear-gradient(45deg, #000 25%, transparent 25%),
+        linear-gradient(-45deg, #000 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #000 75%),
+        linear-gradient(-45deg, transparent 75%, #000 75%);
+      background-size: 4px 4px;
+      background-position: 0 0, 0 2px, 2px -2px, -2px 0;
+      background-color: #fff;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(140, 128, 115, 0.35); border-radius: 9999px; }
+  </style>
+</head>
+<body class="macos-wallpaper min-h-screen flex flex-col justify-between overflow-x-hidden">
+
+  <!-- ========================================================================= -->
+  <!-- 1. TOP MACOS MENU BAR                                                     -->
+  <!-- ========================================================================= -->
+  <header class="mac-menubar h-7 px-3.5 flex items-center justify-between text-xs font-medium z-50 sticky top-0">
+    <div class="flex items-center gap-4">
+      <span class="font-bold text-sm"></span>
+      <span class="font-semibold">Pixel Pilot</span>
+      <span class="mac-text-secondary hidden sm:inline">Ablage</span>
+      <span class="mac-text-secondary hidden sm:inline">Bearbeiten</span>
+      <span class="mac-text-secondary hidden sm:inline">Darstellung</span>
+      <span class="mac-text-secondary hidden sm:inline">Fenster</span>
+      <span class="mac-text-secondary hidden sm:inline">Hilfe</span>
+    </div>
+
+    <!-- Center: Surface Switcher (Apple HIG Segmented Control) -->
+    <div class="mac-segmented">
+      <button onclick="switchWorkspaceView('all')" id="tab-all" class="mac-segment-btn active">Alle Ansichten</button>
+      <button onclick="switchWorkspaceView('menubar')" id="tab-menubar" class="mac-segment-btn">Popover & HUD</button>
+      <button onclick="switchWorkspaceView('settings')" id="tab-settings" class="mac-segment-btn">Einstellungen</button>
+      <button onclick="switchWorkspaceView('onboarding')" id="tab-onboarding" class="mac-segment-btn">Willkommen</button>
+      <button onclick="switchWorkspaceView('compare')" id="tab-compare" class="mac-segment-btn">Studio Craft & HIG</button>
+    </div>
+
+    <!-- Right: Status Items & Pixel Pilot Status Icon -->
+    <div class="flex items-center gap-2">
+      <button onclick="openTestPatternOverlay(false)" class="mac-btn hidden lg:inline-flex" title="Fullscreen Test Patterns">
+        ▦ Testbilder
+      </button>
+      <button onclick="openRepairSheetModal('lg5k')" class="mac-btn hidden lg:inline-flex" title="Stuck Pixel Repair">
+        ⚡︎ Pixel-Pflege
+      </button>
+      <button onclick="triggerIdentifyOverlay()" class="mac-btn" title="Monitore erkennen">
+        # Erkennen
+      </button>
+      <button onclick="cycleOSDDemo()" class="mac-btn" title="HUD Status durchschalten">
+        ☀︎ HUD
+      </button>
+
+      <!-- Pixel Pilot Status Item with Warm Analog LED -->
+      <div
+        id="status-bar-item"
+        onclick="toggleMenuBarPanel()"
+        onwheel="handleStatusIconScroll(event)"
+        ondragover="event.preventDefault()"
+        ondrop="simulateAppDropOnStatusIcon()"
+        class="px-2 py-0.5 rounded-[5px] hover:bg-black/10 cursor-pointer flex items-center gap-1.5 transition"
+        style="border: 0.5px solid var(--mac-separator);"
+        title="Klicken für Popover • Mausrad zum Dimmen"
+      >
+        <span class="w-2 h-2 warm-led" style="background: #f43f5e; --led-color: #f43f5e;"></span>
+        <span class="font-semibold text-xs">☀︎ <span id="menubar-pct" class="tabular-nums">78%</span></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- TOP PROTOTYPE INSPECTOR BAR (Warm Paper/Walnut + Ambient Time + Jumps)   -->
+  <!-- ========================================================================= -->
+  <div class="mx-auto mt-2.5 px-3.5 py-1.5 mac-popover flex flex-wrap items-center gap-3 text-xs z-40">
+    <!-- Appearance Switcher -->
+    <div class="flex items-center gap-1.5">
+      <span class="font-semibold">Thema:</span>
+      <div class="mac-segmented">
+        <button onclick="setAppearance('light')" id="btn-light" class="mac-segment-btn active">☀︎ Warm Paper (Light)</button>
+        <button onclick="setAppearance('dark')" id="btn-dark" class="mac-segment-btn">🌙 Dark Walnut (Dark)</button>
+      </div>
+    </div>
+
+    <div class="h-4 w-px" style="background: var(--mac-separator);"></div>
+
+    <!-- Ambient Time-of-Day Mood Switcher -->
+    <div class="flex items-center gap-1.5">
+      <span class="mac-text-secondary font-medium">Tagesstimmung:</span>
+      <div class="mac-segmented">
+        <button onclick="setAmbientMood('morning')" id="mood-morning" class="mac-segment-btn">🌅 Morgen</button>
+        <button onclick="setAmbientMood('afternoon')" id="mood-afternoon" class="mac-segment-btn active">☀️ Atelier</button>
+        <button onclick="setAmbientMood('evening')" id="mood-evening" class="mac-segment-btn">🌇 Abend</button>
+      </div>
+    </div>
+
+    <div class="h-4 w-px" style="background: var(--mac-separator);"></div>
+
+    <!-- Liquid Glass Opacity -->
+    <div class="flex items-center gap-1.5">
+      <span class="mac-text-secondary font-medium">Glas:</span>
+      <input
+        type="range"
+        min="55"
+        max="98"
+        value="82"
+        oninput="updateGlassOpacity(this.value)"
+        class="w-16 accent-amber-600 cursor-pointer"
+      />
+      <span id="glass-opacity-label" class="tabular-nums font-rounded font-semibold w-8">82%</span>
+    </div>
+
+    <div class="h-4 w-px" style="background: var(--mac-separator);"></div>
+
+    <!-- Quick Jump Buttons -->
+    <div class="flex items-center gap-1 flex-wrap">
+      <button onclick="openSettingsRoute('display:lg5k')" class="mac-btn">Studio-Monitor</button>
+      <button onclick="openSettingsRoute('schedule')" class="mac-btn">Horizont-Tageslauf</button>
+      <button onclick="openSettingsRoute('presets')" class="mac-btn">Licht-Szenen</button>
+      <button onclick="openSettingsRoute('apps')" class="mac-btn">App-Regeln</button>
+      <button onclick="openSettingsRoute('keys')" class="mac-btn">Tasten & Fokus</button>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MAIN WORKSPACE AREA                                                       -->
+  <!-- ========================================================================= -->
+  <main class="flex-1 relative max-w-[1440px] w-full mx-auto px-4 py-3.5 flex flex-col gap-5">
+
+    <!-- ======================================================================= -->
+    <!-- SURFACE 1: MENU BAR POPOVER (Warm Companion Header + Tactile Sliders)   -->
+    <!-- ======================================================================= -->
+    <div id="MenuBarPanelContainer" class="popover-animate fixed right-4 top-9 z-40 w-[328px]">
+      <div class="mac-popover p-3 flex flex-col gap-2.5">
+
+        <!-- PILLAR 4: Familiar Time-of-Day Companion Header Banner -->
+        <div id="popover-companion-banner" class="mac-cc-module p-2.5 relative overflow-hidden flex items-center justify-between">
+          <div id="companion-sky-glow" class="absolute inset-0 pointer-events-none opacity-35"
+               style="background: radial-gradient(circle at 88% 25%, rgba(245, 158, 11, 0.55), transparent 65%);"></div>
+          <div class="relative z-10 flex items-center gap-2.5">
+            <div id="companion-orb" class="w-7 h-7 rounded-full flex items-center justify-center text-sm shadow-xs"
+                 style="background: linear-gradient(135deg, #fbbf24 0%, #ea580c 100%); color: #fff;">
+              ☀️
+            </div>
+            <div>
+              <div id="companion-greeting" class="text-xs font-semibold leading-tight">Goldener Nachmittag</div>
+              <div id="companion-sub" class="text-[11px] mac-text-secondary leading-tight mt-0.5">Sonnenuntergang um 17:42 · Studio-Licht aktiv</div>
+            </div>
+          </div>
+          <button onclick="openSettingsRoute('schedule')" class="relative z-10 mac-btn" style="padding: 2px 7px; font-size: 11px;" title="Tageslauf öffnen">
+            5200 K
+          </button>
+        </div>
+
+        <!-- Master Brightness Sync Module -->
+        <div class="mac-cc-module p-2.5 flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-[5px] flex items-center justify-center text-xs font-bold"
+                    style="background: var(--mac-accent-soft); color: var(--mac-accent);">⊞</span>
+              <span class="text-xs font-semibold">Alle Monitore synchron</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span
+                id="master-readout"
+                onclick="promptExactValue('master')"
+                class="text-xs font-rounded font-semibold mac-text-secondary hover:underline cursor-text px-1 rounded"
+                title="Klicken für exakte Prozentzahl"
+              >78%</span>
+              <div id="sync-switch" onclick="toggleSyncBrightness()" class="mac-switch on" role="switch" aria-checked="true">
+                <div class="mac-switch-knob"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="master-slider-wrap" class="transition-all duration-150 overflow-hidden">
+            <div class="cc-slider-track" onmousedown="startSliderDrag(event, 'master')">
+              <div class="cc-scale-ticks"></div>
+              <div class="cc-detent" style="left: 25%;"></div>
+              <div class="cc-detent" style="left: 50%;"></div>
+              <div class="cc-detent" style="left: 75%;"></div>
+              <div id="fill-master" class="cc-slider-fill" style="width: 78%;"></div>
+              <div id="glyph-master" class="cc-slider-glyph">☀︎</div>
+              <div id="thumb-master" class="cc-slider-thumb" style="left: 78%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Per-Display Control Center Modules -->
+        <div id="menubar-displays-list" class="flex flex-col gap-2"></div>
+
+        <!-- System Sound Module -->
+        <div class="mac-cc-module p-2.5 flex flex-col gap-1.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold">Studio-Ton</span>
+            <span id="sysvol-readout" class="text-xs font-rounded font-semibold mac-text-secondary">62%</span>
+          </div>
+          <div class="cc-slider-track" style="height: 22px;" onmousedown="startSliderDrag(event, 'sysvol')">
+            <div class="cc-scale-ticks"></div>
+            <div id="fill-sysvol" class="cc-slider-fill" style="width: 62%;"></div>
+            <div class="cc-slider-glyph">🔊</div>
+            <div id="thumb-sysvol" class="cc-slider-thumb" style="left: 62%;"></div>
+          </div>
+        </div>
+
+        <!-- PILLAR 4: Atmospheric Scene Cards (Presets Grid with Mood Swatches) -->
+        <div>
+          <div class="flex items-center justify-between px-1 mb-1.5">
+            <span class="text-xs font-medium mac-text-secondary">Licht-Szenen</span>
+            <span id="preset-preview-badge" class="text-xs font-semibold hidden" style="color: var(--mac-accent);">Vorschau…</span>
+          </div>
+          <div class="grid grid-cols-2 gap-1.5" id="menubar-presets-grid"></div>
+        </div>
+
+        <!-- Popover Footer -->
+        <div class="pt-2 border-t flex items-center justify-between" style="border-color: var(--mac-separator);">
+          <button onclick="openSettingsRoute('display:lg5k')" class="mac-btn">
+            <span>Studio öffnen…</span>
+            <span class="w-1.5 h-1.5 rounded-full" style="background: var(--mac-accent);" title="Update 0.4.0 verfügbar"></span>
+            <span class="mac-text-tertiary ml-1">⌘,</span>
+          </button>
+          <button onclick="toggleMenuBarPanel()" class="mac-btn">
+            <span>Schließen</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- SURFACE 3: SETTINGS WINDOW (Warm Studio Paper / Walnut + HIG 12px)      -->
+    <!-- ======================================================================= -->
+    <section id="SettingsWindowSection" class="w-full max-w-[976px] mx-auto lg:mx-0">
+      <div class="mac-window overflow-hidden flex flex-col md:flex-row min-h-[670px] relative">
+
+        <!-- LEFT: Full-Height Continuous macOS Sidebar -->
+        <aside class="mac-sidebar w-full md:w-[260px] flex-shrink-0 flex flex-col justify-between p-2.5 select-none">
+          <div>
+            <!-- Standard Window Traffic Lights (12px circles, 8px gap) -->
+            <div class="flex items-center justify-between px-2 pt-1 pb-3">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-[#ff5f57] border border-black/15 inline-block"></span>
+                <span class="w-3 h-3 rounded-full bg-[#febc2e] border border-black/15 inline-block"></span>
+                <span class="w-3 h-3 rounded-full bg-[#28c840] border border-black/15 inline-block"></span>
+              </div>
+              <span class="text-[11px] font-serif-warm italic mac-text-secondary">Studio Craft</span>
+            </div>
+
+            <!-- PILLAR 2: Living Desk DisplayMap with Real Wallpaper & Backlight Glow -->
+            <div class="mac-group p-2.5 mb-3">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-xs font-semibold mac-text-secondary">Dein Schreibtisch</span>
+                <button onclick="triggerIdentifyOverlay()" class="mac-btn" style="padding: 2px 8px; font-size: 11px;">Erkennen</button>
+              </div>
+              <div id="sidebar-display-map" class="studio-desk-surface mac-subtle-box relative h-[92px] w-full overflow-hidden flex items-end justify-center gap-3 p-2.5 pb-3"></div>
+            </div>
+
+            <!-- Section: Displays -->
+            <div class="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider mac-text-tertiary">Deine Monitore</div>
+            <nav id="sidebar-displays-nav" class="flex flex-col gap-0.5 mb-2.5"></nav>
+
+            <!-- Section: App -->
+            <div class="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider mac-text-tertiary">Begleiter & Regeln</div>
+            <nav id="sidebar-app-nav" class="flex flex-col gap-0.5"></nav>
+          </div>
+
+          <div class="pt-2.5 border-t px-2 flex items-center justify-between text-xs mac-text-tertiary" style="border-color: var(--mac-separator);">
+            <span class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <span>Ruhepuls 0,0 % CPU</span>
+            </span>
+            <span class="font-rounded">v0.4.0</span>
+          </div>
+        </aside>
+
+        <!-- RIGHT: Detail Pane (Native Titlebar + Form(.grouped) Content) -->
+        <div class="flex-1 flex flex-col min-w-0 relative">
+          <!-- Native macOS Titlebar -->
+          <div class="mac-titlebar h-13 px-6 py-3 flex items-center justify-between">
+            <div>
+              <h1 id="settings-page-title" class="text-sm font-semibold leading-tight">LG UltraFine 5K</h1>
+              <p id="settings-page-subtitle" class="text-xs mac-text-secondary">USB-C · Hardware DDC/CI + Gamma-Tafel</p>
+            </div>
+            <div id="settings-toolbar-actions" class="flex items-center gap-2"></div>
+          </div>
+
+          <!-- Scrollable Grouped Form Content -->
+          <div id="settings-page-body" class="p-6 overflow-y-auto max-h-[615px] flex flex-col gap-5"></div>
+
+          <!-- ================================================================= -->
+          <!-- WINDOW-ATTACHED MACOS SHEET (Drops down from Titlebar)            -->
+          <!-- ================================================================= -->
+          <div id="SettingsModalBackdrop" class="hidden absolute inset-0 z-30 bg-black/30 backdrop-blur-[2px] items-start justify-center pt-10 p-4">
+            <div id="SettingsModalContent" class="sheet-animate mac-window p-5 w-full max-w-[440px] flex flex-col gap-4"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- SURFACE 4: ONBOARDING WINDOW (Warm Personal Welcome)                    -->
+    <!-- ======================================================================= -->
+    <section id="OnboardingWindowSection" class="w-full max-w-[560px] mx-auto hidden">
+      <div class="mac-window overflow-hidden p-6 flex flex-col justify-between min-h-[440px]">
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <span class="w-3 h-3 rounded-full bg-[#ff5f57] border border-black/15 inline-block"></span>
+              <span class="w-3 h-3 rounded-full bg-[#febc2e] border border-black/15 inline-block"></span>
+              <span class="w-3 h-3 rounded-full bg-[#28c840] border border-black/15 inline-block"></span>
+            </div>
+            <div id="onboarding-dots" class="flex items-center gap-1.5"></div>
+          </div>
+          <h2 id="onboarding-title" class="text-lg font-semibold tracking-tight mb-0.5">Willkommen im Studio</h2>
+          <p id="onboarding-subtitle" class="text-xs mac-text-secondary mb-4">Schritt 1 von 4 — Dein persönlicher Licht- & Monitor-Begleiter</p>
+        </div>
+
+        <div id="onboarding-step-body" class="flex-1 flex flex-col justify-center"></div>
+
+        <div class="pt-4 mt-5 border-t flex items-center justify-between" style="border-color: var(--mac-separator);">
+          <button onclick="switchWorkspaceView('all')" class="mac-btn">Überspringen</button>
+          <div class="flex items-center gap-2">
+            <button id="onboarding-prev-btn" onclick="stepOnboarding(-1)" class="mac-btn">Zurück</button>
+            <button id="onboarding-next-btn" onclick="stepOnboarding(1)" class="mac-btn-primary">Weiter</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- SURFACE 5: WARM STUDIO CRAFT & APPLE HIG DESIGN SPECS                   -->
+    <!-- ======================================================================= -->
+    <section id="CompareSection" class="w-full max-w-[976px] mx-auto hidden">
+      <div class="mac-window p-6 flex flex-col gap-4">
+        <div>
+          <h2 class="text-base font-semibold">„Warm Studio Craft“ × Apple macOS Human Interface Guidelines</h2>
+          <p class="text-xs mac-text-secondary">Wie Pixel Pilot 100 % native macOS-Geometrie mit spürbarer Seele, Wärme und analoger Haptik verbindet.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div class="mac-group p-4 flex flex-col gap-2">
+            <div class="font-semibold">1. Warm Paper & Dark Walnut</div>
+            <ul class="mac-text-secondary space-y-1.5 list-disc pl-4">
+              <li><b>Light Mode („Warm Studio Paper“):</b> Elfenbein-Fenster (<code>#F5F1E9</code>), cremeweiße Karten (<code>#FFFDF9</code>) und tiefe Espresso-Tinte (<code>#201D1A</code>).</li>
+              <li><b>Dark Mode („Dark Walnut“):</b> Warmes Graphit-Walnuss (<code>#1B1816</code>) mit feinen bernsteinfarbenen <code>1px</code> Lichtkanten.</li>
+              <li><b>Tageszeit-Glas:</b> Nimmt sanft (5 %) die Lichtstimmung von Morgen, Atelier oder Abend auf.</li>
+            </ul>
+          </div>
+
+          <div class="mac-group p-4 flex flex-col gap-2">
+            <div class="font-semibold">2. Lebendige Mini-Monitore & Haptik</div>
+            <ul class="mac-text-secondary space-y-1.5 list-disc pl-4">
+              <li><b>Live Backlight Bleed:</b> Jeder Monitor wirft einen warmen Lichtschein auf die Schreibtisch-Wand dahinter, der live auf Helligkeit & Kelvin reagiert.</li>
+              <li><b>Leica-Skalen-Gravur:</b> Beim Ziehen leuchten feine Blenden-Skalenstriche im Slider auf; die Sonne dreht sich sanft mit.</li>
+              <li><b>Analoge Glas-LEDs:</b> Sanft glimmende Status-Punkte statt flacher Kreise.</li>
+            </ul>
+          </div>
+
+          <div class="mac-group p-4 flex flex-col gap-2">
+            <div class="font-semibold">3. Strikte Apple HIG Treue</div>
+            <ul class="mac-text-secondary space-y-1.5 list-disc pl-4">
+              <li><b>Konzentrische Radien:</b> <code>12pt</code> Fenster, <code>14pt</code> Popover/HUD, <code>10pt</code> Formular-Gruppen, <code>6pt</code> Buttons & Sidebar-Zeilen.</li>
+              <li><b>0ms NSButton-Klick:</b> Sofortiges Druck-Feedback ohne künstliches Schrumpfen.</li>
+              <li><b>Kritisch gedämpfte Kurven:</b> <code>cubic-bezier(0.2, 0.9, 0.25, 1)</code> für Fenster & Sheets.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- SURFACE 2: INTERACTIVE HORIZONTAL CONTROL-CENTER OSD / HUD PILL           -->
+  <!-- ========================================================================= -->
+  <div id="OSDOverlayContainer" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2">
+    <div id="OSDPill" class="osd-animate mac-popover px-3.5 py-2.5 w-[296px] flex flex-col gap-2">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <span id="osd-icon" class="w-6 h-6 rounded-[6px] flex items-center justify-center text-sm"
+                style="background: var(--mac-accent-soft); color: var(--mac-accent);">☀︎</span>
+          <div class="flex flex-col">
+            <span id="osd-title" class="text-xs font-semibold leading-tight">Helligkeit</span>
+            <span class="text-[11px] mac-text-secondary leading-tight flex items-center gap-1.5 mt-0.5">
+              <span id="osd-dot" class="w-2 h-2 warm-led inline-block" style="background: #f43f5e; --led-color: #f43f5e;"></span>
+              <span id="osd-display-name">LG UltraFine 5K</span>
+            </span>
+          </div>
+        </div>
+        <span id="osd-readout" class="text-xs font-rounded font-semibold tabular-nums">78%</span>
+      </div>
+
+      <div id="osd-track-wrap" class="cc-slider-track h-[22px]" onmousedown="startSliderDrag(event, 'osd')">
+        <div class="cc-scale-ticks"></div>
+        <div class="cc-detent" style="left: 25%;"></div>
+        <div class="cc-detent" style="left: 50%;"></div>
+        <div class="cc-detent" style="left: 75%;"></div>
+        <div id="fill-osd" class="cc-slider-fill" style="width: 78%;"></div>
+        <div id="thumb-osd" class="cc-slider-thumb" style="left: 78%; width: 18px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- FULLSCREEN OVERLAY 1: DISPLAY IDENTIFY                                    -->
+  <!-- ========================================================================= -->
+  <div id="IdentifyOverlay" onclick="hideIdentifyOverlay()" class="fixed inset-0 z-50 bg-black/30 backdrop-blur-xs hidden items-center justify-center gap-8 cursor-pointer">
+    <div class="mac-popover px-10 py-7 flex flex-col items-center gap-1.5">
+      <div class="flex items-center gap-1.5">
+        <span class="w-2.5 h-2.5 warm-led" style="background: #f43f5e; --led-color: #f43f5e;"></span>
+        <span class="text-xs font-semibold uppercase tracking-wider mac-text-secondary">Studio Monitor 1</span>
+      </div>
+      <div class="text-6xl font-rounded font-bold leading-none my-1">1</div>
+      <div class="text-sm font-semibold">LG UltraFine 5K</div>
+      <div class="text-xs mac-text-secondary">USB-C · 5120 × 2880 · 5200 K</div>
+    </div>
+
+    <div class="mac-popover px-10 py-7 flex flex-col items-center gap-1.5">
+      <div class="flex items-center gap-1.5">
+        <span class="w-2.5 h-2.5 warm-led" style="background: #0ea5e9; --led-color: #0ea5e9;"></span>
+        <span class="text-xs font-semibold uppercase tracking-wider mac-text-secondary">Studio Monitor 2</span>
+      </div>
+      <div class="text-6xl font-rounded font-bold leading-none my-1">2</div>
+      <div class="text-sm font-semibold">Built-in Liquid Retina XDR</div>
+      <div class="text-xs mac-text-secondary">Integriert · 3456 × 2234</div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- FULLSCREEN OVERLAY 2: TEST PATTERNS & PIXEL MARKING                       -->
+  <!-- ========================================================================= -->
+  <div id="TestPatternOverlay" class="fixed inset-0 z-50 hidden select-none overflow-hidden">
+    <div id="TestPatternCanvas" onmousedown="startPatternSurfaceGesture(event)" class="w-full h-full relative cursor-crosshair">
+      <div id="PixelMarkersLayer" class="absolute inset-0 pointer-events-none"></div>
+    </div>
+
+    <div id="TestPatternPlate" class="fixed top-5 left-5 z-10 mac-popover p-4 w-[336px] flex flex-col gap-2.5">
+      <div class="flex items-center justify-between text-xs mac-text-secondary">
+        <span>LG UltraFine 5K</span>
+        <span id="tp-step-counter" class="font-rounded font-semibold">Muster 1 von 11</span>
+      </div>
+      <div>
+        <div id="tp-title" class="text-sm font-semibold">Solid White (100%)</div>
+        <div id="tp-purpose" class="text-xs mac-text-secondary leading-relaxed mt-0.5">
+          Prüfe auf dunkle Subpixel und gleichmäßige Farbtemperatur bis in die Ecken.
+        </div>
+      </div>
+
+      <div class="border-t pt-2 text-xs mac-text-secondary leading-relaxed" style="border-color: var(--mac-separator);">
+        Ziehe ein Rechteck um eine auffällige Stelle zu markieren, oder klicke für das nächste Muster.
+      </div>
+
+      <div id="tp-marks-badge" class="text-xs font-medium" style="color: var(--mac-accent);">
+        Markiert auf diesem Monitor: 1 Bereich
+      </div>
+
+      <div id="tp-guided-actions" class="hidden items-center gap-2 pt-1">
+        <button onclick="recordPatternVerdict('looksRight')" class="mac-btn-primary flex-1">✔︎ Sieht perfekt aus</button>
+        <button onclick="recordPatternVerdict('problem')" class="mac-btn flex-1">⚠️ Auffälligkeit</button>
+      </div>
+
+      <div class="flex items-center justify-between gap-1.5 pt-1">
+        <div class="flex items-center gap-1">
+          <button onclick="stepTestPattern(-1)" class="mac-btn">← Zurück</button>
+          <button onclick="stepTestPattern(1)" class="mac-btn">Weiter →</button>
+        </div>
+        <div class="flex items-center gap-1">
+          <button onclick="toggleTestPatternPlate(true)" class="mac-btn">Ausblenden</button>
+          <button onclick="closeTestPatternOverlay()" class="mac-btn-destructive">Beenden</button>
+        </div>
+      </div>
+    </div>
+
+    <button id="TestPatternShowChip" onclick="toggleTestPatternPlate(false)" class="hidden fixed top-5 left-5 z-10 mac-btn">
+      Steuerung zeigen (H)
+    </button>
+
+    <div id="HealthSummaryModal" class="hidden fixed inset-0 z-20 bg-[#808080] items-center justify-center p-4">
+      <div class="mac-window p-5 w-full max-w-[500px] flex flex-col gap-3">
+        <div>
+          <div class="text-xs mac-text-secondary">LG UltraFine 5K · Panel-Fürsorge Bericht</div>
+          <h3 id="hs-verdict-title" class="text-base font-semibold mt-0.5">Panel in Bestform</h3>
+          <p id="hs-verdict-sub" class="text-xs mac-text-secondary">Alle 11 Referenzmuster geprüft</p>
+        </div>
+        <div id="hs-rows" class="mac-group mac-divider max-h-[260px] overflow-y-auto"></div>
+        <div class="flex items-center justify-between pt-2">
+          <span class="text-xs mac-text-secondary">Im Monitor-Pass gespeichert</span>
+          <button onclick="closeTestPatternOverlay()" class="mac-btn-primary">Fertig</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- FULLSCREEN OVERLAY 3: PIXEL REPAIR EXERCISER                              -->
+  <!-- ========================================================================= -->
+  <div id="RepairExerciserOverlay" class="fixed inset-0 z-50 bg-black hidden select-none overflow-hidden">
+    <canvas id="RepairNoiseCanvas" class="w-full h-full block"></canvas>
+    <div id="RepairCropBrackets" class="absolute inset-0 pointer-events-none"></div>
+    <div id="RepairCountdownLabel" class="absolute inset-0 flex items-center justify-center pointer-events-none text-white font-rounded font-bold text-[110px]">
+      3
+    </div>
+
+    <div class="fixed top-5 left-5 z-10 mac-popover p-4 w-[336px] flex flex-col gap-2">
+      <div class="text-xs mac-text-secondary">LG UltraFine 5K</div>
+      <div class="text-sm font-semibold flex items-center justify-between">
+        <span>Träge Subpixel massieren</span>
+        <span class="font-rounded" style="color: var(--mac-accent);">09:58 übrig</span>
+      </div>
+      <div id="repair-scope-desc" class="text-xs mac-text-secondary leading-relaxed">
+        Jeder markierte Bereich durchläuft sanft den RGB-Farbraum, während der restliche Bildschirm ruhig und dunkel bleibt.
+      </div>
+      <div class="pt-2 border-t flex items-center justify-between" style="border-color: var(--mac-separator);">
+        <button onclick="stopPixelRepairOverlay()" class="mac-btn-destructive">Stoppen</button>
+        <span class="text-xs mac-text-tertiary">oder Esc drücken</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- APPLICATION LOGIC                                                         -->
+  <!-- ========================================================================= -->
+  <script>
+    const SYMBOLS = ['☀︎', '🌙', '🎬', '🖥️', '🎮', '📖', '🖼️', '🕯️'];
+
+    const TEST_PATTERNS = [
+      { id: 'white', title: 'Reines Weiß (100 %)', purpose: 'Prüfe auf dunkle Subpixel und gleichmäßige Ausleuchtung bis zu den Rändern.', bg: '#ffffff', ink: 'dark' },
+      { id: 'black', title: 'Tiefschwarz (0 %)', purpose: 'Prüfe auf leuchtende Stuck-Pixel und sanftes Backlight-Bleeding.', bg: '#000000', ink: 'light' },
+      { id: 'red', title: 'Rot-Kanal isoliert', purpose: 'Prüft alle roten Subpixel über das gesamte Panel.', bg: '#ff0000', ink: 'light' },
+      { id: 'green', title: 'Grün-Kanal isoliert', purpose: 'Prüft alle grünen Subpixel über das gesamte Panel.', bg: '#00ff00', ink: 'dark' },
+      { id: 'blue', title: 'Blau-Kanal isoliert', purpose: 'Prüft alle blauen Subpixel über das gesamte Panel.', bg: '#0000ff', ink: 'light' },
+      { id: 'greyRamp', title: '64-Stufen Grauverlauf', purpose: 'Deckt feines Banding in neutralen Verläufen auf.', bg: 'linear-gradient(90deg, #000000 0%, #ffffff 100%)', ink: 'light' },
+      { id: 'shadowSteps', title: 'Schatten-Stufen (0 % – 4 %)', purpose: 'Fünf vertikale Bänder für Durchzeichnung in dunklen Szenen.', bg: 'linear-gradient(90deg, #000 0% 20%, #070707 20% 40%, #0d0d0d 40% 60%, #141414 60% 80%, #1a1a1a 80% 100%)', ink: 'light' },
+      { id: 'highlightSteps', title: 'Lichter-Stufen (96 % – 100 %)', purpose: 'Prüft, ob helle Papier-Töne vor 100 % ausbrennen.', bg: 'linear-gradient(90deg, #f2f2f2 0% 20%, #f6f6f6 20% 40%, #fafafa 40% 60%, #fcfcfc 60% 80%, #ffffff 80% 100%)', ink: 'dark' },
+      { id: 'uniformityMid', title: '50 % Neutralgrau-Fläche', purpose: 'Zeigt Homogenität und eventuelle Vignettierung.', bg: '#808080', ink: 'light' },
+      { id: 'uniformityDark', title: '10 % Dunkelgrau-Fläche', purpose: 'Zeigt Gleichmäßigkeit in dunklen Arbeitsumgebungen.', bg: '#1a1a1a', ink: 'light' },
+      { id: 'checkerboard', title: '1:1 Pixel-Schachbrett', purpose: 'Prüft gestochen scharfe native Pixel-Ansteuerung.', bg: 'checkerboard', ink: 'dark' }
+    ];
+
+    const state = {
+      appearance: 'light',
+      ambientMood: 'afternoon', // 'morning' | 'afternoon' | 'evening'
+      glassOpacity: 0.82,
+      menuBarOpen: true,
+      syncBrightness: true,
+      masterBrightness: 0.78,
+      systemVolume: 0.62,
+      activeRoute: 'display:lg5k',
+      onboardingStep: 0,
+      previewPresetId: null,
+      hoverSettingsPresetId: null,
+      newPresetSymbol: '🕯️',
+      appearanceBindingsEnabled: true,
+      lightPresetId: 'daylight',
+      darkPresetId: 'night',
+      fallbackPresetId: 'daylight',
+      recordingShortcutId: null,
+
+      mediaKeysEnabled: true,
+      keyTarget: 'Aktives Fenster',
+      keyStep: '6%',
+      showsOSD: true,
+      attentionEnabled: true,
+      attentionAmount: 0.35,
+      learnedKeys: [
+        { id: 'lk1', action: 'Helligkeit +', device: 'Keychron Q1 Pro', sig: 'Page 0xFF60 · Usage 0x61' }
+      ],
+      pendingLearnedKey: null,
+
+      updatePhase: 'available',
+      diagnosticsExpanded: false,
+      isProbing: false,
+
+      repairScopeWholeScreen: false,
+      repairIntensity: 'Standard',
+      repairDuration: '10 Min.',
+      testPatternIndex: 0,
+      testPatternGuided: false,
+      testPatternVerdicts: {},
+      pixelMarks: [
+        { x: 0.58, y: 0.42, w: 0.06, h: 0.08, kind: 'stuck' }
+      ],
+
+      scheduleEnabled: true,
+      scheduleScrubFraction: 0.72,
+
+      displays: [
+        {
+          id: 'lg5k',
+          name: 'LG UltraFine 5K',
+          route: 'USB-C · DDC/CI',
+          spec: '27" 5K · 5120 × 2880',
+          isBuiltin: false,
+          accentHex: '#f43f5e',
+          brightness: 0.78,
+          contrast: 0.70,
+          volume: 0.50,
+          muted: false,
+          warmthEnabled: true,
+          kelvin: 5200,
+          finish: 'Paper',
+          followsBuiltin: true,
+          extraDimming: true,
+          strategy: 'Automatisch',
+          healthVerdict: 'In Bestform · 0 Pixelfehler seit 42 Tagen'
+        },
+        {
+          id: 'builtin',
+          name: 'MacBook Pro 16" XDR',
+          route: 'Integriert · Liquid Retina',
+          spec: '16" XDR · 3456 × 2234',
+          isBuiltin: true,
+          accentHex: '#0ea5e9',
+          brightness: 0.68,
+          contrast: 0.50,
+          volume: 0.62,
+          muted: false,
+          warmthEnabled: true,
+          kelvin: 5600,
+          finish: 'Off',
+          followsBuiltin: false,
+          extraDimming: false,
+          strategy: 'Automatisch',
+          healthVerdict: 'In Bestform · Geprüft am 10. Nov.'
+        }
+      ],
+      rememberedDisplays: [
+        { key: 'lg5k', name: 'LG UltraFine 5K', detail: 'Verbunden · USB-C · Seriennr. #904K-UD · 42 Tage begleitet', connected: true },
+        { key: 'builtin', name: 'MacBook Pro 16" Liquid Retina XDR', detail: 'Verbunden · Integriertes Display', connected: true },
+        { key: 'dell27', name: 'Dell UltraSharp U2723QE (Büro)', detail: 'Zuletzt gesehen am 29. Okt. über HDMI 1', connected: false }
+      ],
+      presets: [
+        {
+          id: 'daylight',
+          name: 'Atelier-Tag',
+          subtitle: 'Klar & papierwarm',
+          icon: '☀︎',
+          gradient: 'linear-gradient(135deg, rgba(251,191,36,0.22) 0%, rgba(245,158,11,0.08) 100%)',
+          accent: '#d97706',
+          targets: {
+            lg5k: { brightness: 0.88, contrast: 0.75, volume: 0.50, kelvin: '5600 K', finish: 'Paper' },
+            builtin: { brightness: 0.82, contrast: 0.50, volume: 0.60, kelvin: '5600 K', finish: 'Off' }
+          }
+        },
+        {
+          id: 'cinema',
+          name: 'Kinoabend',
+          subtitle: 'Gedimmt & samtig',
+          icon: '🎬',
+          gradient: 'linear-gradient(135deg, rgba(225,29,72,0.20) 0%, rgba(159,18,57,0.08) 100%)',
+          accent: '#e11d48',
+          targets: {
+            lg5k: { brightness: 0.45, contrast: 0.82, volume: 0.72, kelvin: '4600 K', finish: 'Off' },
+            builtin: { brightness: 0.18, contrast: 0.50, volume: 0.60, kelvin: '4400 K', finish: 'Off' }
+          }
+        },
+        {
+          id: 'night',
+          name: 'Spätschicht',
+          subtitle: 'Kerzenlicht 3600 K',
+          icon: '🕯️',
+          gradient: 'linear-gradient(135deg, rgba(234,88,12,0.24) 0%, rgba(180,83,9,0.08) 100%)',
+          accent: '#ea580c',
+          targets: {
+            lg5k: { brightness: 0.28, contrast: 0.65, volume: 0.35, kelvin: '3600 K', finish: 'Matte' },
+            builtin: { brightness: 0.22, contrast: 0.50, volume: 0.35, kelvin: '3600 K', finish: 'Matte' }
+          }
+        },
+        {
+          id: 'paper',
+          name: 'Lesestunde',
+          subtitle: 'Buchdruck & Tinte',
+          icon: '📖',
+          gradient: 'linear-gradient(135deg, rgba(16,185,129,0.20) 0%, rgba(5,150,105,0.07) 100%)',
+          accent: '#059669',
+          targets: {
+            lg5k: { brightness: 0.62, contrast: 0.70, volume: 0.40, kelvin: '4900 K', finish: 'Ink' },
+            builtin: { brightness: 0.58, contrast: 0.50, volume: 0.40, kelvin: '4900 K', finish: 'Paper' }
+          }
+        }
+      ],
+      appRules: [
+        { id: 'r1', appName: 'Final Cut Pro', bundleId: 'com.apple.FinalCut', icon: '🎬', presetId: 'cinema' },
+        { id: 'r2', appName: 'Xcode', bundleId: 'com.apple.dt.Xcode', icon: '🔨', presetId: 'night' },
+        { id: 'r3', appName: 'Bücher', bundleId: 'com.apple.iBooksX', icon: '📚', presetId: 'paper' }
+      ],
+      shortcuts: [
+        { id: 'sc_b_up', group: 'Monitore', label: 'Helligkeit erhöhen', icon: '☀︎', combo: '⌥ ⌘ ↑' },
+        { id: 'sc_b_dn', group: 'Monitore', label: 'Helligkeit verringern', icon: '☀︎', combo: '⌥ ⌘ ↓' },
+        { id: 'sc_ba_up', group: 'Monitore', label: 'Alle Monitore heller', icon: '⊞', combo: '⌃ ⌥ ⌘ ↑' },
+        { id: 'sc_ba_dn', group: 'Monitore', label: 'Alle Monitore dunkler', icon: '⊞', combo: '⌃ ⌥ ⌘ ↓' },
+        { id: 'sc_c_up', group: 'Monitore', label: 'Kontrast erhöhen', icon: '◐', combo: '' },
+        { id: 'sc_c_dn', group: 'Monitore', label: 'Kontrast verringern', icon: '◐', combo: '' },
+        { id: 'sc_w_up', group: 'Monitore', label: 'Farbtemperatur wärmer', icon: '🌡️', combo: '⌥ ⌘ [' },
+        { id: 'sc_w_dn', group: 'Monitore', label: 'Farbtemperatur kühler', icon: '❄️', combo: '⌥ ⌘ ]' },
+        { id: 'sc_v_up', group: 'Ton', label: 'Lautstärke lauter', icon: '🔊', combo: '' },
+        { id: 'sc_v_dn', group: 'Ton', label: 'Lautstärke leiser', icon: '🔉', combo: '' },
+        { id: 'sc_mute', group: 'Ton', label: 'Stummschalten', icon: '🔇', combo: '⌥ ⌘ M' },
+        { id: 'sc_p_next', group: 'Licht-Szenen', label: 'Nächste Licht-Szene', icon: '📑', combo: '⌥ ⌘ P' },
+        { id: 'sc_p_prev', group: 'Licht-Szenen', label: 'Vorherige Licht-Szene', icon: '📑', combo: '⇧ ⌥ ⌘ P' },
+        { id: 'sc_ident', group: 'Studio', label: 'Monitore erkennen', icon: '#', combo: '⌥ ⌘ I' },
+        { id: 'sc_panel', group: 'Studio', label: 'Menüleisten-Popover öffnen', icon: 'menubar', combo: '⌥ ⌘ Leertaste' }
+      ],
+      appPages: [
+        { id: 'schedule', title: 'Tageshorizont', summary: 'Sonnenlauf & Lichtkurve', icon: '🌅', color: '#ea580c' },
+        { id: 'presets', title: 'Licht-Szenen', summary: 'Gespeicherte Stimmungen', icon: '🕯️', color: '#d97706' },
+        { id: 'apps', title: 'App-Begleiter', summary: 'Automatische App-Szenen', icon: '🧩', color: '#9333ea' },
+        { id: 'keys', title: 'Tasten & Fokus', summary: 'Medientasten & Dimmen', icon: '⌨️', color: '#16a34a' },
+        { id: 'shortcuts', title: 'Kurzbefehle', summary: '15 globale Hotkeys', icon: '⌘', color: '#4f46e5' },
+        { id: 'general', title: 'Allgemein', summary: 'Warm Paper & Glas', icon: '⚙️', color: '#78716c' },
+        { id: 'updates', title: 'Updates', summary: 'Version & Pflege', icon: '↻', color: '#0284c7' }
+      ],
+      scheduleStops: [
+        { id: 's1', label: 'Morgenrot', fraction: 0.28, brightness: 0.80, kelvin: 5800 },
+        { id: 's2', label: 'Atelier 13:00', fraction: 0.54, brightness: 0.90, kelvin: 6200 },
+        { id: 's3', label: 'Goldene Stunde', fraction: 0.74, brightness: 0.62, kelvin: 4600 },
+        { id: 's4', label: 'Spätschicht', fraction: 0.92, brightness: 0.26, kelvin: 3400 }
+      ]
+    };
+
+    // Helper: Convert Kelvin + Brightness into a warm CSS glow & screen filter
+    function getKelvinGlowRGBA(kelvin, brightness) {
+      const alpha = (0.14 + brightness * 0.42).toFixed(2);
+      if (kelvin <= 3800) return `rgba(234, 88, 12, ${alpha})`;
+      if (kelvin <= 4800) return `rgba(245, 158, 11, ${alpha})`;
+      if (kelvin <= 5800) return `rgba(251, 191, 36, ${alpha})`;
+      return `rgba(186, 230, 253, ${alpha})`;
+    }
+
+    function getScreenVisualFilter(d) {
+      const b = 0.45 + d.brightness * 0.65;
+      const warmSepia = d.warmthEnabled ? Math.max(0, (6500 - d.kelvin) / 7500) : 0;
+      const finishContrast =
+        d.finish === 'Paper' ? 0.90 :
+        d.finish === 'Matte' ? 0.84 :
+        d.finish === 'Ink' ? 0.78 : 1.0;
+      return `brightness(${b.toFixed(2)}) contrast(${finishContrast}) sepia(${warmSepia.toFixed(2)})`;
+    }
+
+    // ---------------------------------------------------------------------------
+    // RENDER MENU BAR PANEL (With Companion Banner, Analog Scales & Scene Cards)
+    // ---------------------------------------------------------------------------
+    function renderMenuBarPanel() {
+      const pctNum = Math.round(state.masterBrightness * 100);
+      const pct = pctNum + '%';
+      document.getElementById('menubar-pct').textContent = pct;
+      document.getElementById('master-readout').textContent = pct;
+      document.getElementById('fill-master').style.width = pct;
+      document.getElementById('thumb-master').style.left = pct;
+
+      // Rotate the sun glyph gently as brightness changes
+      const masterGlyph = document.getElementById('glyph-master');
+      if (masterGlyph) {
+        masterGlyph.style.transform = `rotate(${Math.round(pctNum * 1.8)}deg) scale(${0.92 + state.masterBrightness * 0.18})`;
+      }
+
+      const sysPct = Math.round(state.systemVolume * 100) + '%';
+      document.getElementById('sysvol-readout').textContent = sysPct;
+      document.getElementById('fill-sysvol').style.width = sysPct;
+      document.getElementById('thumb-sysvol').style.left = sysPct;
+
+      // Update Companion Banner by Ambient Mood
+      const greetingEl = document.getElementById('companion-greeting');
+      const subEl = document.getElementById('companion-sub');
+      const orbEl = document.getElementById('companion-orb');
+      const glowEl = document.getElementById('companion-sky-glow');
+      if (state.ambientMood === 'morning') {
+        greetingEl.textContent = 'Guten Morgen im Studio';
+        subEl.textContent = 'Klares Morgenlicht · 5800 K aktiv';
+        orbEl.textContent = '🌅';
+        orbEl.style.background = 'linear-gradient(135deg, #38bdf8 0%, #f59e0b 100%)';
+        glowEl.style.background = 'radial-gradient(circle at 88% 25%, rgba(56, 189, 248, 0.45), transparent 65%)';
+      } else if (state.ambientMood === 'afternoon') {
+        greetingEl.textContent = 'Goldener Nachmittag';
+        subEl.textContent = 'Sonnenuntergang in 48 Min. · Atelier-Tag';
+        orbEl.textContent = '☀️';
+        orbEl.style.background = 'linear-gradient(135deg, #fbbf24 0%, #ea580c 100%)';
+        glowEl.style.background = 'radial-gradient(circle at 88% 25%, rgba(245, 158, 11, 0.55), transparent 65%)';
+      } else {
+        greetingEl.textContent = 'Gemütlicher Feierabend';
+        subEl.textContent = 'Kerzenlicht-Modus · 3600 K schont die Augen';
+        orbEl.textContent = '🌙';
+        orbEl.style.background = 'linear-gradient(135deg, #ea580c 0%, #7c2d12 100%)';
+        glowEl.style.background = 'radial-gradient(circle at 88% 25%, rgba(234, 88, 12, 0.55), transparent 65%)';
+      }
+
+      const syncSwitch = document.getElementById('sync-switch');
+      const masterWrap = document.getElementById('master-slider-wrap');
+      if (state.syncBrightness) {
+        syncSwitch.classList.add('on');
+        masterWrap.style.maxHeight = '36px';
+        masterWrap.style.opacity = '1';
+      } else {
+        syncSwitch.classList.remove('on');
+        masterWrap.style.maxHeight = '0px';
+        masterWrap.style.opacity = '0';
+      }
+
+      const previewPreset = state.presets.find(p => p.id === state.previewPresetId);
+      const badge = document.getElementById('preset-preview-badge');
+      if (previewPreset) {
+        badge.textContent = `Vorschau: ${previewPreset.name}`;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+
+      const listEl = document.getElementById('menubar-displays-list');
+      listEl.innerHTML = state.displays.map(d => {
+        const bPct = Math.round(d.brightness * 100);
+        const vPct = Math.round(d.volume * 100);
+        const ghostTarget = previewPreset ? previewPreset.targets[d.id] : null;
+        const isUnaffected = previewPreset && !ghostTarget;
+
+        let ghostBarHtml = '';
+        let ghostReadoutHtml = '';
+        if (ghostTarget) {
+          const gPct = Math.round(ghostTarget.brightness * 100);
+          const leftPct = Math.min(bPct, gPct);
+          const widthPct = Math.max(2, Math.abs(gPct - bPct));
+          ghostBarHtml = `
+            <div class="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full z-20 pointer-events-none"
+                 style="left: ${leftPct}%; width: ${widthPct}%; background: ${d.accentHex}; box-shadow: 0 0 8px ${d.accentHex};"></div>
+            <div class="absolute top-1 bottom-1 w-3 rounded-full border-2 z-20 pointer-events-none -translate-x-1/2 bg-white"
+                 style="left: ${gPct}%; border-color: ${d.accentHex};"></div>
+          `;
+          ghostReadoutHtml = `<span class="text-xs font-rounded font-semibold ml-1" style="color:${d.accentHex}">→ ${gPct}%</span>`;
+        }
+
+        const rotDeg = Math.round(bPct * 1.8);
+
+        return `
+          <div class="mac-cc-module p-2.5 flex flex-col gap-1.5 ${isUnaffected ? 'opacity-45' : ''}">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="w-2 h-2 warm-led flex-shrink-0" style="background:${d.accentHex}; --led-color:${d.accentHex};"></span>
+                <span class="text-xs font-semibold truncate">${d.name}</span>
+                ${d.finish !== 'Off' ? `<span class="px-1.5 py-0.2 rounded text-[10px] font-medium mac-text-secondary" style="background: var(--mac-subtle-well);">${d.finish}</span>` : ''}
+              </div>
+              <div class="flex items-center">
+                <span
+                  onclick="promptExactValue('${d.id}')"
+                  class="text-xs font-rounded font-semibold mac-text-secondary hover:underline cursor-text px-1"
+                >${bPct}%</span>
+                ${ghostReadoutHtml}
+              </div>
+            </div>
+
+            <div class="cc-slider-track" onmousedown="startSliderDrag(event, 'display:${d.id}')">
+              <div class="cc-scale-ticks"></div>
+              <div class="cc-detent ${Math.abs(bPct - 25) <= 1 ? 'snapped' : ''}" style="left: 25%;"></div>
+              <div class="cc-detent ${Math.abs(bPct - 50) <= 1 ? 'snapped' : ''}" style="left: 50%;"></div>
+              <div class="cc-detent ${Math.abs(bPct - 75) <= 1 ? 'snapped' : ''}" style="left: 75%;"></div>
+              <div class="cc-slider-fill" style="width: ${bPct}%;"></div>
+              ${ghostBarHtml}
+              <div class="cc-slider-glyph" style="transform: rotate(${rotDeg}deg);">☀︎</div>
+              <div class="cc-slider-thumb" style="left: ${bPct}%;"></div>
+            </div>
+
+            ${!d.isBuiltin ? `
+              <div class="flex items-center gap-1.5 pt-0.5">
+                <div class="cc-slider-track flex-1" style="height: 22px;" onmousedown="startSliderDrag(event, 'vol:${d.id}')">
+                  <div class="cc-scale-ticks"></div>
+                  <div class="cc-slider-fill" style="width: ${d.muted ? 0 : vPct}%; opacity: ${d.muted ? 0.35 : 0.95};"></div>
+                  <div class="cc-slider-glyph">${d.muted ? '🔇' : '🔈'}</div>
+                  <div class="cc-slider-thumb" style="left: ${d.muted ? 0 : vPct}%;"></div>
+                </div>
+                <button
+                  onclick="toggleDisplayMute('${d.id}')"
+                  class="mac-btn"
+                  style="padding: 2px 7px;"
+                  title="Monitor-Lautsprecher stummschalten"
+                >
+                  ${d.muted ? '🔇' : '🔊'}
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+
+      // Atmospheric Scene Cards in Menu Bar Popover
+      const presetsEl = document.getElementById('menubar-presets-grid');
+      presetsEl.innerHTML = state.presets.map(p => `
+        <button
+          onclick="applyPreset('${p.id}')"
+          onmouseenter="setPresetPreview('${p.id}')"
+          onmouseleave="setPresetPreview(null)"
+          class="mac-btn justify-start py-1.5 px-2.5 text-left relative overflow-hidden"
+          style="background: ${p.gradient}, var(--mac-btn-bg);"
+        >
+          <span class="w-5 h-5 rounded-[4px] flex items-center justify-center text-xs flex-shrink-0"
+                style="background: rgba(255,255,255,0.45);">${p.icon}</span>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-semibold truncate leading-tight">${p.name}</div>
+            <div class="text-[10px] mac-text-secondary truncate leading-tight">${p.subtitle || 'Szene'}</div>
+          </div>
+        </button>
+      `).join('');
+    }
+
+    // ---------------------------------------------------------------------------
+    // RENDER SETTINGS SIDEBAR (With Living Mini-Monitors & Physical Silhouettes)
+    // ---------------------------------------------------------------------------
+    function renderSidebar() {
+      const mapEl = document.getElementById('sidebar-display-map');
+      const primaryDisp = state.displays[0];
+      mapEl.style.setProperty('--backlight-glow', getKelvinGlowRGBA(primaryDisp.kelvin, primaryDisp.brightness));
+
+      mapEl.innerHTML = state.displays.map(d => {
+        const isSelected = state.activeRoute === `display:${d.id}`;
+        const bPct = Math.round(d.brightness * 100);
+        const screenFilter = getScreenVisualFilter(d);
+        const glowColor = getKelvinGlowRGBA(d.kelvin, d.brightness);
+
+        if (d.isBuiltin) {
+          // Physical MacBook Silhouette with Notch & Aluminum Base Lip
+          return `
+            <div
+              onclick="openSettingsRoute('display:${d.id}')"
+              onmousedown="startMapTileDrag(event, '${d.id}')"
+              class="relative flex flex-col items-center cursor-ns-resize select-none group"
+              title="${d.name} (${bPct}%) — Vertikal ziehen zum Dimmen"
+            >
+              <div class="absolute -inset-2 rounded-full blur-md pointer-events-none transition-all"
+                   style="background: ${glowColor};"></div>
+              <div
+                class="relative w-[72px] h-[46px] rounded-t-[5px] rounded-b-[2px] overflow-hidden flex flex-col items-center justify-between p-1"
+                style="border: ${isSelected ? `2px solid ${d.accentHex}` : '1.5px solid rgba(48,36,24,0.45)'}; box-shadow: 0 4px 10px rgba(0,0,0,0.25);"
+              >
+                <div class="absolute inset-0 mini-screen-wallpaper transition-all" style="filter: ${screenFilter};"></div>
+                <!-- MacBook Camera Notch -->
+                <div class="relative z-10 w-4 h-1 rounded-b-[2px] bg-black/80 -mt-1"></div>
+                <div class="relative z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-black/55 backdrop-blur-xs text-white text-[10px] font-rounded font-semibold">
+                  <span class="w-1.5 h-1.5 rounded-full" style="background: ${d.accentHex};"></span>
+                  <span>${bPct}%</span>
+                </div>
+                <div class="h-0.5"></div>
+              </div>
+              <!-- MacBook Aluminum Unibody Lip -->
+              <div class="w-[82px] h-[4px] rounded-b-[3px] bg-gradient-to-b from-stone-300 to-stone-500 border-t border-white/40"></div>
+            </div>
+          `;
+        } else {
+          // Physical 27" Studio Monitor Silhouette with Stand
+          return `
+            <div
+              onclick="openSettingsRoute('display:${d.id}')"
+              onmousedown="startMapTileDrag(event, '${d.id}')"
+              class="relative flex flex-col items-center cursor-ns-resize select-none group"
+              title="${d.name} (${bPct}%) — Vertikal ziehen zum Dimmen"
+            >
+              <div class="absolute -inset-3 rounded-full blur-md pointer-events-none transition-all"
+                   style="background: ${glowColor};"></div>
+              <div
+                class="relative w-[96px] h-[56px] rounded-[5px] overflow-hidden flex flex-col items-center justify-center"
+                style="border: ${isSelected ? `2px solid ${d.accentHex}` : '1.5px solid rgba(48,36,24,0.45)'}; box-shadow: 0 5px 14px rgba(0,0,0,0.28);"
+              >
+                <div class="absolute inset-0 mini-screen-wallpaper transition-all" style="filter: ${screenFilter};"></div>
+                <div class="relative z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 backdrop-blur-xs text-white text-[11px] font-rounded font-semibold">
+                  <span class="w-1.5 h-1.5 rounded-full" style="background: ${d.accentHex};"></span>
+                  <span>${bPct}%</span>
+                </div>
+              </div>
+              <!-- Physical Monitor Stand Neck & Foot -->
+              <div class="w-[10px] h-[7px] bg-gradient-to-b from-stone-400 to-stone-500"></div>
+              <div class="w-[34px] h-[3px] rounded-full bg-stone-400"></div>
+            </div>
+          `;
+        }
+      }).join('');
+
+      const dispNav = document.getElementById('sidebar-displays-nav');
+      dispNav.innerHTML = state.displays.map(d => {
+        const active = state.activeRoute === `display:${d.id}`;
+        const bPct = Math.round(d.brightness * 100);
+        return `
+          <button onclick="openSettingsRoute('display:${d.id}')" class="mac-sidebar-item ${active ? 'active' : ''}">
+            <span class="w-5 h-5 rounded-[5px] flex items-center justify-center flex-shrink-0" style="background: ${active ? 'rgba(255,255,255,0.22)' : 'var(--mac-subtle-well)'};">
+              <span class="w-2.5 h-2.5 warm-led" style="background: ${d.accentHex}; --led-color: ${d.accentHex};"></span>
+            </span>
+            <div class="min-w-0 flex-1">
+              <div class="text-xs font-medium truncate">${d.name}</div>
+              <div class="text-[11px] mac-text-secondary truncate">${d.route} · ${bPct}%</div>
+            </div>
+          </button>
+        `;
+      }).join('') + `
+        <button onclick="openSettingsRoute('remembered')" class="mac-sidebar-item ${state.activeRoute === 'remembered' ? 'active' : ''}">
+          <span class="w-5 h-5 rounded-[5px] bg-stone-500 text-white flex items-center justify-center text-xs flex-shrink-0">🖴</span>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-medium truncate">Bekannte Monitore</div>
+            <div class="text-[11px] mac-text-secondary truncate">${state.rememberedDisplays.length} gespeicherte Begleiter</div>
+          </div>
+        </button>
+      `;
+
+      const appNav = document.getElementById('sidebar-app-nav');
+      appNav.innerHTML = state.appPages.map(p => {
+        const active = state.activeRoute === p.id;
+        return `
+          <button onclick="openSettingsRoute('${p.id}')" class="mac-sidebar-item ${active ? 'active' : ''}">
+            <span class="w-5 h-5 rounded-[5px] text-white flex items-center justify-center text-xs flex-shrink-0" style="background: ${p.color};">${p.icon}</span>
+            <div class="min-w-0 flex-1">
+              <div class="text-xs font-medium truncate">${p.title}</div>
+              <div class="text-[11px] mac-text-secondary truncate">${p.summary}</div>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    // ---------------------------------------------------------------------------
+    // RENDER SETTINGS DETAIL PAGE
+    // ---------------------------------------------------------------------------
+    function renderSettingsPage() {
+      const titleEl = document.getElementById('settings-page-title');
+      const subEl = document.getElementById('settings-page-subtitle');
+      const actionsEl = document.getElementById('settings-toolbar-actions');
+      const bodyEl = document.getElementById('settings-page-body');
+
+      // 1. DISPLAY PAGE (With Live Studio Desk Monitor Hero + Tactile Sliders + Care Seal)
+      if (state.activeRoute.startsWith('display:')) {
+        const id = state.activeRoute.split(':')[1];
+        const d = state.displays.find(x => x.id === id) || state.displays[0];
+        const bPct = Math.round(d.brightness * 100);
+        const cPct = Math.round(d.contrast * 100);
+        const vPct = Math.round(d.volume * 100);
+        const glowColor = getKelvinGlowRGBA(d.kelvin, d.brightness);
+        const screenFilter = getScreenVisualFilter(d);
+        const rotDeg = Math.round(bPct * 1.8);
+
+        titleEl.textContent = d.name;
+        subEl.textContent = `${d.spec} · ${d.route}`;
+        actionsEl.innerHTML = `
+          <span class="mac-subtle-box px-2.5 py-1 text-xs font-medium flex items-center gap-1.5">
+            <span class="w-2 h-2 warm-led" style="background:${d.accentHex}; --led-color:${d.accentHex};"></span>
+            <span>Verbunden & Synchron</span>
+          </span>
+        `;
+
+        bodyEl.innerHTML = `
+          <!-- PILLAR 2: LIVE STUDIO MONITOR HERO CARD WITH BACKLIGHT BLEED -->
+          <div class="mac-group overflow-hidden">
+            <div class="studio-desk-surface relative p-5 flex flex-col md:flex-row items-center justify-between gap-6"
+                 style="--backlight-glow: ${glowColor};">
+              <!-- Left: Physical Monitor Preview on Desk with Live Wallpaper & Ambient Halo -->
+              <div class="relative flex flex-col items-center flex-shrink-0">
+                <!-- Ambient Backlight Bleed on Studio Wall -->
+                <div class="absolute -inset-6 rounded-full blur-2xl pointer-events-none transition-all duration-150"
+                     style="background: ${glowColor};"></div>
+
+                <!-- Monitor Frame -->
+                <div class="relative w-[210px] h-[118px] rounded-[7px] p-1.5 bg-[#1a1817] shadow-xl border border-white/15 flex flex-col justify-between overflow-hidden">
+                  <div class="absolute inset-1 rounded-[4px] mini-screen-wallpaper transition-all duration-75"
+                       style="filter: ${screenFilter};"></div>
+
+                  <!-- Top Mini Menubar inside Monitor -->
+                  <div class="relative z-10 h-3 px-2 rounded-t-[3px] bg-black/35 backdrop-blur-xs flex items-center justify-between text-[8px] text-white/90">
+                    <span> Studio</span>
+                    <span>${d.warmthEnabled ? d.kelvin + ' K' : '6500 K'} · ${d.finish}</span>
+                  </div>
+
+                  <!-- Center Live Floating Readout inside Mini Monitor -->
+                  <div class="relative z-10 my-auto mx-auto px-2.5 py-1 rounded-full bg-black/55 backdrop-blur-md text-white flex items-center gap-1.5 text-xs font-rounded font-semibold shadow-sm">
+                    <span>☀︎ ${bPct}%</span>
+                    <span class="opacity-60">·</span>
+                    <span>${d.warmthEnabled ? d.kelvin + ' K' : 'Neutral'}</span>
+                  </div>
+
+                  <!-- Mini Dock inside Monitor -->
+                  <div class="relative z-10 mx-auto mb-0.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-xs flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-[2px] bg-amber-400"></span>
+                    <span class="w-2 h-2 rounded-[2px] bg-sky-400"></span>
+                    <span class="w-2 h-2 rounded-[2px] bg-rose-400"></span>
+                    <span class="w-2 h-2 rounded-[2px] bg-emerald-400"></span>
+                  </div>
+                </div>
+
+                <!-- Physical Stand or Laptop Base -->
+                ${d.isBuiltin ? `
+                  <div class="w-[234px] h-[6px] rounded-b-[4px] bg-gradient-to-b from-stone-300 to-stone-500 shadow"></div>
+                ` : `
+                  <div class="w-[18px] h-[14px] bg-gradient-to-b from-stone-400 to-stone-500"></div>
+                  <div class="w-[68px] h-[4px] rounded-full bg-stone-400 shadow"></div>
+                `}
+              </div>
+
+              <!-- Right: Personal Studio Companion Context & Quick Scene Chips -->
+              <div class="flex-1 flex flex-col gap-2.5 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                        style="background: var(--mac-accent-soft); color: var(--mac-accent);">
+                    ☀︎ Live Studio-Vorschau
+                  </span>
+                  <span class="text-xs mac-text-secondary">Hintergrundlicht reagiert in Echtzeit</span>
+                </div>
+                <div class="text-sm font-semibold leading-snug">
+                  Warmes Atelier-Licht (${d.warmthEnabled ? d.kelvin + ' K' : '6500 K'}) mit Oberfläche „${d.finish}“
+                </div>
+                <div class="text-xs mac-text-secondary leading-relaxed">
+                  Dein Monitor zeigt dein echtes macOS-Hintergrundbild und simuliert Helligkeit, Farbtemperatur sowie den Papier-Schwarzwert schon beim Ziehen der Regler.
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  ${state.presets.map(p => `
+                    <button onclick="applyPreset('${p.id}')" class="mac-btn" style="padding: 3px 9px; font-size: 11px;">
+                      <span>${p.icon}</span>
+                      <span>${p.name}</span>
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- GROUP 1: Tactile Analog Controls -->
+          <div>
+            <div class="text-xs font-semibold mac-text-secondary mb-1.5 px-1">Analoge Licht- & Ton-Regler</div>
+            <div class="mac-group mac-divider">
+              <div class="p-3.5 flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-xs font-semibold">Helligkeit</span>
+                    <span class="text-xs mac-text-secondary ml-1.5">Hardware-Backlight + sanfte Reserve</span>
+                  </div>
+                  <span onclick="promptExactValue('${d.id}')" class="text-xs font-rounded font-semibold cursor-text hover:underline">${bPct}%</span>
+                </div>
+                <div class="cc-slider-track" onmousedown="startSliderDrag(event, 'display:${d.id}')">
+                  <div class="cc-scale-ticks"></div>
+                  <div class="cc-detent ${Math.abs(bPct - 25) <= 1 ? 'snapped' : ''}" style="left: 25%;"></div>
+                  <div class="cc-detent ${Math.abs(bPct - 50) <= 1 ? 'snapped' : ''}" style="left: 50%;"></div>
+                  <div class="cc-detent ${Math.abs(bPct - 75) <= 1 ? 'snapped' : ''}" style="left: 75%;"></div>
+                  <div class="cc-slider-fill" style="width: ${bPct}%;"></div>
+                  <div class="cc-slider-glyph" style="transform: rotate(${rotDeg}deg);">☀︎</div>
+                  <div class="cc-slider-thumb" style="left: ${bPct}%;"></div>
+                </div>
+              </div>
+
+              <div class="p-3.5 flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-xs font-semibold">Kontrast</span>
+                    <span class="text-xs mac-text-secondary ml-1.5">VCP 0x12 Hardware-Gain</span>
+                  </div>
+                  <span class="text-xs font-rounded font-semibold mac-text-secondary">${cPct}%</span>
+                </div>
+                <div class="cc-slider-track" onmousedown="startSliderDrag(event, 'contrast:${d.id}')">
+                  <div class="cc-scale-ticks"></div>
+                  <div class="cc-detent" style="left: 50%;"></div>
+                  <div class="cc-slider-fill" style="width: ${cPct}%;"></div>
+                  <div class="cc-slider-glyph">◐</div>
+                  <div class="cc-slider-thumb" style="left: ${cPct}%;"></div>
+                </div>
+              </div>
+
+              <div class="p-3.5 flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-xs font-semibold">Monitor-Lautsprecher</span>
+                    <span class="text-xs mac-text-secondary ml-1.5">VCP 0x62 Audio-Line</span>
+                  </div>
+                  <span class="text-xs font-rounded font-semibold mac-text-secondary">${vPct}%</span>
+                </div>
+                <div class="cc-slider-track" onmousedown="startSliderDrag(event, 'vol:${d.id}')">
+                  <div class="cc-scale-ticks"></div>
+                  <div class="cc-slider-fill" style="width: ${vPct}%;"></div>
+                  <div class="cc-slider-glyph">🔊</div>
+                  <div class="cc-slider-thumb" style="left: ${vPct}%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- GROUP 2: Colour & Paper Finish -->
+          <div>
+            <div class="text-xs font-semibold mac-text-secondary mb-1.5 px-1">Farbwärme & Papier-Charakter</div>
+            <div class="mac-group mac-divider">
+              <div class="p-3.5 flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-semibold">Warmes Atelier-Licht aktivieren</div>
+                  <div class="text-xs mac-text-secondary">Stufenlose Farbtemperatur über die Gamma-Kurve</div>
+                </div>
+                <div onclick="toggleDisplayWarmth('${d.id}')" class="mac-switch ${d.warmthEnabled ? 'on' : ''}">
+                  <div class="mac-switch-knob"></div>
+                </div>
+              </div>
+
+              ${d.warmthEnabled ? `
+                <div class="p-3.5 flex flex-col gap-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium mac-text-secondary">Farbtemperatur (Kerzenlicht 2700 K bis Tageslicht 6500 K)</span>
+                    <span class="text-xs font-rounded font-semibold" style="color: var(--mac-accent);">${d.kelvin >= 6450 ? 'Neutral (6500 K)' : d.kelvin + ' K'}</span>
+                  </div>
+                  <div class="cc-slider-track" onmousedown="startSliderDrag(event, 'kelvin:${d.id}')"
+                       style="background: linear-gradient(90deg, #ea580c 0%, #fbbf24 45%, #fef3c7 75%, #e0f2fe 100%);">
+                    <div class="cc-scale-ticks"></div>
+                    <div class="cc-slider-thumb" style="left: ${Math.round(((d.kelvin - 2700) / (6500 - 2700)) * 100)}%; opacity: 1;"></div>
+                  </div>
+                </div>
+              ` : ''}
+
+              <div class="p-3.5 flex flex-col gap-2.5">
+                <div class="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <div class="text-xs font-semibold">Papier-Oberfläche (Paper Finish)</div>
+                    <div class="text-xs mac-text-secondary">Hebt tiefes Schwarz sanft an und dämpft hartes Weiß wie auf echtem Kunstdruckpapier</div>
+                  </div>
+                  <div class="mac-segmented">
+                    ${['Off', 'Paper', 'Matte', 'Ink'].map(f => `
+                      <button onclick="setDisplayFinish('${d.id}', '${f}')" class="mac-segment-btn ${d.finish === f ? 'active' : ''}">${f}</button>
+                    `).join('')}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PILLAR 4: Warm "In Bestform" Panel Care Seal -->
+          <div>
+            <div class="text-xs font-semibold mac-text-secondary mb-1.5 px-1">Panel-Fürsorge & Zustand</div>
+            <div class="mac-group mac-divider">
+              <div class="p-4 flex items-center justify-between flex-wrap gap-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-full flex items-center justify-center text-base"
+                       style="background: rgba(16, 185, 129, 0.14); color: #059669; border: 1px solid rgba(16, 185, 129, 0.28);">
+                    ✦
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold flex items-center gap-2">
+                      <span>Dein ${d.name} ist in Bestform</span>
+                      <span class="px-2 py-0.2 rounded-full text-[10px] bg-emerald-500/15 text-emerald-700 font-semibold">Geprüft</span>
+                    </div>
+                    <div class="text-xs mac-text-secondary mt-0.5">${d.healthVerdict} · 11 Referenzmuster verfügbar</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <button onclick="openTestPatternOverlay(true)" class="mac-btn-primary">Panel-Check starten</button>
+                  <button onclick="openRepairSheetModal('${d.id}')" class="mac-btn">Pixel-Massage…</button>
+                  <button onclick="openTestPatternOverlay(false)" class="mac-btn">Testbilder</button>
+                </div>
+              </div>
+
+              ${state.pixelMarks.length > 0 ? `
+                <div class="p-3.5 flex items-center justify-between">
+                  <div>
+                    <div class="text-xs font-medium">${state.pixelMarks.length} gemerkte Stelle — wird bei der Pixel-Massage gezielt gepflegt</div>
+                    <div class="text-xs mac-text-secondary">Skaliert automatisch bei Auflösungswechseln mit</div>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <button onclick="openTestPatternOverlay(false)" class="mac-btn">Zeigen</button>
+                    <button onclick="state.pixelMarks = []; renderSettingsPage();" class="mac-btn-destructive">Markierung löschen</button>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- GROUP 4: Configuration & Warm Analog LED Picker -->
+          <div>
+            <div class="text-xs font-semibold mac-text-secondary mb-1.5 px-1">Persönliche Abstimmung</div>
+            <div class="mac-group mac-divider">
+              <div class="p-3.5 flex items-center justify-between">
+                <span class="text-xs font-medium">Ansteuerung über</span>
+                <div class="mac-segmented">
+                  ${['Automatisch', 'Hardware (DDC)', 'Software (Gamma)'].map(st => `
+                    <button onclick="d_setStrategy('${d.id}', '${st}')" class="mac-segment-btn ${d.strategy === st ? 'active' : ''}">${st}</button>
+                  `).join('')}
+                </div>
+              </div>
+
+              <div class="p-3.5 flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-medium">Dem Umgebungslicht des MacBooks folgen</div>
+                  <div class="text-xs mac-text-secondary">MacBook 68 % → dieser Monitor harmonisch auf ${bPct} %</div>
+                </div>
+                <div onclick="toggleFollowBuiltin('${d.id}')" class="mac-switch ${d.followsBuiltin ? 'on' : ''}">
+                  <div class="mac-switch-knob"></div>
+                </div>
+              </div>
+
+              <div class="p-3.5 flex items-center justify-between">
+                <span class="text-xs font-medium">Farbe der Status-Leuchtdiode</span>
+                <div class="flex items-center gap-2.5">
+                  ${['#f43f5e', '#ea580c', '#d97706', '#10b981', '#0ea5e9', '#6366f1', '#a855f7'].map(hex => `
+                    <button
+                      onclick="setDisplayAccent('${d.id}', '${hex}')"
+                      class="w-4 h-4 warm-led transition-transform ${d.accentHex === hex ? 'ring-2 ring-amber-600 scale-125' : ''}"
+                      style="background: ${hex}; --led-color: ${hex};"
+                    ></button>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      // 2. SCHEDULE PAGE (PILLAR 5: Living Horizon DayArc Artwork)
+      if (state.activeRoute === 'schedule') {
+        titleEl.textContent = 'Tageshorizont (DayArc)';
+        subEl.textContent = 'Natürlicher Sonnenlauf & warme Lichtstimmungen durch den Tag';
+        actionsEl.innerHTML = '';
+
+        const scrubHours = Math.floor(state.scheduleScrubFraction * 24);
+        const scrubMins = Math.floor((state.scheduleScrubFraction * 24 - scrubHours) * 60);
+        const timeStr = `${String(scrubHours).padStart(2, '0')}:${String(scrubMins).padStart(2, '0')} Uhr`;
+
+        const sunX = state.scheduleScrubFraction * 600;
+        const sunY = 104 - Math.sin(state.scheduleScrubFraction * Math.PI) * 76;
+        const isNight = state.scheduleScrubFraction < 0.22 || state.scheduleScrubFraction > 0.82;
+        const interpBri = Math.round((0.25 + Math.max(0, Math.sin(state.scheduleScrubFraction * Math.PI)) * 0.65) * 100);
+        const interpKel = Math.round(3400 + Math.max(0, Math.sin(state.scheduleScrubFraction * Math.PI)) * 2800);
+
+        const skyGradient = isNight
+          ? 'linear-gradient(180deg, #1b1726 0%, #312332 60%, #4a2c2a 100%)'
+          : state.scheduleScrubFraction > 0.68 || state.scheduleScrubFraction < 0.32
+          ? 'linear-gradient(180deg, #4338ca 0%, #c2410c 55%, #fbbf24 100%)'
+          : 'linear-gradient(180deg, #0284c7 0%, #7dd3fc 60%, #fef3c7 100%)';
+
+        bodyEl.innerHTML = `
+          <div class="mac-group mac-divider overflow-hidden">
+            <div class="p-3.5 flex items-center justify-between">
+              <div>
+                <div class="text-xs font-semibold">Monitore sanft mit dem Sonnenstand mitführen</div>
+                <div class="text-xs mac-text-secondary">Übergänge dauern mehrere Minuten und fallen beim Arbeiten nie abrupt auf</div>
+              </div>
+              <div onclick="state.scheduleEnabled = !state.scheduleEnabled; renderSettingsPage();" class="mac-switch ${state.scheduleEnabled ? 'on' : ''}">
+                <div class="mac-switch-knob"></div>
+              </div>
+            </div>
+
+            <!-- PILLAR 5: Living Horizon Panorama Artwork -->
+            <div class="p-4 flex flex-col gap-3">
+              <div class="flex items-center justify-between text-xs">
+                <span class="mac-text-secondary">Fahre mit der Maus über den Horizont, um jede Uhrzeit live zu erleben</span>
+                <span class="px-2.5 py-0.5 rounded-full font-rounded font-semibold"
+                      style="background: var(--mac-accent-soft); color: var(--mac-accent);">
+                  ${timeStr} → ☀︎ ${interpBri}% · 🌡️ ${interpKel} K
+                </span>
+              </div>
+
+              <div
+                onmousemove="scrubDayArc(event)"
+                class="relative h-44 w-full rounded-[10px] cursor-ew-resize overflow-hidden shadow-inner border border-black/15"
+                style="background: ${skyGradient}; transition: background 0.25s ease;"
+              >
+                <svg viewBox="0 0 600 130" class="w-full h-full overflow-visible">
+                  <!-- Warm Sun / Moon Radial Halo -->
+                  <defs>
+                    <radialGradient id="sunHalo" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stop-color="#fde68a" stop-opacity="0.95" />
+                      <stop offset="45%" stop-color="#f59e0b" stop-opacity="0.45" />
+                      <stop offset="100%" stop-color="#ea580c" stop-opacity="0" />
+                    </radialGradient>
+                  </defs>
+
+                  <!-- Solar Trajectory Arc -->
+                  <path d="M 0,104 C 140,104 180,28 300,28 C 420,28 460,104 600,104"
+                        fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="2" stroke-dasharray="4 4" />
+
+                  <!-- Distant Layered Warm Hills Silhouette -->
+                  <path d="M 0,130 L 0,102 Q 110,82 230,98 T 460,92 T 600,100 L 600,130 Z"
+                        fill="rgba(42, 24, 16, 0.45)" />
+                  <path d="M 0,130 L 0,112 Q 160,96 310,110 T 600,106 L 600,130 Z"
+                        fill="rgba(28, 19, 15, 0.78)" />
+
+                  <!-- Scrubbing Vertical Guide Line -->
+                  <line x1="${sunX}" y1="0" x2="${sunX}" y2="130" stroke="rgba(255,255,255,0.75)" stroke-width="1.5" stroke-dasharray="2 3" />
+
+                  <!-- Glowing Sun / Moon Orb on the Horizon -->
+                  <g transform="translate(${sunX}, ${sunY})">
+                    <circle r="28" fill="url(#sunHalo)" />
+                    <circle r="9" fill="${isNight ? '#fef08a' : '#fffbeb'}" stroke="#f59e0b" stroke-width="2" />
+                  </g>
+
+                  <!-- Stop Pins along the Arc -->
+                  ${state.scheduleStops.map(s => {
+                    const x = s.fraction * 600;
+                    const y = 104 - Math.sin(s.fraction * Math.PI) * 76;
+                    return `
+                      <g transform="translate(${x}, ${y})">
+                        <circle r="5.5" fill="#d96b1f" stroke="#ffffff" stroke-width="2" />
+                        <rect x="-36" y="-24" width="72" height="15" rx="4" fill="rgba(24, 18, 14, 0.68)" />
+                        <text y="-13" text-anchor="middle" fill="#fffdf9" font-size="9.5" font-weight="600">${s.label}</text>
+                      </g>
+                    `;
+                  }).join('')}
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1.5 px-1">
+              <span class="text-xs font-semibold mac-text-secondary">Tages-Stationen</span>
+              <button onclick="addScheduleStop()" class="mac-btn">+ Station hinzufügen</button>
+            </div>
+            <div class="mac-group mac-divider">
+              ${state.scheduleStops.map(s => `
+                <div class="p-3.5 flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <span class="mac-subtle-box px-2.5 py-1 text-xs font-rounded font-semibold w-28 text-center">${s.label}</span>
+                    <span class="text-xs mac-text-secondary">Helligkeit <b>${Math.round(s.brightness * 100)} %</b> · Farbtemperatur <b>${s.kelvin} K</b></span>
+                  </div>
+                  <div class="mac-segmented">
+                    <button class="mac-segment-btn active">Lichtwerte</button>
+                    <button class="mac-segment-btn">Szene</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      // 3. PRESETS PAGE (Atmospheric Scene Cards)
+      if (state.activeRoute === 'presets') {
+        titleEl.textContent = 'Licht-Szenen';
+        subEl.textContent = 'Handverlesene Stimmungen für Arbeit, Lesen und Heimkino';
+        actionsEl.innerHTML = '';
+
+        bodyEl.innerHTML = `
+          <div>
+            <div class="text-xs font-semibold mac-text-secondary mb-1.5 px-1">Deine Szenen (Mit der Maus darüberfahren für Detailwerte)</div>
+            <div class="mac-group mac-divider">
+              ${state.presets.map(p => {
+                const isHover = state.hoverSettingsPresetId === p.id;
+                const displayKeys = Object.keys(p.targets);
+                return `
+                  <div
+                    onmouseenter="state.hoverSettingsPresetId = '${p.id}'; renderSettingsPage();"
+                    onmouseleave="state.hoverSettingsPresetId = null; renderSettingsPage();"
+                    class="p-3.5 flex flex-col gap-2 transition-colors"
+                    style="background: ${isHover ? p.gradient : 'transparent'};"
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-[7px] flex items-center justify-center text-base shadow-xs"
+                              style="background: ${p.gradient}, var(--mac-subtle-well); border: 0.5px solid var(--mac-separator);">${p.icon}</span>
+                        <div>
+                          <div class="text-xs font-semibold">${p.name} <span class="font-normal mac-text-secondary">· ${p.subtitle || ''}</span></div>
+                          <div class="text-[11px] mac-text-secondary">${displayKeys.map(k => (state.displays.find(d => d.id === k) || {name: k}).name).join(' + ')}</div>
+                        </div>
+                      </div>
+
+                      <div class="flex items-center gap-1.5">
+                        <button onclick="applyPreset('${p.id}')" class="mac-btn-primary">Aktivieren</button>
+                        <button onclick="recapturePreset('${p.id}')" class="mac-btn" title="Aktuelle Monitorwerte übernehmen">↻</button>
+                        <button onclick="openPresetEditSheet('${p.id}')" class="mac-btn">Bearbeiten…</button>
+                        <button onclick="deletePreset('${p.id}')" class="mac-btn-destructive">Löschen</button>
+                      </div>
+                    </div>
+
+                    ${isHover ? `
+                      <div class="pl-11 pt-1 flex flex-col gap-1 text-xs">
+                        ${displayKeys.map(k => {
+                          const entry = p.targets[k];
+                          const dispName = (state.displays.find(d => d.id === k) || {name: k}).name;
+                          return `
+                            <div class="flex items-center gap-2 flex-wrap">
+                              <span class="w-36 truncate mac-text-secondary font-medium">${dispName}:</span>
+                              <span class="mac-subtle-box px-2 py-0.5 font-rounded">☀︎ ${Math.round(entry.brightness * 100)}%</span>
+                              <span class="mac-subtle-box px-2 py-0.5 font-rounded">◐ ${Math.round((entry.contrast || 0.7) * 100)}%</span>
+                              <span class="mac-subtle-box px-2 py-0.5 font-rounded">🌡️ ${entry.kelvin || 'Neutral'}</span>
+                              <span class="mac-subtle-box px-2 py-0.5 font-rounded">📄 ${entry.finish || 'Off'}</span>
+                            </div>
+                          `;
+                        }).join('')}
+                      </div>
+                    ` : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs font-semibold mac-text-secondary mb-1.5 px-1">Aktuelle Lichtstimmung festhalten</div>
+            <div class="mac-group p-3.5 flex flex-col gap-3">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-xs mac-text-secondary mr-1">Symbol:</span>
+                ${SYMBOLS.map(sym => `
+                  <button
+                    onclick="state.newPresetSymbol = '${sym}'; renderSettingsPage();"
+                    class="${state.newPresetSymbol === sym ? 'mac-btn-primary' : 'mac-btn'}"
+                    style="padding: 4px 8px;"
+                  >${sym}</button>
+                `).join('')}
+              </div>
+
+              <div class="flex items-center gap-2">
+                <input id="new-preset-name-input" type="text" placeholder="Name der neuen Licht-Szene (z. B. Fokus & Espresso)" class="mac-input flex-1" />
+                <button onclick="captureNewPresetFromPage()" class="mac-btn-primary">Szene speichern</button>
+              </div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      // 4. APPS PAGE
+      if (state.activeRoute === 'apps') {
+        titleEl.textContent = 'App-Begleiter';
+        subEl.textContent = 'Wechselt automatisch die Licht-Szene passend zu deinem aktiven Programm';
+        actionsEl.innerHTML = `
+          <button onclick="simulateAppDropOnStatusIcon()" class="mac-btn">App-Drop auf Menüleiste testen</button>
+        `;
+
+        bodyEl.innerHTML = `
+          <div>
+            <div class="text-xs font-semibold mac-text-secondary mb-1.5 px-1">Automatische App-Szenen</div>
+            <div class="mac-group mac-divider">
+              ${state.appRules.map(rule => `
+                <div class="p-3.5 flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-2.5">
+                    <span class="w-7 h-7 rounded-[6px] flex items-center justify-center text-sm" style="background: var(--mac-subtle-well);">${rule.icon}</span>
+                    <div>
+                      <div class="text-xs font-semibold">${rule.appName}</div>
+                      <div class="text-xs mac-text-secondary font-mono">${rule.bundleId}</div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <select onchange="updateAppRulePreset('${rule.id}', this.value)" class="mac-select">
+                      ${state.presets.map(p => `<option value="${p.id}" ${p.id === rule.presetId ? 'selected' : ''}>${p.icon} ${p.name}</option>`).join('')}
+                    </select>
+                    <button onclick="deleteAppRule('${rule.id}')" class="mac-btn-destructive">Entfernen</button>
+                  </div>
+                </div>
+              `).join('')}
+
+              <div class="p-3.5 flex items-center justify-between">
+                <span class="text-xs mac-text-secondary">Ziehe einfach ein Programm auf das Menüleisten-Symbol oder wähle es hier aus.</span>
+                <button onclick="openChooseApplicationModal()" class="mac-btn-primary">Programm wählen…</button>
+              </div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      // 5. SHORTCUTS PAGE
+      if (state.activeRoute === 'shortcuts') {
+        titleEl.textContent = 'Kurzbefehle';
+        subEl.textContent = 'Klicke auf ein Feld und drücke deine gewünschte Tastenkombination';
+        actionsEl.innerHTML = '';
+
+        const groups = ['Monitore', 'Ton', 'Licht-Szenen', 'Studio'];
+        bodyEl.innerHTML = groups.map(grp => {
+          const items = state.shortcuts.filter(s => s.group === grp);
+          return `
+            <div>
+              <div class="text-xs font-semibold mac-text-secondary mb-1.5 px-1">${grp}</div>
+              <div class="mac-group mac-divider">
+                ${items.map(sc => {
+                  const isRec = state.recordingShortcutId === sc.id;
+                  return `
+                    <div class="p-3 flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <span class="w-5 text-center text-xs mac-text-secondary">${sc.icon}</span>
+                        <span class="text-xs font-medium">${sc.label}</span>
+                      </div>
+                      <button
+                        onclick="toggleShortcutRecording('${sc.id}')"
+                        class="${isRec ? 'mac-btn-primary' : 'mac-btn'} min-w-[128px] font-mono justify-between"
+                      >
+                        <span>${isRec ? 'Tasten drücken…' : (sc.combo || 'Aufnehmen')}</span>
+                        ${sc.combo && !isRec ? `<span onclick="clearShortcut(event, '${sc.id}')" class="mac-text-tertiary hover:opacity-100 ml-1" title="Löschen">⊗</span>` : ''}
+                      </button>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }).join('');
+        return;
+      }
+
+      // 6. KEYS & ATTENTION PAGE
+      if (state.activeRoute === 'keys') {
+        titleEl.textContent = 'Tasten & Fokus-Licht';
+        subEl.textContent = 'Hardware-Medientasten, HID-Lernmodus & sanftes Abdunkeln inaktiver Monitore';
+        actionsEl.innerHTML = `<button onclick="openKeyLearningSheet()" class="mac-btn">Taste anlernen…</button>`;
+
+        const attPct = Math.round(state.attentionAmount * 100);
+
+        bodyEl.innerHTML = `
+          <div>
+            <div class="text-xs font-semibold mac-text-secondary mb-1.5 px-1">Tastatur-Steuerung</div>
+            <div class="mac-group mac-divider">
+              <div class="p-3.5 flex items-center justify-between">
+                <span class="text-xs font-medium">Helligkeits- und Lautstärketasten für externe Monitore nutzen</span>
+                <div onclick="state.mediaKeysEnabled = !state.mediaKeysEnabled; renderSettingsPage();" class="mac-switch ${state.mediaKeysEnabled ? 'on' : ''}">
+                  <div class="mac-switch-knob"></div>
+                </div>
+              </div>
+
+              <div class="p-3.5 flex items-center justify-between">
+                <span class="text-xs font-medium">Tasten wirken auf</span>
+                <div class="mac-segmented">
+                  ${['Aktives Fenster', 'Unter Mauszeiger', 'Alle Monitore'].map(t => `
+                    <button onclick="state.keyTarget = '${t}'; renderSettingsPage();" class="mac-segment-btn ${state.keyTarget === t ? 'active' : ''}">${t}</button>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs font-semibold mac-text-secondary mb-1.5 px-1">Fokus-Licht (Attention)</div>
+            <div class="mac-group mac-divider">
+              <div class="p-3.5 flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-semibold">Nebenmonitore sanft in den Hintergrund treten lassen</div>
+                  <div class="text-xs mac-text-secondary">Dimmt Bildschirme, auf denen du gerade nicht tippst, weich über die Gamma-Kurve</div>
+                </div>
+                <div onclick="state.attentionEnabled = !state.attentionEnabled; renderSettingsPage();" class="mac-switch ${state.attentionEnabled ? 'on' : ''}">
+                  <div class="mac-switch-knob"></div>
+                </div>
+              </div>
+
+              ${state.attentionEnabled ? `
+                <div class="p-3.5 flex flex-col gap-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium mac-text-secondary">Abdunkelung inaktiver Monitore</span>
+                    <span class="text-xs font-rounded font-semibold">${attPct}%</span>
+                  </div>
+                  <div class="cc-slider-track" onmousedown="startSliderDrag(event, 'attention')">
+                    <div class="cc-scale-ticks"></div>
+                    <div class="cc-slider-fill" style="width: ${attPct}%;"></div>
+                    <div class="cc-slider-thumb" style="left: ${attPct}%;"></div>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      // 7. REMEMBERED DISPLAYS
+      if (state.activeRoute === 'remembered') {
+        titleEl.textContent = 'Bekannte Monitore';
+        subEl.textContent = 'Alle Bildschirme, die Pixel Pilot bereits kennengelernt hat';
+        actionsEl.innerHTML = '';
+
+        bodyEl.innerHTML = `
+          <div class="mac-group mac-divider">
+            ${state.rememberedDisplays.map(rem => `
+              <div class="p-3.5 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-2 h-2 warm-led" style="background: ${rem.connected ? '#10b981' : '#a8a29e'}; --led-color: ${rem.connected ? '#10b981' : 'transparent'};"></span>
+                  <div>
+                    <div class="text-xs font-semibold">${rem.name}</div>
+                    <div class="text-xs mac-text-secondary">${rem.detail}</div>
+                  </div>
+                </div>
+                <button onclick="openForgetDisplayModal('${rem.key}', '${rem.name}')" class="mac-btn-destructive">Vergessen…</button>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        return;
+      }
+
+      // 8. UPDATES
+      if (state.activeRoute === 'updates') {
+        titleEl.textContent = 'Updates';
+        subEl.textContent = 'Handwerkliche Weiterentwicklung ohne Hintergrund-Last';
+        actionsEl.innerHTML = '';
+
+        bodyEl.innerHTML = `
+          <div class="mac-group p-4 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-semibold">
+                ${state.updatePhase === 'upToDate' ? '✔︎ Auf dem neuesten Stand (v0.4.0)' :
+                  state.updatePhase === 'available' ? '✦ Pixel Pilot 0.4.0 „Warm Studio“ ist bereit' :
+                  state.updatePhase === 'downloading' ? 'Lade v0.4.0 herunter…' :
+                  '✔︎ Bereit zum Installieren'}
+              </div>
+              <div class="text-xs mac-text-secondary">Heute geprüft · 0,0 % Hintergrund-CPU</div>
+            </div>
+            <div>
+              ${state.updatePhase === 'available' ? `
+                <button onclick="state.updatePhase = 'downloading'; renderSettingsPage(); setTimeout(() => { state.updatePhase = 'ready'; renderSettingsPage(); }, 700);" class="mac-btn-primary">v0.4.0 laden</button>
+              ` : state.updatePhase === 'ready' ? `
+                <button onclick="showToast('Update v0.4.0 installiert'); state.updatePhase = 'upToDate'; renderSettingsPage();" class="mac-btn-primary">Installieren & Neustarten</button>
+              ` : `
+                <button onclick="state.updatePhase = 'available'; renderSettingsPage();" class="mac-btn">Jetzt prüfen</button>
+              `}
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      // 9. GENERAL
+      titleEl.textContent = 'Allgemein';
+      subEl.textContent = 'Warm Studio Paper, Dark Walnut & Tageszeit-Glas';
+      actionsEl.innerHTML = '';
+
+      bodyEl.innerHTML = `
+        <div class="mac-group mac-divider">
+          <div class="p-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-semibold">Erscheinungsbild</div>
+              <div class="text-xs mac-text-secondary">Warm Studio Paper (Hell) oder Dark Walnut (Dunkel)</div>
+            </div>
+            <div class="mac-segmented">
+              <button onclick="setAppearance('light')" class="mac-segment-btn ${state.appearance === 'light' ? 'active' : ''}">☀︎ Warm Paper</button>
+              <button onclick="setAppearance('dark')" class="mac-segment-btn ${state.appearance === 'dark' ? 'active' : ''}">🌙 Dark Walnut</button>
+            </div>
+          </div>
+
+          <div class="p-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-semibold">Liquid Glass Deckkraft</div>
+              <div class="text-xs mac-text-secondary">Steuert die Lichtdurchlässigkeit von Popover, HUD & Seitenleiste</div>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="range" min="55" max="98" value="${Math.round(state.glassOpacity * 100)}" oninput="updateGlassOpacity(this.value)" class="w-28 accent-amber-600" />
+              <span class="text-xs font-rounded font-semibold w-9">${Math.round(state.glassOpacity * 100)}%</span>
+            </div>
+          </div>
+
+          <div class="p-3.5 flex items-center justify-between">
+            <span class="text-xs font-medium">Beim Anmelden automatisch im Studio bereitstehen</span>
+            <div onclick="this.classList.toggle('on')" class="mac-switch on">
+              <div class="mac-switch-knob"></div>
+            </div>
+          </div>
+
+          <div class="p-3.5 flex items-center justify-between">
+            <span class="text-xs font-medium">Einführungstour</span>
+            <button onclick="switchWorkspaceView('onboarding')" class="mac-btn">Willkommens-Tour zeigen…</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // ---------------------------------------------------------------------------
+    // MODAL SHEETS (Native macOS Top-Down Sheets)
+    // ---------------------------------------------------------------------------
+    function openSheet(htmlContent) {
+      const backdrop = document.getElementById('SettingsModalBackdrop');
+      const content = document.getElementById('SettingsModalContent');
+      content.innerHTML = htmlContent;
+      backdrop.classList.remove('hidden');
+      backdrop.classList.add('flex');
+    }
+
+    function closeSheet() {
+      const backdrop = document.getElementById('SettingsModalBackdrop');
+      backdrop.classList.add('hidden');
+      backdrop.classList.remove('flex');
+      state.pendingLearnedKey = null;
+    }
+
+    let editingPresetTempSymbol = '☀︎';
+    function openPresetEditSheet(presetId) {
+      const p = state.presets.find(x => x.id === presetId);
+      if (!p) return;
+      editingPresetTempSymbol = p.icon;
+
+      openSheet(`
+        <h3 class="text-sm font-semibold">Licht-Szene bearbeiten</h3>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-medium mac-text-secondary">Name</label>
+          <input id="edit-preset-name" type="text" value="${p.name}" class="mac-input" />
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-medium mac-text-secondary">Symbol</label>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            ${SYMBOLS.map(sym => `
+              <button
+                onclick="editingPresetTempSymbol = '${sym}'; document.querySelectorAll('.sym-edit-btn').forEach(b => b.className='sym-edit-btn mac-btn'); this.className='sym-edit-btn mac-btn-primary';"
+                class="sym-edit-btn ${editingPresetTempSymbol === sym ? 'mac-btn-primary' : 'mac-btn'}"
+                style="padding: 4px 8px;"
+              >${sym}</button>
+            `).join('')}
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t" style="border-color: var(--mac-separator);">
+          <button onclick="closeSheet()" class="mac-btn">Abbrechen</button>
+          <button onclick="savePresetEdit('${p.id}')" class="mac-btn-primary">Sichern</button>
+        </div>
+      `);
+    }
+
+    function savePresetEdit(presetId) {
+      const p = state.presets.find(x => x.id === presetId);
+      const nameVal = document.getElementById('edit-preset-name')?.value?.trim();
+      if (p && nameVal) {
+        p.name = nameVal;
+        p.icon = editingPresetTempSymbol;
+      }
+      closeSheet();
+      renderAll();
+    }
+
+    function openKeyLearningSheet() {
+      switchWorkspaceView('settings');
+      openSettingsRoute('keys');
+      state.pendingLearnedKey = null;
+
+      openSheet(`
+        <h3 class="text-sm font-semibold">Taste anlernen</h3>
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium">Aktion für diese Taste</span>
+          <select id="teach-key-action" class="mac-select">
+            <option>Helligkeit +</option>
+            <option>Helligkeit −</option>
+            <option>Lautstärke +</option>
+            <option>Lautstärke −</option>
+            <option>Stummschalten</option>
+          </select>
+        </div>
+        <div id="teach-key-status-box" class="mac-subtle-box p-3.5 flex flex-col gap-1">
+          <div class="text-xs font-semibold" style="color: var(--mac-accent);">⌨️ Drücke jetzt die gewünschte Taste auf deiner Tastatur…</div>
+          <div class="text-xs mac-text-secondary">Pixel Pilot merkt sich die exakte USB-HID-Signatur deiner Tastatur.</div>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t" style="border-color: var(--mac-separator);">
+          <button onclick="closeSheet()" class="mac-btn">Abbrechen</button>
+          <button id="teach-key-confirm-btn" onclick="confirmLearnedKeyModal()" class="mac-btn-primary opacity-40 pointer-events-none">Taste übernehmen</button>
+        </div>
+      `);
+    }
+
+    function confirmLearnedKeyModal() {
+      const action = document.getElementById('teach-key-action')?.value || 'Helligkeit +';
+      if (state.pendingLearnedKey) {
+        state.learnedKeys.push({
+          id: 'lk_' + Date.now(),
+          action,
+          device: 'Custom USB Keyboard',
+          sig: state.pendingLearnedKey
+        });
+      }
+      closeSheet();
+      renderSettingsPage();
+    }
+
+    function openRepairSheetModal(displayId) {
+      switchWorkspaceView('settings');
+      openSettingsRoute('display:' + (displayId || 'lg5k'));
+
+      const hasMarks = state.pixelMarks.length > 0;
+      openSheet(`
+        <h3 class="text-sm font-semibold">Träge Subpixel sanft reaktivieren</h3>
+        <div class="mac-subtle-box p-3 text-xs leading-relaxed">
+          <b>⚠️ Hinweis bei Lichtempfindlichkeit:</b> Dieser Modus wechselt rasch die Primärfarben im markierten Bereich. Er zählt 3 Sekunden herunter und lässt sich jederzeit mit <b>Esc</b> beenden.
+        </div>
+        <div class="mac-group mac-divider text-xs">
+          <div class="p-3 flex items-center justify-between">
+            <div>
+              <div class="font-semibold">${hasMarks && !state.repairScopeWholeScreen ? `${state.pixelMarks.length} markierter Bereich` : 'Gesamte Bildschirmfläche'}</div>
+              <div class="mac-text-secondary">${hasMarks && !state.repairScopeWholeScreen ? 'Nur die markierte Stelle arbeitet, der Rest bleibt ruhig.' : 'Massiert das gesamte Panel.'}</div>
+            </div>
+            <button onclick="state.repairScopeWholeScreen = !state.repairScopeWholeScreen; openRepairSheetModal('${displayId}');" class="mac-btn">
+              ${state.repairScopeWholeScreen ? 'Nur Markierung' : 'Ganzes Panel'}
+            </button>
+          </div>
+          <div class="p-3 flex items-center justify-between">
+            <span class="font-medium">Intensität</span>
+            <div class="mac-segmented">
+              ${['Sanft', 'Standard', 'Intensiv'].map(int => `
+                <button onclick="state.repairIntensity = '${int}'; openRepairSheetModal('${displayId}');" class="mac-segment-btn ${state.repairIntensity === int ? 'active' : ''}">${int}</button>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t" style="border-color: var(--mac-separator);">
+          <button onclick="closeSheet()" class="mac-btn">Abbrechen</button>
+          <button onclick="closeSheet(); startPixelRepairOverlay();" class="mac-btn-primary">Starten</button>
+        </div>
+      `);
+    }
+
+    function openChooseApplicationModal() {
+      const sampleApps = [
+        { name: 'Lightroom Classic', bundle: 'com.adobe.LightroomClassicCC7', icon: '📸' },
+        { name: 'Logic Pro', bundle: 'com.apple.logic10', icon: '🎹' },
+        { name: 'Figma', bundle: 'com.figma.Desktop', icon: '🎨' }
+      ];
+      openSheet(`
+        <h3 class="text-sm font-semibold">Programm auswählen</h3>
+        <div class="mac-group mac-divider">
+          ${sampleApps.map(a => `
+            <div class="p-3 flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <span class="text-base">${a.icon}</span>
+                <div>
+                  <div class="text-xs font-semibold">${a.name}</div>
+                  <div class="text-xs mac-text-secondary font-mono">${a.bundle}</div>
+                </div>
+              </div>
+              <button onclick="addAppRule('${a.name}', '${a.bundle}', '${a.icon}'); closeSheet();" class="mac-btn-primary">Auswählen</button>
+            </div>
+          `).join('')}
+        </div>
+        <div class="flex justify-end">
+          <button onclick="closeSheet()" class="mac-btn">Abbrechen</button>
+        </div>
+      `);
+    }
+
+    function openForgetDisplayModal(key, name) {
+      openSheet(`
+        <h3 class="text-sm font-semibold">„${name}“ vergessen?</h3>
+        <p class="text-xs mac-text-secondary leading-relaxed">
+          Seine Kennfarbe, DDC-Profile und Kalibrierung werden entfernt. Beim nächsten Anschließen begrüßt Pixel Pilot ihn wieder wie neu.
+        </p>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button onclick="closeSheet()" class="mac-btn">Behalten</button>
+          <button onclick="state.rememberedDisplays = state.rememberedDisplays.filter(d => d.key !== '${key}'); closeSheet(); renderAll();" class="mac-btn-destructive">Vergessen</button>
+        </div>
+      `);
+    }
+
+    // ---------------------------------------------------------------------------
+    // TEST PATTERNS & PIXEL REPAIR OVERLAYS
+    // ---------------------------------------------------------------------------
+    function openTestPatternOverlay(guided) {
+      state.testPatternGuided = guided;
+      state.testPatternIndex = 0;
+      state.testPatternVerdicts = {};
+      document.getElementById('HealthSummaryModal').classList.add('hidden');
+      document.getElementById('HealthSummaryModal').classList.remove('flex');
+      document.getElementById('TestPatternOverlay').classList.remove('hidden');
+      renderTestPattern();
+    }
+
+    function closeTestPatternOverlay() {
+      document.getElementById('TestPatternOverlay').classList.add('hidden');
+    }
+
+    function toggleTestPatternPlate(hide) {
+      document.getElementById('TestPatternPlate').classList.toggle('hidden', hide);
+      document.getElementById('TestPatternShowChip').classList.toggle('hidden', !hide);
+    }
+
+    function stepTestPattern(delta) {
+      const next = state.testPatternIndex + delta;
+      if (next >= TEST_PATTERNS.length) {
+        if (state.testPatternGuided) {
+          showHealthSummaryModal();
+          return;
+        }
+        state.testPatternIndex = 0;
+      } else if (next < 0) {
+        state.testPatternIndex = 0;
+      } else {
+        state.testPatternIndex = next;
+      }
+      renderTestPattern();
+    }
+
+    function recordPatternVerdict(verdict) {
+      const pat = TEST_PATTERNS[state.testPatternIndex];
+      state.testPatternVerdicts[pat.id] = verdict;
+      stepTestPattern(1);
+    }
+
+    function showHealthSummaryModal() {
+      const modal = document.getElementById('HealthSummaryModal');
+      const rows = document.getElementById('hs-rows');
+      const problemCount = Object.values(state.testPatternVerdicts).filter(v => v === 'problem').length;
+
+      document.getElementById('hs-verdict-title').textContent =
+        problemCount === 0 ? '✦ Dein Panel ist in Bestform' : `⚠️ ${problemCount} Auffälligkeit(en) vermerkt`;
+      rows.innerHTML = TEST_PATTERNS.map(p => {
+        const v = state.testPatternVerdicts[p.id] || 'looksRight';
+        return `
+          <div class="p-2.5 px-3.5 flex items-center justify-between text-xs">
+            <span class="font-medium">${p.title}</span>
+            <span class="mac-text-secondary">${v === 'problem' ? '⚠️ Vermerkt' : '✔︎ Einwandfrei'}</span>
+          </div>
+        `;
+      }).join('');
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function renderTestPattern() {
+      const pat = TEST_PATTERNS[state.testPatternIndex];
+      const canvas = document.getElementById('TestPatternCanvas');
+      canvas.className = 'w-full h-full relative cursor-crosshair';
+      if (pat.bg === 'checkerboard') {
+        canvas.style.background = '';
+        canvas.classList.add('pattern-checkerboard');
+      } else {
+        canvas.style.background = pat.bg;
+      }
+
+      document.getElementById('tp-step-counter').textContent =
+        state.testPatternGuided
+          ? `Schritt ${state.testPatternIndex + 1} von ${TEST_PATTERNS.length}`
+          : `Muster ${state.testPatternIndex + 1} von ${TEST_PATTERNS.length}`;
+      document.getElementById('tp-title').textContent = pat.title;
+      document.getElementById('tp-purpose').textContent = pat.purpose;
+      document.getElementById('tp-marks-badge').textContent =
+        state.pixelMarks.length === 0
+          ? 'Keine Stelle markiert'
+          : `Markiert auf diesem Monitor: ${state.pixelMarks.length} Bereich`;
+
+      const guidedEl = document.getElementById('tp-guided-actions');
+      guidedEl.classList.toggle('hidden', !state.testPatternGuided);
+      guidedEl.classList.toggle('flex', state.testPatternGuided);
+
+      renderPixelMarkers();
+    }
+
+    function renderPixelMarkers(draftRect) {
+      const layer = document.getElementById('PixelMarkersLayer');
+      const pat = TEST_PATTERNS[state.testPatternIndex];
+      const borderColor = pat.ink === 'dark' ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)';
+
+      let html = state.pixelMarks.map((m, idx) => `
+        <div
+          style="left:${m.x * 100}%; top:${m.y * 100}%; width:${m.w * 100}%; height:${m.h * 100}%; border: 1.5px dashed ${borderColor};"
+          class="absolute flex items-start justify-end p-1"
+        >
+          <span class="px-1.5 py-0.2 rounded bg-black/70 text-white text-xs font-mono">#${idx + 1}</span>
+        </div>
+      `).join('');
+
+      if (draftRect) {
+        html += `<div style="left:${draftRect.x * 100}%; top:${draftRect.y * 100}%; width:${draftRect.w * 100}%; height:${draftRect.h * 100}%; border: 1.5px solid #d96b1f; background: rgba(217,107,31,0.15);" class="absolute"></div>`;
+      }
+      layer.innerHTML = html;
+    }
+
+    function startPatternSurfaceGesture(event) {
+      if (event.target.closest('#TestPatternPlate') || event.target.closest('#TestPatternShowChip')) return;
+      const surface = document.getElementById('TestPatternCanvas');
+      const rect = surface.getBoundingClientRect();
+      const startX = event.clientX;
+      const startY = event.clientY;
+      let dragged = false;
+
+      const onMove = (e) => {
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (Math.hypot(dx, dy) > 6) {
+          dragged = true;
+          renderPixelMarkers({
+            x: Math.min(startX, e.clientX) / rect.width,
+            y: Math.min(startY, e.clientY) / rect.height,
+            w: Math.abs(dx) / rect.width,
+            h: Math.abs(dy) / rect.height
+          });
+        }
+      };
+
+      const onUp = (e) => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        if (dragged) {
+          state.pixelMarks.push({
+            x: Math.min(startX, e.clientX) / rect.width,
+            y: Math.min(startY, e.clientY) / rect.height,
+            w: Math.max(0.03, Math.abs(e.clientX - startX) / rect.width),
+            h: Math.max(0.04, Math.abs(e.clientY - startY) / rect.height),
+            kind: 'stuck'
+          });
+          renderTestPattern();
+          renderSettingsPage();
+        } else {
+          stepTestPattern(1);
+        }
+      };
+
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    }
+
+    let repairAnimId = null;
+    let repairCountdownTimer = null;
+
+    function startPixelRepairOverlay() {
+      const ov = document.getElementById('RepairExerciserOverlay');
+      const cdEl = document.getElementById('RepairCountdownLabel');
+      const bracketsEl = document.getElementById('RepairCropBrackets');
+      ov.classList.remove('hidden');
+
+      const useMarks = !state.repairScopeWholeScreen && state.pixelMarks.length > 0;
+      bracketsEl.innerHTML = useMarks ? state.pixelMarks.map(m => `
+        <div style="left:${m.x * 100}%; top:${m.y * 100}%; width:${m.w * 100}%; height:${m.h * 100}%; border: 1.5px solid rgba(255,255,255,0.65);" class="absolute"></div>
+      `).join('') : '';
+
+      let count = 3;
+      cdEl.textContent = count;
+      cdEl.style.display = 'flex';
+
+      const canvas = document.getElementById('RepairNoiseCanvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 240;
+      canvas.height = 135;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      clearInterval(repairCountdownTimer);
+      repairCountdownTimer = setInterval(() => {
+        count--;
+        if (count > 0) {
+          cdEl.textContent = count;
+        } else {
+          clearInterval(repairCountdownTimer);
+          cdEl.style.display = 'none';
+          const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffffff', '#000000'];
+          let tick = 0;
+          const draw = () => {
+            tick++;
+            if (useMarks) {
+              ctx.fillStyle = '#08080a';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              state.pixelMarks.forEach((m, idx) => {
+                ctx.fillStyle = colors[(tick + idx * 3) % colors.length];
+                ctx.fillRect(m.x * canvas.width, m.y * canvas.height, m.w * canvas.width, m.h * canvas.height);
+              });
+            } else {
+              const img = ctx.createImageData(canvas.width, canvas.height);
+              for (let i = 0; i < img.data.length; i += 4) {
+                img.data[i] = Math.random() > 0.5 ? 255 : 0;
+                img.data[i + 1] = Math.random() > 0.5 ? 255 : 0;
+                img.data[i + 2] = Math.random() > 0.5 ? 255 : 0;
+                img.data[i + 3] = 255;
+              }
+              ctx.putImageData(img, 0, 0);
+            }
+            repairAnimId = requestAnimationFrame(draw);
+          };
+          draw();
+        }
+      }, 700);
+    }
+
+    function stopPixelRepairOverlay() {
+      clearInterval(repairCountdownTimer);
+      if (repairAnimId) cancelAnimationFrame(repairAnimId);
+      document.getElementById('RepairExerciserOverlay').classList.add('hidden');
+    }
+
+    // ---------------------------------------------------------------------------
+    // KEYBOARD LISTENER
+    // ---------------------------------------------------------------------------
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        if (state.recordingShortcutId) {
+          state.recordingShortcutId = null;
+          renderSettingsPage();
+          return;
+        }
+        closeTestPatternOverlay();
+        stopPixelRepairOverlay();
+        hideIdentifyOverlay();
+        closeSheet();
+        return;
+      }
+
+      if (state.recordingShortcutId) {
+        event.preventDefault();
+        if (event.key === 'Backspace' || event.key === 'Delete') {
+          setShortcutCombo(state.recordingShortcutId, '');
+          state.recordingShortcutId = null;
+          renderSettingsPage();
+          return;
+        }
+        if (['Meta', 'Control', 'Alt', 'Shift'].includes(event.key)) return;
+        const parts = [];
+        if (event.ctrlKey) parts.push('⌃');
+        if (event.altKey) parts.push('⌥');
+        if (event.shiftKey) parts.push('⇧');
+        if (event.metaKey) parts.push('⌘');
+        if (parts.length === 0) parts.push('⌥ ⌘');
+        parts.push(event.key.length === 1 ? event.key.toUpperCase() : event.key);
+        setShortcutCombo(state.recordingShortcutId, parts.join(' '));
+        state.recordingShortcutId = null;
+        renderSettingsPage();
+        return;
+      }
+
+      const teachBox = document.getElementById('teach-key-status-box');
+      if (teachBox && !document.getElementById('SettingsModalBackdrop').classList.contains('hidden')) {
+        event.preventDefault();
+        const codeHex = '0x' + (event.keyCode || 112).toString(16).toUpperCase();
+        state.pendingLearnedKey = `Page 0xFF00 · Usage ${codeHex} (${event.key})`;
+        teachBox.innerHTML = `
+          <div class="text-xs font-semibold text-emerald-600">✔︎ Taste erkannt</div>
+          <div class="text-xs font-mono mac-text-secondary">Custom USB Keyboard — ${state.pendingLearnedKey}</div>
+        `;
+        document.getElementById('teach-key-confirm-btn')?.classList.remove('opacity-40', 'pointer-events-none');
+      }
+    });
+
+    function toggleShortcutRecording(scId) {
+      state.recordingShortcutId = state.recordingShortcutId === scId ? null : scId;
+      renderSettingsPage();
+    }
+
+    function clearShortcut(event, scId) {
+      event.stopPropagation();
+      setShortcutCombo(scId, '');
+      renderSettingsPage();
+    }
+
+    function setShortcutCombo(scId, combo) {
+      const sc = state.shortcuts.find(x => x.id === scId);
+      if (sc) sc.combo = combo;
+    }
+
+    // ---------------------------------------------------------------------------
+    // HELPERS & ONBOARDING
+    // ---------------------------------------------------------------------------
+    function captureNewPresetFromPage() {
+      const input = document.getElementById('new-preset-name-input');
+      const name = input?.value?.trim() || 'Eigene Stimmung';
+      const targets = {};
+      state.displays.forEach(d => {
+        targets[d.id] = {
+          brightness: d.brightness,
+          contrast: d.contrast,
+          volume: d.volume,
+          kelvin: d.warmthEnabled ? `${d.kelvin} K` : 'Neutral',
+          finish: d.finish
+        };
+      });
+      state.presets.push({
+        id: 'p_' + Date.now(),
+        name,
+        subtitle: 'Persönliche Szene',
+        icon: state.newPresetSymbol,
+        gradient: 'linear-gradient(135deg, rgba(217,107,31,0.20) 0%, rgba(180,83,9,0.08) 100%)',
+        targets
+      });
+      renderAll();
+    }
+
+    function recapturePreset(presetId) {
+      const p = state.presets.find(x => x.id === presetId);
+      if (!p) return;
+      state.displays.forEach(d => {
+        p.targets[d.id] = {
+          brightness: d.brightness,
+          contrast: d.contrast,
+          volume: d.volume,
+          kelvin: d.warmthEnabled ? `${d.kelvin} K` : 'Neutral',
+          finish: d.finish
+        };
+      });
+      showToast(`„${p.name}“ aktualisiert`);
+      renderAll();
+    }
+
+    function deletePreset(presetId) {
+      state.presets = state.presets.filter(p => p.id !== presetId);
+      renderAll();
+    }
+
+    function addAppRule(appName, bundleId, icon) {
+      state.appRules.push({ id: 'r_' + Date.now(), appName, bundleId, icon, presetId: state.presets[0]?.id || 'daylight' });
+      renderSettingsPage();
+    }
+
+    function updateAppRulePreset(ruleId, presetId) {
+      const r = state.appRules.find(x => x.id === ruleId);
+      if (r) r.presetId = presetId;
+    }
+
+    function deleteAppRule(ruleId) {
+      state.appRules = state.appRules.filter(r => r.id !== ruleId);
+      renderSettingsPage();
+    }
+
+    function simulateAppDropOnStatusIcon() {
+      addAppRule('Adobe Photoshop 2026', 'com.adobe.Photoshop', '🖼️');
+      switchWorkspaceView('settings');
+      openSettingsRoute('apps');
+      showOSD('App-Begleiter aktiv', 1.0, 'Photoshop → Atelier-Tag', '#9333ea', '🧩', 'Verknüpft');
+    }
+
+    function d_setStrategy(id, st) {
+      const d = state.displays.find(x => x.id === id);
+      if (d) { d.strategy = st; renderSettingsPage(); }
+    }
+
+    function renderOnboarding() {
+      const steps = [
+        {
+          title: 'Willkommen im Studio',
+          sub: 'Schritt 1 von 4 — Warmes Licht & volle Kontrolle für deine Monitore',
+          html: `
+            <div class="flex items-center gap-5 py-3">
+              <div class="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-inner"
+                   style="background: linear-gradient(135deg, rgba(251,191,36,0.25), rgba(217,107,31,0.12)); border: 1px solid var(--mac-separator);">☀️</div>
+              <div class="flex-1 flex flex-col gap-1.5">
+                <div class="text-sm font-semibold">Dein Schreibtisch verdient mehr als kaltes Standard-Licht.</div>
+                <div class="text-xs mac-text-secondary leading-relaxed">
+                  Pixel Pilot verbindet deine externen Monitore nahtlos mit den Medientasten deines Macs, bringt warmes Atelier-Licht & Papier-Kontrast auf jedes Display und benötigt im Ruhezustand exakt 0,0 % CPU.
+                </div>
+              </div>
+            </div>
+          `
+        },
+        {
+          title: 'Zwei kurze Freigaben',
+          sub: 'Schritt 2 von 4 — Damit deine Helligkeits- und Lautstärketasten sofort reagieren',
+          html: `
+            <div class="mac-group mac-divider my-2">
+              <div class="p-3.5 flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-semibold">✔︎ Bedienungshilfen</div>
+                  <div class="text-xs mac-text-secondary">Leitet die Helligkeits- und Lautstärketasten an Pixel Pilot weiter</div>
+                </div>
+                <span class="mac-subtle-box px-2 py-0.5 text-xs font-medium text-emerald-700">Verbunden</span>
+              </div>
+              <div class="p-3.5 flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-semibold">⌨️ Eingabeüberwachung (Optional)</div>
+                  <div class="text-xs mac-text-secondary">Für externe mechanische Tastaturen (z. B. Keychron)</div>
+                </div>
+                <button onclick="this.textContent='Aktiviert ✔︎';" class="mac-btn">Freigeben…</button>
+              </div>
+            </div>
+          `
+        },
+        {
+          title: 'Deine erkannten Monitore',
+          sub: 'Schritt 3 von 4 — Jeder Monitor trägt seine eigene warme Leuchtdiode',
+          html: `
+            <div class="mac-group mac-divider my-2">
+              ${state.displays.map(d => `
+                <div class="p-3.5 flex items-center justify-between">
+                  <div class="flex items-center gap-2.5">
+                    <span class="w-2.5 h-2.5 warm-led" style="background:${d.accentHex}; --led-color:${d.accentHex};"></span>
+                    <div>
+                      <div class="text-xs font-semibold">${d.name}</div>
+                      <div class="text-xs mac-text-secondary">${d.spec} · ${d.route}</div>
+                    </div>
+                  </div>
+                  <span class="text-xs font-rounded font-semibold">${Math.round(d.brightness * 100)}%</span>
+                </div>
+              `).join('')}
+            </div>
+          `
+        },
+        {
+          title: 'Deine erste Licht-Szene',
+          sub: 'Schritt 4 von 4 — Halte deine aktuelle Wohlfühl-Einstellung fest',
+          html: `
+            <div class="mac-group p-4 flex flex-col gap-3 my-2">
+              <div class="text-xs mac-text-secondary">Stelle deine Monitore so ein, wie sie sich für deine Augen am besten anfühlen, und gib der Stimmung einen Namen:</div>
+              <div class="flex items-center gap-2">
+                <input type="text" placeholder="z. B. Mein Atelier-Licht" class="mac-input flex-1" />
+                <button onclick="showToast('Licht-Szene gespeichert')" class="mac-btn-primary">Speichern</button>
+              </div>
+            </div>
+          `
+        }
+      ];
+
+      const cur = steps[state.onboardingStep];
+      document.getElementById('onboarding-title').textContent = cur.title;
+      document.getElementById('onboarding-subtitle').textContent = cur.sub;
+      document.getElementById('onboarding-step-body').innerHTML = cur.html;
+
+      document.getElementById('onboarding-dots').innerHTML = steps.map((_, i) => `
+        <div class="h-1.5 rounded-full transition-all duration-200" style="width: ${i === state.onboardingStep ? '20px' : '6px'}; background: ${i <= state.onboardingStep ? 'var(--mac-accent)' : 'var(--mac-separator)'};"></div>
+      `).join('');
+
+      document.getElementById('onboarding-prev-btn').style.visibility = state.onboardingStep === 0 ? 'hidden' : 'visible';
+      document.getElementById('onboarding-next-btn').textContent = state.onboardingStep === steps.length - 1 ? 'Studio betreten' : 'Weiter';
+    }
+
+    function startSliderDrag(event, targetKey) {
+      event.preventDefault();
+      const track = event.currentTarget;
+      track.classList.add('dragging');
+
+      const updateFromEvent = (e) => {
+        const rect = track.getBoundingClientRect();
+        let val = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+
+        // Magnetic micro-snap near 25%, 50%, 75%
+        [0.25, 0.50, 0.75].forEach(det => {
+          if (Math.abs(val - det) < 0.012) val = det;
+        });
+
+        if (targetKey === 'master' || targetKey === 'osd') {
+          const delta = val - state.masterBrightness;
+          state.masterBrightness = val;
+          if (state.syncBrightness) {
+            state.displays.forEach(d => { d.brightness = Math.min(1, Math.max(0, d.brightness + delta)); });
+          }
+          showOSD('Helligkeit', val, 'Alle Monitore', '#d96b1f', '☀︎');
+        } else if (targetKey === 'sysvol') {
+          state.systemVolume = val;
+          showOSD('Studio-Ton', val, 'MacBook Pro Lautsprecher', '#d96b1f', val === 0 ? '🔇' : '🔊');
+        } else if (targetKey === 'attention') {
+          state.attentionAmount = Math.min(0.70, Math.max(0.10, val));
+        } else if (targetKey.startsWith('display:')) {
+          const d = state.displays.find(x => x.id === targetKey.split(':')[1]);
+          if (d) { d.brightness = val; showOSD('Helligkeit', val, d.name, d.accentHex, '☀︎'); }
+        } else if (targetKey.startsWith('vol:')) {
+          const d = state.displays.find(x => x.id === targetKey.split(':')[1]);
+          if (d) { d.volume = val; d.muted = val <= 0.01; showOSD('Lautstärke', val, d.name, d.accentHex, d.muted ? '🔇' : '🔊'); }
+        } else if (targetKey.startsWith('contrast:')) {
+          const d = state.displays.find(x => x.id === targetKey.split(':')[1]);
+          if (d) { d.contrast = val; showOSD('Kontrast', val, d.name, d.accentHex, '◐'); }
+        } else if (targetKey.startsWith('kelvin:')) {
+          const d = state.displays.find(x => x.id === targetKey.split(':')[1]);
+          if (d) {
+            d.kelvin = Math.round((2700 + val * (6500 - 2700)) / 50) * 50;
+            showOSD('Farbwärme', val, d.name, '#ea580c', '🌡️', `${d.kelvin} K`);
+          }
+        }
+        renderAll();
+      };
+
+      updateFromEvent(event);
+      const onMove = (e) => updateFromEvent(e);
+      const onUp = () => {
+        track.classList.remove('dragging');
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    }
+
+    function startMapTileDrag(event, displayId) {
+      const d = state.displays.find(x => x.id === displayId);
+      if (!d) return;
+      const startY = event.clientY;
+      const startB = d.brightness;
+
+      const onMove = (e) => {
+        const dy = startY - e.clientY;
+        if (Math.abs(dy) > 3) {
+          d.brightness = Math.min(1, Math.max(0, startB + dy / 120));
+          showOSD('Helligkeit', d.brightness, d.name, d.accentHex, '☀︎');
+          renderAll();
+        }
+      };
+      const onUp = () => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    }
+
+    function showOSD(title, fraction, displayName, dotHex, icon, customReadout) {
+      const pill = document.getElementById('OSDPill');
+      pill.classList.remove('osd-hidden');
+      document.getElementById('osd-title').textContent = title;
+      document.getElementById('osd-display-name').textContent = displayName;
+      const dot = document.getElementById('osd-dot');
+      dot.style.background = dotHex;
+      dot.style.setProperty('--led-color', dotHex);
+      document.getElementById('osd-icon').textContent = icon;
+      const pct = Math.round(fraction * 100) + '%';
+      document.getElementById('osd-readout').textContent = customReadout || pct;
+      document.getElementById('fill-osd').style.width = pct;
+      document.getElementById('thumb-osd').style.left = pct;
+    }
+
+    let osdDemoIdx = 0;
+    function cycleOSDDemo() {
+      const demos = [
+        () => showOSD('Helligkeit', 0.82, 'LG UltraFine 5K', '#f43f5e', '☀︎'),
+        () => showOSD('Farbwärme', 0.48, 'LG UltraFine 5K', '#ea580c', '🌡️', '4600 K'),
+        () => showOSD('Lautstärke', 0.65, 'LG UltraFine 5K', '#f43f5e', '🔊'),
+        () => showOSD('Licht-Szene aktiv', 1.0, 'Alle Monitore', '#10b981', '🎬', 'Kinoabend')
+      ];
+      demos[osdDemoIdx % demos.length]();
+      osdDemoIdx++;
+    }
+
+    function toggleMenuBarPanel() {
+      state.menuBarOpen = !state.menuBarOpen;
+      document.getElementById('MenuBarPanelContainer').classList.toggle('popover-hidden', !state.menuBarOpen);
+    }
+
+    function handleStatusIconScroll(event) {
+      event.preventDefault();
+      const delta = -event.deltaY * 0.0015;
+      state.masterBrightness = Math.min(1, Math.max(0, state.masterBrightness + delta));
+      state.displays.forEach(d => { d.brightness = Math.min(1, Math.max(0, d.brightness + delta)); });
+      showOSD('Helligkeit', state.masterBrightness, 'Alle Monitore', '#d96b1f', '☀︎');
+      renderAll();
+    }
+
+    function toggleSyncBrightness() {
+      state.syncBrightness = !state.syncBrightness;
+      renderMenuBarPanel();
+    }
+
+    function setPresetPreview(presetId) {
+      state.previewPresetId = presetId;
+      renderMenuBarPanel();
+    }
+
+    function applyPreset(presetId) {
+      const p = state.presets.find(x => x.id === presetId);
+      if (!p) return;
+      state.displays.forEach(d => {
+        const t = p.targets[d.id];
+        if (t) {
+          d.brightness = t.brightness;
+          if (t.finish) d.finish = t.finish;
+          if (t.kelvin && t.kelvin.includes('K')) {
+            d.warmthEnabled = true;
+            d.kelvin = parseInt(t.kelvin, 10) || 5200;
+          }
+        }
+      });
+      state.previewPresetId = null;
+      showOSD('Licht-Szene aktiv', 1.0, 'Alle Monitore', p.accent || '#d96b1f', p.icon, p.name);
+      renderAll();
+    }
+
+    function toggleDisplayMute(id) {
+      const d = state.displays.find(x => x.id === id);
+      if (!d) return;
+      d.muted = !d.muted;
+      showOSD(d.muted ? 'Stumm' : 'Ton aktiv', d.muted ? 0 : d.volume, d.name, d.accentHex, d.muted ? '🔇' : '🔊');
+      renderAll();
+    }
+
+    function toggleDisplayWarmth(id) {
+      const d = state.displays.find(x => x.id === id);
+      if (d) { d.warmthEnabled = !d.warmthEnabled; renderAll(); }
+    }
+
+    function setDisplayFinish(id, finish) {
+      const d = state.displays.find(x => x.id === id);
+      if (d) { d.finish = finish; renderAll(); }
+    }
+
+    function toggleFollowBuiltin(id) {
+      const d = state.displays.find(x => x.id === id);
+      if (d) { d.followsBuiltin = !d.followsBuiltin; renderAll(); }
+    }
+
+    function setDisplayAccent(id, hex) {
+      const d = state.displays.find(x => x.id === id);
+      if (d) { d.accentHex = hex; renderAll(); }
+    }
+
+    function promptExactValue(target) {
+      const input = prompt('Exakte Helligkeit in Prozent eingeben (0 - 100):', '75');
+      if (input === null) return;
+      const num = Math.min(100, Math.max(0, parseInt(input, 10) || 0)) / 100;
+      if (target === 'master') {
+        state.masterBrightness = num;
+        state.displays.forEach(d => d.brightness = num);
+      } else {
+        const d = state.displays.find(x => x.id === target);
+        if (d) d.brightness = num;
+      }
+      renderAll();
+    }
+
+    function openSettingsRoute(route) {
+      state.activeRoute = route;
+      closeSheet();
+      renderSidebar();
+      renderSettingsPage();
+    }
+
+    function scrubDayArc(event) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      state.scheduleScrubFraction = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+      renderSettingsPage();
+    }
+
+    function addScheduleStop() {
+      state.scheduleStops.push({ id: 's' + Date.now(), label: 'Nachmittag', fraction: 0.64, brightness: 0.74, kelvin: 5200 });
+      renderSettingsPage();
+    }
+
+    function stepOnboarding(dir) {
+      state.onboardingStep = Math.min(3, Math.max(0, state.onboardingStep + dir));
+      renderOnboarding();
+    }
+
+    function updateGlassOpacity(val) {
+      state.glassOpacity = val / 100;
+      document.documentElement.style.setProperty('--glass-alpha', state.glassOpacity);
+      document.getElementById('glass-opacity-label').textContent = val + '%';
+    }
+
+    function setAppearance(mode) {
+      state.appearance = mode;
+      document.documentElement.setAttribute('data-theme', mode);
+      document.getElementById('btn-dark').classList.toggle('active', mode === 'dark');
+      document.getElementById('btn-light').classList.toggle('active', mode === 'light');
+      renderSettingsPage();
+    }
+
+    function setAmbientMood(mood) {
+      state.ambientMood = mood;
+      ['morning', 'afternoon', 'evening'].forEach(m => {
+        document.getElementById('mood-' + m)?.classList.toggle('active', m === mood);
+      });
+      const tintMap = {
+        morning: 'rgba(56, 189, 248, 0.055)',
+        afternoon: 'rgba(245, 158, 11, 0.06)',
+        evening: 'rgba(234, 88, 12, 0.08)'
+      };
+      document.documentElement.style.setProperty('--ambient-tint', tintMap[mood]);
+      renderMenuBarPanel();
+    }
+
+    function triggerIdentifyOverlay() {
+      const el = document.getElementById('IdentifyOverlay');
+      el.classList.remove('hidden');
+      el.classList.add('flex');
+      setTimeout(hideIdentifyOverlay, 2200);
+    }
+
+    function hideIdentifyOverlay() {
+      const el = document.getElementById('IdentifyOverlay');
+      el.classList.add('hidden');
+      el.classList.remove('flex');
+    }
+
+    function switchWorkspaceView(view) {
+      ['all', 'menubar', 'settings', 'onboarding', 'compare'].forEach(t => {
+        document.getElementById('tab-' + t)?.classList.toggle('active', t === view);
+      });
+
+      document.getElementById('MenuBarPanelContainer').classList.toggle('popover-hidden', !(view === 'all' || view === 'menubar'));
+      document.getElementById('SettingsWindowSection').classList.toggle('hidden', !(view === 'all' || view === 'settings'));
+      document.getElementById('OnboardingWindowSection').classList.toggle('hidden', view !== 'onboarding');
+      document.getElementById('CompareSection').classList.toggle('hidden', view !== 'compare');
+    }
+
+    function showToast(msg) {
+      showOSD('Pixel Pilot', 1.0, msg, '#d96b1f', '✦', 'Bereit');
+    }
+
+    function renderAll() {
+      renderMenuBarPanel();
+      renderSidebar();
+      renderSettingsPage();
+      renderOnboarding();
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>
