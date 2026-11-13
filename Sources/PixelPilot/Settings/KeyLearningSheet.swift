@@ -12,12 +12,18 @@ struct KeyLearningSheet: View {
   @Binding var isPresented: Bool
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
   @State private var action: MediaKeyAction = .brightnessUp
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.normal) {
-      Text("Teach a key")
-        .font(TypeScale.sheetTitle)
+      VStack(alignment: .leading, spacing: 2) {
+        Text("Teach a key")
+          .font(TypeScale.sheetTitle)
+        Text("Lerne eine Sondertaste deiner Tastatur direkt über den HID-Kanal an.")
+          .font(TypeScale.editorialAccent)
+          .foregroundStyle(.secondary)
+      }
 
       ControlRow(title: "This key should") {
         MorphMenuPicker(title: action.displayName) {
@@ -49,6 +55,7 @@ struct KeyLearningSheet: View {
           model.cancelLearningKey()
           isPresented = false
         }
+        .buttonStyle(.soft)
         .keyboardShortcut(.cancelAction)
 
         Spacer()
@@ -58,21 +65,23 @@ struct KeyLearningSheet: View {
             model.confirmLearnedKey(as: action)
             isPresented = false
           }
+          .buttonStyle(SoftButtonStyle(isProminent: true))
           .keyboardShortcut(.defaultAction)
           .disabled(!verdict(for: press).isAllowed)
         }
       }
     }
     .padding(Layout.loose)
-    .frame(width: 440, height: 320)
-    // A sheet is a container, not a card, so it takes the container radius —
-    // that is what makes the scale read as a hierarchy rather than as four
-    // numbers that happen to be near each other.
+    .frame(width: 440, height: 332)
     .background {
-      RoundedRectangle(cornerRadius: Layout.radiusPanel, style: .continuous)
-        .fill(.background)
+      RoundedRectangle(cornerRadius: Layout.radiusWindow, style: .continuous)
+        .fill(theme.surface)
     }
-    .clipShape(RoundedRectangle(cornerRadius: Layout.radiusPanel, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: Layout.radiusWindow, style: .continuous)
+        .strokeBorder(theme.specularRim, lineWidth: 1)
+    }
+    .clipShape(RoundedRectangle(cornerRadius: Layout.radiusWindow, style: .continuous))
     .onAppear { model.beginLearningKey() }
     .onDisappear { model.cancelLearningKey() }
   }

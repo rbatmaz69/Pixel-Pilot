@@ -17,6 +17,8 @@ struct RepairSheet: View {
   let display: DisplayViewModel
   @Binding var isPresented: Bool
 
+  @Environment(\.theme) private var theme
+
   @State private var style: RepairPlan.Style = .noise
   @State private var intensity: RepairPlan.Intensity = .standard
   @State private var duration: RepairPlan.Duration = .tenMinutes
@@ -36,8 +38,13 @@ struct RepairSheet: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.normal) {
-      Text("Reanimate stuck pixels")
-        .font(TypeScale.sheetTitle)
+      VStack(alignment: .leading, spacing: 2) {
+        Text("Reanimate stuck pixels")
+          .font(TypeScale.sheetTitle)
+        Text("Gezieltes Subpixel-Training für träge Flüssigkristalle auf \(display.name).")
+          .font(TypeScale.editorialAccent)
+          .foregroundStyle(.secondary)
+      }
 
       warning
 
@@ -127,6 +134,7 @@ struct RepairSheet: View {
 
       HStack {
         Button("Cancel", role: .cancel) { isPresented = false }
+          .buttonStyle(.soft)
           .keyboardShortcut(.cancelAction)
         Spacer()
         Button("Start") {
@@ -138,16 +146,21 @@ struct RepairSheet: View {
           )
           isPresented = false
         }
+        .buttonStyle(.soft(display.accent))
         .keyboardShortcut(.defaultAction)
       }
     }
     .padding(Layout.loose)
-    .frame(width: 480, height: 560)
+    .frame(width: 480, height: 572)
     .background {
-      RoundedRectangle(cornerRadius: Layout.radiusPanel, style: .continuous)
-        .fill(.background)
+      RoundedRectangle(cornerRadius: Layout.radiusWindow, style: .continuous)
+        .fill(theme.surface)
     }
-    .clipShape(RoundedRectangle(cornerRadius: Layout.radiusPanel, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: Layout.radiusWindow, style: .continuous)
+        .strokeBorder(theme.specularRim, lineWidth: 1)
+    }
+    .clipShape(RoundedRectangle(cornerRadius: Layout.radiusWindow, style: .continuous))
   }
 
   private var warning: some View {

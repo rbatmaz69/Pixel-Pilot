@@ -22,6 +22,10 @@ struct AppRuleSettings: View {
   private var rulesCard: some View {
     PanelCard(title: "Per-app presets", systemImage: "app.badge") {
       VStack(alignment: .leading, spacing: Layout.snug) {
+        Text("Rückt eine verknüpfte App in den Fokus, wechselt das Studio-Licht nahtlos mit.")
+          .font(TypeScale.editorialAccent)
+          .foregroundStyle(.secondary)
+
         if model.presetList.isEmpty {
           Text("Capture a preset first — a rule chooses between presets rather than "
             + "storing its own values.")

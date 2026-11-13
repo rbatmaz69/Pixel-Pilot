@@ -32,6 +32,10 @@ struct PresetSettings: View {
     CardStack {
       PanelCard(title: "Presets", systemImage: "square.stack") {
         VStack(alignment: .leading, spacing: Layout.snug) {
+          Text("Licht-Szenen halten Helligkeit, Wärme und Papier-Finish deiner Monitore als Atmosphäre fest.")
+            .font(TypeScale.editorialAccent)
+            .foregroundStyle(.secondary)
+
           if model.presetList.isEmpty {
             CharacterfulEmptyState(
               title: "No presets yet",
