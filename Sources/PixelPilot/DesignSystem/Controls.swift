@@ -45,16 +45,13 @@ struct MorphToggleStyle: ToggleStyle {
 
     private var tone: Color { accent ?? theme.tone }
 
-    // Sized against the slider's track so the two controls sit at the same
-    // visual weight in a column that contains both.
-    private static let trackWidth: CGFloat = 42
-    private static let trackHeight: CGFloat = 24
-    private static let padding: CGFloat = 3
+    // Native macOS NSSwitch dimensions (36×20pt capsule, 16×16pt circular thumb).
+    private static let trackWidth: CGFloat = 36
+    private static let trackHeight: CGFloat = 20
+    private static let padding: CGFloat = 2
 
-    /// The knob widens when pressed, the same acknowledgement the slider handle
-    /// gives on grab — the control responds before the value has moved.
     private var knobWidth: CGFloat {
-      isPressed ? 24 : (isHovered ? 20 : 18)
+      isPressed ? 18 : 16
     }
 
     var body: some View {
@@ -67,9 +64,6 @@ struct MorphToggleStyle: ToggleStyle {
       .opacity(isEnabled ? 1 : 0.4)
       .onHover { isHovered = $0 && isEnabled }
       .onTapGesture { toggle() }
-      // The gesture exists only to catch the press for the knob's stretch; the
-      // tap above is what actually flips it, so a drag off the control cancels
-      // the way a button does.
       .simultaneousGesture(
         DragGesture(minimumDistance: 0)
           .onChanged { _ in if isEnabled { isPressed = true } }
@@ -83,14 +77,19 @@ struct MorphToggleStyle: ToggleStyle {
 
     private var switchBody: some View {
       ZStack(alignment: .leading) {
-        MorphingRoundedRectangle(cornerRadius: Self.trackHeight / 2)
-          .fill(configuration.isOn ? AnyShapeStyle(theme.fill(for: tone)) : AnyShapeStyle(.quaternary))
+        Capsule(style: .continuous)
+          .fill(
+            configuration.isOn
+              ? AnyShapeStyle(theme.fill(for: tone))
+              : AnyShapeStyle(theme.recessedWell)
+          )
           .overlay {
-            MorphingRoundedRectangle(cornerRadius: Self.trackHeight / 2)
-              .strokeBorder(configuration.isOn ? theme.rim(for: tone) : .clear, lineWidth: 1)
+            Capsule(style: .continuous)
+              .strokeBorder(
+                configuration.isOn ? theme.rim(for: tone) : theme.groupBorder,
+                lineWidth: 1
+              )
           }
-          // Colour is an effect and must not overshoot. A hue that rings reads
-          // as a flicker rather than as a state change.
           .animation(motion.effectDefault, value: configuration.isOn)
 
         knob
@@ -99,24 +98,13 @@ struct MorphToggleStyle: ToggleStyle {
     }
 
     private var knob: some View {
-      MorphingRoundedRectangle(cornerRadius: knobWidth / 2)
+      Capsule(style: .continuous)
         .fill(.white)
         .frame(width: knobWidth, height: Self.trackHeight - Self.padding * 2)
-        .overlay {
-          Image(systemName: "checkmark")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(tone)
-            .opacity(configuration.isOn ? 1 : 0)
-            .animation(motion.effectFast, value: configuration.isOn)
-        }
-        .shadow(color: .black.opacity(isPressed ? 0.28 : 0.15), radius: isPressed ? 4 : 2, y: 1)
+        .shadow(color: .black.opacity(isPressed ? 0.24 : 0.16), radius: isPressed ? 3 : 2, y: 1)
         .offset(x: knobOffset)
-        // Unlike the slider handle, this one is not tracking a pointer, so it
-        // *should* spring. The rule there was about following a drag exactly;
-        // there is no drag here to fall behind.
         .animation(motion.spatialDefault, value: configuration.isOn)
         .animation(motion.spatialFast, value: knobWidth)
-        .tickOnChange(flip, motion: motion)
     }
 
     private var knobOffset: CGFloat {
@@ -170,8 +158,12 @@ struct SegmentedMorphPicker<Value: Hashable>: View {
     }
     .padding(2)
     .background {
-      MorphingRoundedRectangle(cornerRadius: Layout.radiusControl + 2)
-        .fill(.quaternary.opacity(0.5))
+      RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+        .fill(theme.recessedWell)
+        .overlay {
+          RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+            .strokeBorder(theme.groupBorder, lineWidth: 1)
+        }
     }
     .opacity(isEnabled ? 1 : 0.4)
     .animation(motion.spatialDefault, value: selection)
@@ -185,24 +177,24 @@ struct SegmentedMorphPicker<Value: Hashable>: View {
       .font(.callout.weight(isSelected ? .semibold : .regular))
       .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
       .padding(.horizontal, Layout.snug)
-      .padding(.vertical, Layout.tight)
+      .padding(.vertical, 5)
       .frame(maxWidth: .infinity)
       .background {
         if isSelected {
-          MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-            .fill(theme.wash(for: tone))
+          RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+            .fill(theme.surfaceRaised)
             .overlay {
-              MorphingRoundedRectangle(cornerRadius: Layout.radiusControl)
-                .strokeBorder(theme.rim(for: tone), lineWidth: 1)
+              RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+                .fill(theme.wash(for: tone))
             }
+            .overlay {
+              RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+                .strokeBorder(theme.rim(for: tone).opacity(0.65), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
             .matchedGeometryEffect(id: "segment", in: highlight)
         }
       }
-      // The label scales on hover, not the segment. Nothing here contains a
-      // slider, so a scale is safe — but keeping it off the background means
-      // the travelling highlight never has to compete with it.
-      .scaleEffect(hovered == option.value && !isSelected ? 1.06 : 1)
-      .animation(motion.spatialFast, value: hovered)
       .contentShape(.rect)
       .onHover { hovered = $0 ? option.value : (hovered == option.value ? nil : hovered) }
       .onTapGesture {
