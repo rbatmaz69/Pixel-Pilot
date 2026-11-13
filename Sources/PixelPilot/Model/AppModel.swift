@@ -1035,6 +1035,26 @@ final class AppModel {
     identify.show(labels: labels)
   }
 
+  /// Lights up a warm border on the physical monitor being dragged in `DisplayMap`.
+  func beginArrangingHighlight(for display: DisplayViewModel) {
+    identify.showSingleHighlight(
+      displayID: display.displayID,
+      name: display.name,
+      accent: display.accent
+    )
+  }
+
+  func endArrangingHighlight() {
+    identify.endHighlight()
+  }
+
+  /// Applies a 2D monitor arrangement atomically via `DisplayArrangementController`.
+  func applyDisplayArrangement(_ entries: [DisplayLayout.ArrangementEntry]) {
+    if DisplayArrangementController.apply(entries, log: log) {
+      screenLayoutTick += 1
+    }
+  }
+
   // MARK: - Moving every display at once
 
   /// Whether the brightness sliders are ganged together.

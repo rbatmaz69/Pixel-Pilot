@@ -17,6 +17,7 @@ final class IdentifyController {
 
   private var panels: [NSPanel] = []
   private var dismissTask: Task<Void, Never>?
+  private var highlightedDisplayID: CGDirectDisplayID?
 
   private var fadeInDuration: TimeInterval { OverlayPanel.reduceMotion ? 0 : 0.12 }
   private var fadeOutDuration: TimeInterval { OverlayPanel.reduceMotion ? 0.08 : 0.3 }
@@ -25,6 +26,7 @@ final class IdentifyController {
   ///   with no entry still get a panel, so nothing is left unlabelled — an
   ///   identify that skips a screen looks like that screen is broken.
   func show(labels: [CGDirectDisplayID: (number: Int, name: String, accent: Color)]) {
+    highlightedDisplayID = nil
     teardown()
 
     for (index, screen) in NSScreen.screens.enumerated() {
@@ -49,6 +51,56 @@ final class IdentifyController {
     }
 
     scheduleDismiss()
+  }
+
+  /// Shows a warm glowing border + badge on the single physical screen currently
+  /// being arranged in `DisplayMap`, without stealing focus or running timers.
+  func showSingleHighlight(displayID: CGDirectDisplayID, name: String, accent: Color) {
+    guard highlightedDisplayID != displayID else { return }
+    dismissTask?.cancel()
+    dismissTask = nil
+    teardown()
+
+    guard let screen = NSScreen.screens.first(where: { $0.displayID == displayID }) else { return }
+    highlightedDisplayID = displayID
+
+    let content = AnyView(
+      ZStack(alignment: .top) {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .strokeBorder(accent.opacity(0.88), lineWidth: 6)
+          .shadow(color: accent.opacity(0.55), radius: 18)
+          .padding(8)
+
+        HStack(spacing: 8) {
+          AccentDot(accent: accent, isReady: true, size: 8)
+          Text(name)
+            .font(TypeScale.sheetTitle)
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .heroSurface()
+        .padding(.top, 28)
+      }
+      .frame(width: screen.frame.width, height: screen.frame.height)
+      .withMotionTokens()
+      .withAppTheme(paintsWindow: false)
+    )
+
+    let made = OverlayPanel.make(content: content)
+    made.panel.setFrame(screen.frame, display: false)
+    OverlayPanel.fadeIn(made.panel, duration: fadeInDuration)
+    panels.append(made.panel)
+  }
+
+  /// Fades out and tears down any live arrange highlight (`0.0% idle CPU`).
+  func endHighlight() {
+    guard highlightedDisplayID != nil else { return }
+    highlightedDisplayID = nil
+    dismissTask?.cancel()
+    dismissTask = nil
+    fadeOutAndTeardown()
   }
 
   /// One delayed task for all of them, so they leave together. Not a timer:
