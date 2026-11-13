@@ -54,6 +54,8 @@ struct DisplayMap: View {
   // Interactive 2D arrange state
   @State private var arrangeSnapshot: [DisplayLayout.ArrangementEntry]?
   @State private var arrangeDragOriginalFrame: CGRect = .zero
+  @State private var arrangeDragPrimaryID: CGDirectDisplayID?
+  @State private var arrangeLockedViewport: (desktop: CGRect, scale: CGFloat)?
   @State private var arrangeGuides: [DisplayLayout.AlignmentGuide] = []
   @State private var draggingMenuBarFrom: CGDirectDisplayID?
   @State private var menuBarDropTarget: DisplayViewModel.ID?
@@ -113,11 +115,70 @@ struct DisplayMap: View {
         }
         .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
       }
-      .frame(height: 112)
-      .animation(motion.spatialDefault, value: selection)
+      .frame(height: mode == .arrange ? 148 : 112)
+      .animation(dragging == nil ? motion.spatialDefault : nil, value: selection)
+      .animation(dragging == nil ? motion.spatialDefault : nil, value: arrangeSnapshot)
       .animation(motion.effectFast, value: mode)
       .accessibilityElement(children: .contain)
       .accessibilityLabel("Display-Anordnung")
+
+      if mode == .arrange, supportsArrangement, displays.count > 1 {
+        let entries = resolvedEntries
+        let primaryID = primaryDisplayID(in: entries)
+        let primaryDisplay = displays.first { $0.displayID == primaryID }
+
+        VStack(spacing: 5) {
+          Menu {
+            ForEach(displays) { display in
+              Button {
+                let reassigned = DisplayLayout.assignPrimary(id: display.displayID, in: entries)
+                onApplyArrangement?(reassigned)
+                Haptics.confirm()
+              } label: {
+                HStack {
+                  Text(display.name)
+                  if display.displayID == primaryID {
+                    Image(systemName: "checkmark")
+                  }
+                }
+              }
+            }
+          } label: {
+            HStack(spacing: 5) {
+              Image(systemName: "menubar.rectangle")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(theme.studioAccent)
+              Text("Hauptdisplay:")
+                .foregroundStyle(.secondary)
+              Text(primaryDisplay?.name ?? "Auswählen")
+                .fontWeight(.medium)
+                .lineLimit(1)
+                .truncationMode(.tail)
+              Spacer(minLength: 2)
+              Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+            }
+            .font(TypeScale.detail)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+              RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color.primary.opacity(0.05))
+            )
+            .overlay(
+              RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.75)
+            )
+          }
+          .menuStyle(.borderlessButton)
+          .help("Legt fest, welcher Bildschirm die macOS-Menüleiste und Dock-Basis erhält")
+
+          Text("Monitor ziehen · ⌥ ohne Einrasten")
+            .font(.system(size: 10, weight: .regular))
+            .foregroundStyle(.tertiary)
+        }
+      }
     }
   }
 
@@ -170,9 +231,18 @@ struct DisplayMap: View {
     .animation(motion.effectFast, value: isDragging)
     .frame(width: rect.width, height: rect.height)
     .offset(x: rect.minX, y: rect.minY - (isHovered && !motion.isReduced && mode == .light ? 1 : 0))
-    .animation(motion.spatialFast, value: isHovered)
+    .animation(dragging == nil ? motion.spatialFast : nil, value: isHovered)
     .contentShape(.rect)
-    .onHover { hovered = $0 ? display.id : (hovered == display.id ? nil : hovered) }
+    .onHover { entering in
+      hovered = entering ? display.id : (hovered == display.id ? nil : hovered)
+      if mode == .arrange {
+        if entering {
+          NSCursor.openHand.set()
+        } else if dragging == nil {
+          NSCursor.arrow.set()
+        }
+      }
+    }
     .onTapGesture { selection = display.id }
     .gesture(
       mode == .light
@@ -260,7 +330,7 @@ struct DisplayMap: View {
           .matchedGeometryEffect(id: "mapRing", in: ring)
       }
     }
-    .overlay { badge(display, isDragging: isDragging) }
+    .overlay { badge(display, isDragging: isDragging, isPrimary: isPrimary) }
     .shadow(color: shadowColor, radius: shadowRadius, y: 1)
   }
 
@@ -324,18 +394,29 @@ struct DisplayMap: View {
     }
   }
 
-  private func badge(_ display: DisplayViewModel, isDragging: Bool) -> some View {
+  private func badge(_ display: DisplayViewModel, isDragging: Bool, isPrimary: Bool) -> some View {
     HStack(spacing: 4) {
       AccentDot(accent: display.accent, isReady: display.isReady, size: 6)
-      Text("\(Int((display.brightness * 100).rounded()))%")
-        .font(.system(size: isDragging ? 10.5 : 9.5, weight: .semibold, design: .rounded).monospacedDigit())
-        .foregroundStyle(.white)
+      if mode == .arrange {
+        Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+          .font(.system(size: isDragging ? 10 : 9, weight: .semibold))
+          .foregroundStyle(.white)
+        if isPrimary {
+          Text("Haupt")
+            .font(.system(size: 8.5, weight: .semibold, design: .rounded))
+            .foregroundStyle(.white.opacity(0.92))
+        }
+      } else {
+        Text("\(Int((display.brightness * 100).rounded()))%")
+          .font(.system(size: isDragging ? 10.5 : 9.5, weight: .semibold, design: .rounded).monospacedDigit())
+          .foregroundStyle(.white)
+      }
     }
     .padding(.horizontal, 5)
     .padding(.vertical, 2)
     .background(
       Capsule(style: .continuous)
-        .fill(Color.black.opacity(isDragging ? 0.68 : 0.48))
+        .fill(Color.black.opacity(isDragging ? 0.72 : 0.48))
     )
   }
 
@@ -360,29 +441,46 @@ struct DisplayMap: View {
     .padding(.vertical, isDragging ? 4 : 2)
   }
 
+  private func viewport(
+    for entries: [DisplayLayout.ArrangementEntry],
+    in size: CGSize
+  ) -> (desktop: CGRect, scale: CGFloat, originX: CGFloat, originY: CGFloat)? {
+    let box = CGRect(origin: .zero, size: size).insetBy(dx: 10, dy: 10)
+    guard box.width > 0, box.height > 0 else { return nil }
+    let frames = entries.map(\.frame)
+    guard let first = frames.first else { return nil }
+
+    let desktop: CGRect
+    let scale: CGFloat
+    if let locked = arrangeLockedViewport {
+      desktop = locked.desktop
+      scale = locked.scale
+    } else {
+      desktop = frames.dropFirst().reduce(first) { $0.union($1) }
+      scale = DisplayLayout.scaleFactor(frames: frames, into: box)
+    }
+
+    let scaled = CGSize(width: desktop.width * scale, height: desktop.height * scale)
+    let originX = box.minX + (box.width - scaled.width) / 2
+    let originY = box.minY + (box.height - scaled.height) / 2
+    return (desktop, scale, originX, originY)
+  }
+
   @ViewBuilder
   private func alignmentGuideOverlay(
     for entries: [DisplayLayout.ArrangementEntry],
     in size: CGSize
   ) -> some View {
-    let frames = entries.map(\.frame)
-    let box = CGRect(origin: .zero, size: size).insetBy(dx: 10, dy: 10)
-    if let first = frames.first, box.width > 0, box.height > 0 {
-      let desktop = frames.dropFirst().reduce(first) { $0.union($1) }
-      let scale = DisplayLayout.scaleFactor(frames: frames, into: box)
-      let scaled = CGSize(width: desktop.width * scale, height: desktop.height * scale)
-      let originX = box.minX + (box.width - scaled.width) / 2
-      let originY = box.minY + (box.height - scaled.height) / 2
-
+    if let vp = viewport(for: entries, in: size) {
       ForEach(arrangeGuides, id: \.self) { guide in
         Path { path in
           switch guide.axis {
           case .horizontal:
-            let y = originY + (guide.position - desktop.minY) * scale
+            let y = vp.originY + (guide.position - vp.desktop.minY) * vp.scale
             path.move(to: CGPoint(x: 0, y: y))
             path.addLine(to: CGPoint(x: size.width, y: y))
           case .vertical:
-            let x = originX + (guide.position - desktop.minX) * scale
+            let x = vp.originX + (guide.position - vp.desktop.minX) * vp.scale
             path.move(to: CGPoint(x: x, y: 0))
             path.addLine(to: CGPoint(x: x, y: size.height))
           }
@@ -402,22 +500,33 @@ struct DisplayMap: View {
     in canvasSize: CGSize,
     entries: [DisplayLayout.ArrangementEntry]
   ) -> some Gesture {
-    DragGesture(minimumDistance: 4)
+    DragGesture(minimumDistance: 3)
       .onChanged { gesture in
         if dragging != display.id {
           dragging = display.id
           selection = display.id
+          NSCursor.closedHand.set()
           let initial = entries
           arrangeSnapshot = initial
+          arrangeDragPrimaryID = primaryDisplayID(in: initial)
           arrangeDragOriginalFrame = initial.first { $0.id == display.displayID }?.frame
             ?? CGDisplayBounds(display.displayID)
+          let box = CGRect(origin: .zero, size: canvasSize).insetBy(dx: 10, dy: 10)
+          let initialFrames = initial.map(\.frame)
+          if let first = initialFrames.first, box.width > 0, box.height > 0 {
+            let desktop = initialFrames.dropFirst().reduce(first) { $0.union($1) }
+            let scale = max(0.01, DisplayLayout.scaleFactor(frames: initialFrames, into: box))
+            arrangeLockedViewport = (desktop, scale)
+          }
           onBeginHighlight?(display)
         }
 
         let currentEntries = arrangeSnapshot ?? entries
         let box = CGRect(origin: .zero, size: canvasSize).insetBy(dx: 10, dy: 10)
-        let scale = max(0.01, DisplayLayout.scaleFactor(frames: currentEntries.map(\.frame), into: box))
-        let threshold = max(48, 18 / scale)
+        let scale = arrangeLockedViewport?.scale
+          ?? max(0.01, DisplayLayout.scaleFactor(frames: currentEntries.map(\.frame), into: box))
+        let freeMove = NSEvent.modifierFlags.contains(.option)
+        let threshold: CGFloat = freeMove ? 0 : max(14, 5 / scale)
 
         let rawMoving = arrangeDragOriginalFrame.offsetBy(
           dx: gesture.translation.width / scale,
@@ -432,10 +541,10 @@ struct DisplayMap: View {
           against: stationary,
           threshold: threshold
         )
-        if snapped.guides != arrangeGuides, !snapped.guides.isEmpty {
+        if snapped.guides != arrangeGuides, !snapped.guides.isEmpty, !freeMove {
           Haptics.detent()
         }
-        arrangeGuides = snapped.guides
+        arrangeGuides = freeMove ? [] : snapped.guides
 
         arrangeSnapshot = currentEntries.map { entry in
           guard entry.id == display.displayID else { return entry }
@@ -445,12 +554,23 @@ struct DisplayMap: View {
       .onEnded { _ in
         guard dragging == display.id else { return }
         dragging = nil
+        if hovered != nil {
+          NSCursor.openHand.set()
+        } else {
+          NSCursor.arrow.set()
+        }
         let committed = arrangeSnapshot
+        let preservedPrimary = arrangeDragPrimaryID
         arrangeSnapshot = nil
+        arrangeDragPrimaryID = nil
+        arrangeLockedViewport = nil
         arrangeGuides = []
         onEndHighlight?()
         if let committed {
-          onApplyArrangement?(committed)
+          let normalized = preservedPrimary.map {
+            DisplayLayout.assignPrimary(id: $0, in: committed)
+          } ?? committed
+          onApplyArrangement?(normalized)
           Haptics.confirm()
         }
       }
@@ -553,14 +673,26 @@ struct DisplayMap: View {
     in size: CGSize
   ) -> [(display: DisplayViewModel, rect: CGRect)] {
     let frames = entries.map(\.frame)
-    let rects: [CGRect] = if mode == .arrange {
-      DisplayLayout.normalizeTopDown(
-        frames: frames,
-        into: CGRect(origin: .zero, size: size).insetBy(dx: 10, dy: 10),
-        spacing: 2
-      )
+    let rects: [CGRect]
+    if mode == .arrange {
+      if arrangeLockedViewport != nil, let vp = viewport(for: entries, in: size) {
+        rects = frames.map { frame in
+          CGRect(
+            x: vp.originX + (frame.minX - vp.desktop.minX) * vp.scale,
+            y: vp.originY + (frame.minY - vp.desktop.minY) * vp.scale,
+            width: max(20, frame.width * vp.scale - 2),
+            height: max(14, frame.height * vp.scale - 2)
+          )
+        }
+      } else {
+        rects = DisplayLayout.normalizeTopDown(
+          frames: frames,
+          into: CGRect(origin: .zero, size: size).insetBy(dx: 10, dy: 10),
+          spacing: 2
+        )
+      }
     } else {
-      DisplayLayout.normalize(
+      rects = DisplayLayout.normalize(
         frames: frames,
         into: CGRect(origin: .zero, size: size),
         spacing: 7
