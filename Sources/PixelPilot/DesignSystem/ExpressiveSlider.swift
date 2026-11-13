@@ -1,49 +1,27 @@
 import PixelPilotCore
 import SwiftUI
 
-/// The signature control of the app.
+/// Native macOS Control Center Pill Slider with Warm Studio Craft tactile details.
 ///
-/// A macOS slider in every way that matters — size, spacing, keyboard and
-/// VoiceOver behaviour — with Material 3 Expressive movement layered on top:
-/// the handle morphs from a thin pill to a wide squircle as you grab it, the
-/// track thickens, and everything settles with a spring rather than an ease.
+/// Combines a `26pt` recessed Control Center pill track (`theme.recessedWell`),
+/// crisp warm-ivory fill (`theme.sliderFill`), fine engraved Leica-aperture
+/// scale ticks (`.cc-scale-ticks`) with magnetic quarter detents (`25% / 50% / 75%`),
+/// a rotating leading sun glyph, a circular native thumb that reveals on
+/// hover/drag, and a glowing ghost preview bridge when hovering a scene preset.
 ///
-/// Two properties that are easy to lose and expensive to get back:
-///
-/// - **Dragging is not animated.** The handle follows the pointer exactly; only
-///   the *shape* change is sprung. A sprung position lags the cursor and feels
-///   broken.
-/// - **`onCommit` fires once, on release.** Callers use it for the expensive,
-///   verified write. Firing it continuously would put a DDC round trip in the
-///   middle of every drag.
+/// Two invariants:
+/// - **Dragging is not animated.** The handle follows the pointer with `0ms` lag.
+/// - **`onCommit` fires once, on release.**
 struct ExpressiveSlider: View {
   @Binding var value: Double
   var range: ClosedRange<Double> = 0 ... 1
   var accent: Color
   var icon: String?
-  /// Overrides the accent fill on the filled part of the track.
-  ///
-  /// Exists for the warmth control, whose track is a Kelvin gradient built from
-  /// the same function that drives the hardware — so the colour under the
-  /// handle is the colour the screen is about to be. Defaulted to nil, so no
-  /// existing call site changes.
+  /// Overrides the fill on the filled part of the track (e.g. Kelvin warmth gradient).
   var trackStyle: AnyShapeStyle?
-  /// Where something else would put this control, in the same units as `value`.
-  ///
-  /// Drawn as a hollow handle with a bar spanning the distance it would travel,
-  /// and that is all it ever does: it never touches `value`, never takes part in
-  /// the drag, and never fires a callback. Presets are the caller — resting the
-  /// pointer on one shows where it would leave every display, which is the
-  /// difference between pressing a button and finding out afterwards what it
-  /// did.
+  /// Preview target position (in the same units as `value`) when hovering a preset scene.
   var ghost: Double?
-  /// Marks that tug back, as 0...1 fractions of the track. Felt and drawn,
-  /// never enforced — see `SliderDetents`.
-  ///
-  /// Defaulted rather than passed at each call site: every slider in this app
-  /// is a percentage of something, so the quarters are the right marks for all
-  /// of them, and six copies of the same argument is how the seventh ends up
-  /// different. Pass an empty array for a control where they are not.
+  /// Marks that tug back with haptic feedback, as `0...1` fractions of the track.
   var detents: [Double] = SliderDetents.quarters
   /// Called continuously while dragging — cheap work only.
   var onChange: (Double) -> Void = { _ in }
@@ -56,23 +34,15 @@ struct ExpressiveSlider: View {
 
   @State private var isDragging = false
   @State private var isHovered = false
-  /// Bumped to fire the knob's squash. One counter for both causes — arriving
-  /// at an end and letting go — because they want the same acknowledgement.
   @State private var pop = 0
-  /// Bumped when a detent is entered. Its own counter, and its own smaller
-  /// squash: a detent happens several times in one drag and must not read as
-  /// loudly as bottoming out.
   @State private var tick = 0
-  /// Latches the end stop, so holding the pointer past the edge pops once
-  /// instead of on every frame of the drag.
   @State private var isAtEnd = false
-  /// The detent currently occupied. Latched for the same reason as `isAtEnd`:
-  /// a drag sits inside a detent for many frames and deserves one tick.
   @State private var latchedDetent: Double?
 
-  /// How wide a detent feels, in points. Converted to a fraction of the track
-  /// at drag time so a wide slider does not get wide detents.
+  /// How wide a detent feels, in points.
   private static let detentReach: Double = 4
+  /// Engraved Leica-style decile scale marks across the pill track.
+  private static let scaleDeciles: [Double] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
   private var fraction: Double { fraction(of: value) }
 
@@ -82,18 +52,18 @@ struct ExpressiveSlider: View {
     return min(1, max(0, (value - range.lowerBound) / span))
   }
 
-  /// Where the centre of the handle sits for a fraction of the track.
-  ///
-  /// One formula, three callers: the handle, the detent marks and the ghost.
-  /// `detentMarks` already gives the reason for sharing it — `metrics.width`
-  /// grows when the handle is grabbed, so anything computed another way drifts
-  /// out from under a handle that is standing still.
+  /// Where the centre of the thumb sits for a fraction of the track.
   private func knobX(for fraction: Double, width: CGFloat) -> CGFloat {
     max(1, width - metrics.width) * fraction + metrics.width / 2
   }
 
   private var metrics: KnobGeometry.Metrics {
     KnobGeometry.metrics(isDragging: isDragging, isHovered: isHovered)
+  }
+
+  private var rotatesGlyph: Bool {
+    guard let icon else { return false }
+    return icon.contains("sun") || icon.contains("sparkles")
   }
 
   var body: some View {
@@ -118,15 +88,10 @@ struct ExpressiveSlider: View {
       .frame(height: geometry.size.height)
       .contentShape(.rect)
       .gesture(dragGesture(width: width))
-      // Keyed to `ghost` alone. The handle pins `.animation(nil, value: x)` on
-      // its own position precisely so a transaction opened up here cannot reach
-      // it — and nothing about the ghost appearing moves the handle anyway.
       .animation(motion.effectDefault, value: ghost)
     }
-    .frame(height: KnobGeometry.dragging.trackHeight + 12)
+    .frame(height: KnobGeometry.rest.trackHeight)
     .onHover { hovering in
-      // Hover is a pure effect change, so it gets an effect spring — and it is
-      // suppressed mid-drag, where the pointer routinely leaves the control.
       withAnimation(motion.effectFast) {
         isHovered = hovering && !isDragging
       }
@@ -147,124 +112,146 @@ struct ExpressiveSlider: View {
   // MARK: - Pieces
 
   private func track(width: CGFloat, filledTo knobX: CGFloat) -> some View {
-    ZStack(alignment: .leading) {
-      MorphingRoundedRectangle(cornerRadius: metrics.trackHeight / 2)
-        .fill(.quaternary)
+    let fillWidth = max(metrics.trackHeight, min(width, knobX + metrics.width / 2))
+    let pillShape = Capsule(style: .continuous)
 
-      detentMarks(width: width)
+    return ZStack(alignment: .leading) {
+      // Recessed Control Center well
+      pillShape
+        .fill(theme.recessedWell)
+        .overlay {
+          pillShape.strokeBorder(theme.groupBorder, lineWidth: 1)
+        }
 
-      MorphingRoundedRectangle(cornerRadius: metrics.trackHeight / 2)
-        .fill(trackStyle ?? AnyShapeStyle(theme.fill(for: accent)))
-        .frame(width: max(metrics.trackHeight, knobX))
+      // Crisp warm-ivory / custom fill bar
+      pillShape
+        .fill(resolvedFillStyle)
+        .frame(width: fillWidth)
+        .shadow(color: .black.opacity(0.10), radius: 2, x: 1, y: 0)
 
+      // Fine engraved Leica aperture scale ticks + prominent quarter detents
+      scaleAndDetentMarks(width: width, fillWidth: fillWidth)
+
+      // Embedded leading glyph with smooth sun rotation
       if let icon {
+        let isCovered = fillWidth > 26
         Image(systemName: icon)
-          .font(.system(size: 9, weight: .semibold))
-          .foregroundStyle(.white.opacity(0.9))
-          .padding(.leading, 6)
-          // Hidden once the fill is too narrow to hold it, rather than letting
-          // it spill onto the empty part of the track.
-          .opacity(knobX > 22 ? 1 : 0)
-          .animation(motion.effectFast, value: knobX > 22)
+          .font(.system(size: 11, weight: .semibold))
+          .foregroundStyle(
+            isCovered
+              ? (trackStyle == nil ? theme.sliderGlyphInk.opacity(0.82) : Color.white.opacity(0.92))
+              : Color.secondary
+          )
+          .rotationEffect(.degrees(rotatesGlyph ? fraction * 90 : 0))
+          .scaleEffect(rotatesGlyph ? (0.92 + 0.14 * fraction) : 1.0)
+          .padding(.leading, 8)
+          .allowsHitTesting(false)
       }
     }
     .frame(width: width, height: metrics.trackHeight)
-    .animation(motion.spatialFast, value: metrics.trackHeight)
+    .clipShape(pillShape)
   }
 
-  /// Hairlines where the detents are.
-  ///
-  /// A detent nobody can see is a control that occasionally resists for no
-  /// stated reason. Drawn under the fill rather than over it, so the marks show
-  /// on the empty part of the track and the filled part stays a clean colour —
-  /// ticks over the accent read as damage to it.
-  ///
-  /// The two ends are skipped: a mark hard against the cap is indistinguishable
-  /// from the cap.
-  @ViewBuilder
-  private func detentMarks(width: CGFloat) -> some View {
-    let interior = detents.filter { $0 > 0.001 && $0 < 0.999 }
-    if !interior.isEmpty {
-      ZStack(alignment: .leading) {
-        ForEach(interior, id: \.self) { detent in
-          Rectangle()
-            .fill(.tertiary)
-            .frame(width: 1, height: metrics.trackHeight)
-            // The knob's own formula, minus half the mark's width to centre it
-            // on the line rather than start it there. Sharing the formula
-            // matters more than it looks: `metrics.width` grows when the handle
-            // is grabbed, and a mark computed any other way would drift out
-            // from under a handle that is sitting still on it.
-            .offset(x: knobX(for: detent, width: width) - 0.5)
-        }
-      }
-      .frame(width: width, alignment: .leading)
-      // The marks belong to the track, so they fade with it rather than
-      // sitting at full strength on a control nobody is touching.
-      .opacity(isDragging || isHovered ? 0.9 : 0.5)
-      .animation(motion.effectFast, value: isDragging || isHovered)
+  private var resolvedFillStyle: AnyShapeStyle {
+    if let trackStyle {
+      return trackStyle
     }
+    return AnyShapeStyle(
+      LinearGradient(
+        colors: [
+          theme.sliderFill,
+          theme.sliderFill.blended(with: accent, by: isDragging ? 0.14 : 0.06),
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+      )
+    )
   }
 
-  /// The hollow handle, and the distance between it and the real one.
-  ///
-  /// Hollow rather than filled, and never on its own: the bar is what turns
-  /// "there" into "this far, in this direction". Both are hidden the moment the
-  /// real handle is grabbed, because two handles on one track — one of them
-  /// under the pointer — is a control with two answers to where it is.
-  ///
-  /// Hit testing off, so a preview can never become an adjustment by accident.
+  /// Engraved Leica aperture scale ticks (every 10%) plus magnetic quarter detent ticks (`25% / 50% / 75%`).
+  @ViewBuilder
+  private func scaleAndDetentMarks(width: CGFloat, fillWidth: CGFloat) -> some View {
+    let interiorDetents = detents.filter { $0 > 0.001 && $0 < 0.999 }
+    ZStack(alignment: .leading) {
+      // Fine decile scale ticks along bottom edge
+      ForEach(Self.scaleDeciles, id: \.self) { mark in
+        let markX = knobX(for: mark, width: width)
+        let isCovered = markX < fillWidth
+        Rectangle()
+          .fill(
+            isCovered
+              ? theme.sliderGlyphInk.opacity(isDragging || isHovered ? 0.24 : 0.12)
+              : Color.primary.opacity(isDragging || isHovered ? 0.26 : 0.12)
+          )
+          .frame(width: 1, height: 3.5)
+          .offset(x: markX - 0.5, y: metrics.trackHeight / 2 - 3.5)
+      }
+
+      // Prominent quarter detent marks (25% / 50% / 75%)
+      ForEach(interiorDetents, id: \.self) { detent in
+        let detentX = knobX(for: detent, width: width)
+        let isLatched = latchedDetent == detent && isDragging
+        let isCovered = detentX < fillWidth
+        Capsule(style: .continuous)
+          .fill(
+            isLatched
+              ? theme.studioAccent
+              : (isCovered
+                ? theme.sliderGlyphInk.opacity(isDragging || isHovered ? 0.42 : 0.22)
+                : Color.primary.opacity(isDragging || isHovered ? 0.42 : 0.22))
+          )
+          .frame(width: isLatched ? 2 : 1.25, height: isLatched ? 8 : 5.5)
+          .offset(x: detentX - (isLatched ? 1 : 0.625), y: metrics.trackHeight / 2 - (isLatched ? 5.5 : 4.5))
+      }
+    }
+    .frame(width: width, height: metrics.trackHeight, alignment: .leading)
+    .allowsHitTesting(false)
+    .animation(motion.effectFast, value: isDragging || isHovered)
+    .animation(motion.effectFast, value: latchedDetent)
+  }
+
+  /// Ghost preview bridge & hollow target ring when hovering a scene card.
   private func ghostMarker(
     at x: CGFloat, from handleX: CGFloat, width: CGFloat, height: CGFloat
   ) -> some View {
     ZStack {
       Capsule(style: .continuous)
-        .fill(accent.opacity(0.4))
-        .frame(width: max(2, abs(x - handleX)), height: 2)
+        .fill(theme.studioAccent.opacity(0.55))
+        .frame(width: max(3, abs(x - handleX)), height: 4)
         .position(x: (x + handleX) / 2, y: height / 2)
 
-      MorphingKnob(
-        width: KnobGeometry.hovered.width,
-        cornerRadius: KnobGeometry.hovered.cornerRadius
-      )
-      .stroke(theme.fill(for: accent), lineWidth: 2)
-      .frame(width: KnobGeometry.hovered.width, height: metrics.trackHeight + 8)
-      .position(x: x, y: height / 2)
+      Circle()
+        .strokeBorder(theme.studioAccent, lineWidth: 2)
+        .background(Circle().fill(theme.sliderFill.opacity(0.35)))
+        .frame(width: 16, height: 16)
+        .shadow(color: theme.studioAccent.opacity(0.45), radius: 4)
+        .position(x: x, y: height / 2)
     }
     .frame(width: width, height: height)
     .allowsHitTesting(false)
     .transition(.opacity)
   }
 
+  /// Native circular Control Center thumb (`20×20pt`) that reveals on hover/drag.
   private func knob(centeredAt x: CGFloat, height: CGFloat) -> some View {
-    MorphingKnob(width: metrics.width, cornerRadius: metrics.cornerRadius)
-      .fill(.white)
-      .shadow(color: .black.opacity(isDragging ? 0.30 : 0.16), radius: isDragging ? 6 : 2, y: 1)
-      .background { glow }
-      .frame(width: metrics.width, height: metrics.trackHeight + (isDragging ? 10 : 6))
-      .tickOnChange(tick, motion: motion)
-      .squashOnChange(pop, motion: motion)
+    let isActive = isDragging || isHovered
+    return Circle()
+      .fill(Color.white)
+      .overlay {
+        Circle()
+          .strokeBorder(
+            isDragging ? theme.studioAccent.opacity(0.65) : Color.black.opacity(0.12),
+            lineWidth: isDragging ? 1.5 : 0.75
+          )
+      }
+      .shadow(color: .black.opacity(isDragging ? 0.26 : 0.18), radius: isDragging ? 5 : 3, y: 1)
+      .frame(width: metrics.width, height: metrics.width)
+      .scaleEffect(isDragging ? 1.04 : (isHovered ? 1.0 : 0.86))
+      .opacity(isActive ? 1 : 0)
       .position(x: x, y: height / 2)
-      // The morph springs; the position does not. Position must track the
-      // pointer exactly or the control feels laggy. Everything added around
-      // this control since — entrances, glows, the squash — is keyed to its own
-      // value for exactly this reason: an unkeyed animation, or a
-      // `withAnimation` anywhere above, would reach the position and undo it.
-      .animation(motion.spatialFast, value: metrics)
+      .animation(motion.effectFast, value: isActive)
+      .animation(motion.effectFast, value: isDragging)
       .animation(nil, value: x)
-  }
-
-  /// The accent halo under the handle while it is held.
-  ///
-  /// Its own layer with its own spring: opacity is an effect and must not
-  /// overshoot, but the morph it sits behind is spatial and must. Sharing one
-  /// curve would make the glow flicker at the end of every grab.
-  private var glow: some View {
-    MorphingKnob(width: metrics.width, cornerRadius: metrics.cornerRadius)
-      .fill(accent)
-      .blur(radius: 7)
-      .opacity(isDragging ? 0.9 : 0)
-      .animation(motion.effectDefault, value: isDragging)
   }
 
   // MARK: - Interaction
