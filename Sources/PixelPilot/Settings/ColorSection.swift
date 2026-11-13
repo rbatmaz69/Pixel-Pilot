@@ -34,8 +34,6 @@ struct ColorSection: View {
           nightShiftWarning.transition(.blurReplace)
         }
 
-        probeRow
-
         CardFooter(isWarmed
           ? "Die Farbwärme wirkt weich über die Farbtabelle des Displays."
           : "Ohne aktive Farbwärme bleibt der Weißpunkt exakt auf Standard.")
@@ -110,38 +108,5 @@ struct ColorSection: View {
       detail: "Die Farbtabellen wurden \(display.recentColorResets)-mal pro Minute zurückgesetzt. "
         + "Deaktiviere Night Shift oder True Tone für ein ruhiges Bild."
     )
-  }
-
-  @ViewBuilder
-  private var probeRow: some View {
-    if display.isProbingColor {
-      HStack(spacing: Layout.tight) {
-        ProgressView().controlSize(.small)
-        Text("Farbsteuerungs-Fähigkeiten werden geprüft…")
-          .font(TypeScale.detail)
-          .foregroundStyle(.secondary)
-      }
-      .transition(.blurReplace)
-    } else if let capabilities = display.colorCapabilities {
-      StatusRow(
-        symbol: display.hasNativeColorControl ? "checkmark.circle.fill" : "info.circle",
-        tint: display.hasNativeColorControl ? Status.ok : nil,
-        title: display.hasNativeColorControl
-          ? "Display besitzt eigene Hardware-Farbsteuerung"
-          : "Display besitzt keine eigene Farbtemperatur-Steuerung",
-        detail: nativeDetail(capabilities)
-      )
-      .transition(.blurReplace)
-    }
-  }
-
-  private func nativeDetail(_ capabilities: DisplayCapabilities) -> String {
-    if display.hasNativeColorControl {
-      return "Pixel Pilot nutzt bewusst die stufenlose Software-Farbtabelle für konsistente Ergebnisse."
-    }
-    if case let .implausible(_, _, reason) = capabilities.support(for: .colorTemperature) {
-      return "Hardware-Abfrage beantwortet (\(reason))."
-    }
-    return "Die Farbwärme wird stufenlos per Software-Profil angewendet."
   }
 }
