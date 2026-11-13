@@ -28,8 +28,12 @@ struct MenuBarPanel: View {
   @State private var previewed: Preset?
   @State private var previewTask: Task<Void, Never>?
 
+  private let mood = AmbientDaylightMood.current()
+
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
+      companionBanner
+
       if model.displays.isEmpty {
         emptyState
       } else {
@@ -39,8 +43,6 @@ struct MenuBarPanel: View {
         }
 
         ForEach(Array(model.displays.enumerated()), id: \.element.id) { index, display in
-          // Cards separate themselves; the dividers that used to sit between
-          // these groups were doing a job the card edges now do better.
           DisplayControlGroup(display: display, preview: previewed)
             .accentWave(
               index: index,
@@ -52,8 +54,8 @@ struct MenuBarPanel: View {
       }
 
       SystemVolumeRow(audio: model.systemAudio)
-        .padding(.horizontal, Layout.tight)
-        .padding(.top, Layout.tight)
+        .padding(Layout.snug)
+        .cardSurface(accent: theme.tone)
         .entrance(index: trailingIndex)
 
       if !model.presetList.isEmpty {
@@ -67,24 +69,100 @@ struct MenuBarPanel: View {
           .entrance(index: trailingIndex + 2)
       }
 
-      Divider().padding(.top, Layout.tight)
+      Divider().padding(.top, Layout.hair)
       footer
         .entrance(index: trailingIndex + 3)
     }
     .padding(Layout.normal)
-    // Wider than before to absorb the card padding without the sliders getting
-    // any shorter than they were.
-    .frame(width: 320)
+    .frame(width: 332)
+    .background(alignment: .top) {
+      theme.ambientDaylightGradient(mood: mood)
+        .frame(height: 110)
+        .allowsHitTesting(false)
+    }
     .animation(motion.spatialDefault, value: model.needsAccessibilityPermission)
-    // The motion tokens, the theme and `surfaceDepth` are set by
-    // `MenuBarPanelWindow`, not here. A view cannot read an environment value
-    // its own body installs — `@Environment(\.motion)` above was quietly seeing
-    // the default and ignoring Reduce Motion — so the panel's environment is
-    // set up one level out, the way `WindowCoordinator` does it for windows.
-    // Opening the panel is a cheap, natural moment to notice a grant that
-    // happened while the app was in the background.
     .onAppear { model.refreshPermissions() }
     .onDisappear { previewTask?.cancel() }
+  }
+
+  /// Warm personal time-of-day studio greeting banner at the top of the popover.
+  private var companionBanner: some View {
+    HStack(spacing: Layout.snug) {
+      ZStack {
+        Circle()
+          .fill(
+            RadialGradient(
+              colors: [
+                Color.white.opacity(0.92),
+                mood.orbColor,
+                mood.orbColor.blended(with: .black, by: 0.18),
+              ],
+              center: UnitPoint(x: 0.34, y: 0.30),
+              startRadius: 0,
+              endRadius: 15
+            )
+          )
+          .frame(width: 26, height: 26)
+          .overlay {
+            Circle()
+              .strokeBorder(Color.white.opacity(0.35), lineWidth: 0.75)
+          }
+          .shadow(color: mood.orbColor.opacity(0.45), radius: 5)
+
+        Image(systemName: mood.symbolName)
+          .font(.system(size: 11, weight: .semibold))
+          .foregroundStyle(.white)
+      }
+
+      VStack(alignment: .leading, spacing: 1) {
+        Text(mood.greetingTitle)
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(.primary)
+          .lineLimit(1)
+        Text(mood.greetingSubtitle)
+          .font(TypeScale.editorialAccent)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+      }
+
+      Spacer(minLength: 4)
+
+      HStack(spacing: 5) {
+        AccentDot(accent: theme.studioAccent, size: 6)
+        Text(Preferences.shared.global.schedule.isEnabled ? "Tageshorizont" : "Studio")
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundStyle(.secondary)
+      }
+      .padding(.horizontal, 7)
+      .padding(.vertical, 3)
+      .background(
+        Capsule(style: .continuous)
+          .fill(theme.recessedWell)
+      )
+      .overlay(
+        Capsule(style: .continuous)
+          .strokeBorder(theme.groupBorder, lineWidth: 1)
+      )
+    }
+    .padding(.horizontal, Layout.snug)
+    .padding(.vertical, 8)
+    .background {
+      RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous)
+        .fill(
+          LinearGradient(
+            colors: [
+              theme.studioAccent.opacity(theme.isDark ? 0.14 : 0.10),
+              theme.onGlassSurface,
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+        )
+    }
+    .overlay {
+      RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous)
+        .strokeBorder(theme.groupBorder, lineWidth: 1)
+    }
   }
 
   /// Arms or cancels the preset preview.
