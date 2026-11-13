@@ -55,10 +55,6 @@ struct DisplayPage: View {
         .frame(height: 260)
     }
     .navigationTitle(display.name)
-    // On demand, once ever per panel: six round trips is too much to spend at
-    // connect time on a card most people will never open. Cached against the
-    // `DisplayKey` after that, so this is a no-op on every later visit.
-    .task(id: display.id) { await display.probeColorSupport() }
   }
 
   /// Normalized warmth fraction (`0.0` = warmest 2700K, `1.0` = neutral 6500K)
@@ -415,19 +411,6 @@ struct DisplayPage: View {
   private var configuration: some View {
     PanelCard(title: "Persönliche Abstimmung", systemImage: "gearshape", accent: display.accent) {
       VStack(alignment: .leading, spacing: Layout.normal) {
-        VStack(alignment: .leading, spacing: Layout.tight) {
-          Text("Helligkeit über").font(TypeScale.rowTitle)
-          SegmentedMorphPicker(
-            selection: strategyBinding,
-            options: BrightnessStrategy.allCases.map { ($0, $0.displayName) },
-            accent: display.accent
-          )
-        }
-        .help("Automatisch wählt den besten verfügbaren Pfad.")
-
-        Toggle("Weiter unter das Backlight-Minimum dimmen", isOn: extraDimmingBinding)
-          .help("Dimmt unter 0 % Backlight per Software-Gamma-Tabelle weiter (erscheint in Screenshots).")
-
         Toggle("Tastatur-Helligkeitstasten folgen diesem Display", isOn: mediaKeysBinding)
 
         Toggle("Mit Fokus-Dimmung abdunkeln", isOn: attentionBinding)
@@ -439,41 +422,7 @@ struct DisplayPage: View {
           Divider()
         }
 
-        VStack(alignment: .leading, spacing: Layout.tight) {
-          Text("Reaktionsgeschwindigkeit (DDC-Timing)").font(TypeScale.rowTitle)
-          SegmentedMorphPicker(
-            selection: timingBinding,
-            options: [(DDCTiming.default, "Standard"), (DDCTiming.relaxed, "Entspannt")],
-            accent: display.accent
-          )
-        }
-        .help("Erhöhen, falls Werte sporadisch aussetzen oder Befehle nach Standby verschluckt werden.")
-
         accentPicker
-
-        HStack {
-          Button {
-            Task { await display.reprobeCapabilities() }
-          } label: {
-            if display.isProbing {
-              HStack(spacing: Layout.tight) {
-                ProgressView().controlSize(.small)
-                Text("Wird geprüft…")
-              }
-              .transition(.blurReplace)
-            } else {
-              Text("Funktionen erneut prüfen")
-                .transition(.blurReplace)
-            }
-          }
-          .buttonStyle(.soft(display.accent))
-          .disabled(display.isProbing)
-          .animation(motion.spatialDefault, value: display.isProbing)
-
-          Text("Dauert wenige Sekunden.")
-            .font(TypeScale.detail)
-            .foregroundStyle(.secondary)
-        }
       }
     }
   }
@@ -628,14 +577,67 @@ struct DisplayPage: View {
       title: "Diagnose & Technik",
       systemImage: "stethoscope",
       accent: display.accent,
-      summary: "Erkannte Hardware-Funktionen, Testbilder und DDC-Protokoll."
+      summary: "Transport-Override, DDC-Timing, erkannte Hardware-Funktionen und Testbilder."
     ) {
       VStack(alignment: .leading, spacing: Layout.normal) {
+        transportOverrides
+        Divider()
         capabilities
         Divider()
         testPatterns
         Divider()
         ddcLog
+      }
+    }
+  }
+
+  private var transportOverrides: some View {
+    VStack(alignment: .leading, spacing: Layout.normal) {
+      VStack(alignment: .leading, spacing: Layout.tight) {
+        Text("Helligkeit über").font(TypeScale.rowTitle)
+        SegmentedMorphPicker(
+          selection: strategyBinding,
+          options: BrightnessStrategy.allCases.map { ($0, $0.displayName) },
+          accent: display.accent
+        )
+      }
+      .help("Automatisch wählt nahtlos zwischen Hardware (DDC) und Software.")
+
+      Toggle("Unter das Backlight-Minimum dimmen (Software-Reserve)", isOn: extraDimmingBinding)
+        .help("Dimmt unter 0 % Backlight per Software-Gamma-Tabelle weiter.")
+
+      VStack(alignment: .leading, spacing: Layout.tight) {
+        Text("DDC-Bus-Timing").font(TypeScale.rowTitle)
+        SegmentedMorphPicker(
+          selection: timingBinding,
+          options: [(DDCTiming.default, "Standard"), (DDCTiming.relaxed, "Entspannt")],
+          accent: display.accent
+        )
+      }
+      .help("Erhöhen, falls Werte sporadisch aussetzen oder nach Standby verschluckt werden.")
+
+      HStack {
+        Button {
+          Task { await display.reprobeCapabilities() }
+        } label: {
+          if display.isProbing {
+            HStack(spacing: Layout.tight) {
+              ProgressView().controlSize(.small)
+              Text("Wird geprüft…")
+            }
+            .transition(.blurReplace)
+          } else {
+            Text("Funktionen erneut prüfen")
+              .transition(.blurReplace)
+          }
+        }
+        .buttonStyle(.soft(display.accent))
+        .disabled(display.isProbing)
+        .animation(motion.spatialDefault, value: display.isProbing)
+
+        Text("Dauert wenige Sekunden.")
+          .font(TypeScale.detail)
+          .foregroundStyle(.secondary)
       }
     }
   }
