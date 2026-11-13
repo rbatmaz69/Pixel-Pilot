@@ -442,6 +442,15 @@ struct ThemeTests {
     }
   }
 
+  @Test("Control Center Pill Slider uses 26pt pill track and circular 20pt thumb")
+  func controlCenterPillSliderGeometry() {
+    #expect(KnobGeometry.rest.trackHeight == 26)
+    #expect(KnobGeometry.hovered.trackHeight == 26)
+    #expect(KnobGeometry.dragging.trackHeight == 26)
+    #expect(KnobGeometry.rest.width == 20)
+    #expect(KnobGeometry.rest.cornerRadius == 10)
+  }
+
   @Test("legible(on:) reaches the ratio it is asked for")
   func legibleReachesRatio() {
     for background in AccentPalette.tones {
