@@ -1,3 +1,4 @@
+import CoreGraphics
 import PixelPilotCore
 import SwiftUI
 
@@ -17,6 +18,8 @@ struct DisplayPage: View {
   let log: DiagnosticsLog
   /// Bumped whenever something outside this card changed the values in it.
   let groupChangeTick: Int
+
+  @State private var displayModeRefreshTick = 0
 
   var body: some View {
     ScrollView {
@@ -127,6 +130,7 @@ struct DisplayPage: View {
       VStack(spacing: 0) {
         ZStack {
           StudioWallpaperCanvas(
+            displayID: display.displayID,
             accent: display.accent,
             brightness: display.brightness,
             warmthFraction: warmthFraction,
@@ -264,6 +268,8 @@ struct DisplayPage: View {
         )
       }
 
+      resolutionMenuPill
+
       Divider()
         .overlay(theme.separator)
 
@@ -307,6 +313,64 @@ struct DisplayPage: View {
       RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
         .strokeBorder(theme.groupBorder, lineWidth: 0.5)
     )
+  }
+
+  @ViewBuilder
+  private var resolutionMenuPill: some View {
+    let _ = displayModeRefreshTick
+    let summary = DisplayModeController.currentSummary(for: display.displayID)
+    let options = DisplayModeController.availableOptions(for: display.displayID)
+
+    if let summary {
+      Menu {
+        if options.isEmpty {
+          Text("Keine weiteren HiDPI-/Hz-Modi verfügbar")
+        } else {
+          ForEach(options) { option in
+            Button {
+              if DisplayModeController.apply(option, to: display.displayID) {
+                Haptics.confirm()
+                displayModeRefreshTick &+= 1
+              }
+            } label: {
+              let title = option.menuLabel
+              if option.isCurrent {
+                Label(title, systemImage: "checkmark")
+              } else {
+                Text(title)
+              }
+            }
+          }
+        }
+      } label: {
+        HStack(spacing: 4) {
+          Image(systemName: "display")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(display.accent)
+          Text(summary)
+            .font(TypeScale.detail)
+            .monospacedDigit()
+            .foregroundStyle(.primary.opacity(0.86))
+          Image(systemName: "chevron.up.chevron.down")
+            .font(.system(size: 8.5, weight: .semibold))
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+          RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+            .fill(theme.recessedWell)
+        )
+        .overlay(
+          RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+            .strokeBorder(theme.groupBorder, lineWidth: 0.5)
+        )
+      }
+      .menuStyle(.borderlessButton)
+      .fixedSize()
+      .help("HiDPI-Skalierung und Bildwiederholrate schnell umschalten")
+      .accessibilityLabel("Auflösung und Bildwiederholrate")
+    }
   }
 
   /// Cards fade rather than scale as they scroll.
@@ -710,5 +774,125 @@ struct DisplayPage: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+/// Clean HiDPI / refresh-rate Quick-Switcher wrapper around CoreGraphics display modes.
+@MainActor
+private enum DisplayModeController {
+  struct Option: Identifiable, Hashable, Sendable {
+    let ioDisplayModeID: Int32
+    let width: Int
+    let height: Int
+    let refreshHz: Int
+    let isHiDPI: Bool
+    let isCurrent: Bool
+    let roleTag: String?
+
+    var id: Int32 { ioDisplayModeID }
+
+    var menuLabel: String {
+      let base = refreshHz > 0 ? "\(width) × \(height) · \(refreshHz) Hz" : "\(width) × \(height)"
+      let hidpi = isHiDPI ? " HiDPI" : ""
+      if let roleTag {
+        return "\(base)\(hidpi) — \(roleTag)"
+      }
+      return "\(base)\(hidpi)"
+    }
+  }
+
+  static func currentSummary(for displayID: CGDirectDisplayID) -> String? {
+    guard let mode = CGDisplayCopyDisplayMode(displayID) else { return nil }
+    let hz = Int(mode.refreshRate.rounded())
+    return hz > 0 ? "\(mode.width) × \(mode.height) · \(hz) Hz" : "\(mode.width) × \(mode.height)"
+  }
+
+  static func availableOptions(for displayID: CGDirectDisplayID) -> [Option] {
+    let current = CGDisplayCopyDisplayMode(displayID)
+    let options = [kCGDisplayShowDuplicateLowResolutionModes: kCFBooleanTrue] as CFDictionary
+    guard let raw = CGDisplayCopyAllDisplayModes(displayID, options) as? [CGDisplayMode] else {
+      return []
+    }
+
+    let usable = raw.filter { $0.isUsableForDesktopGUI() && $0.width >= 800 && $0.height >= 600 }
+    let hasHiDPI = usable.contains { $0.pixelWidth > $0.width }
+
+    struct Key: Hashable {
+      let width: Int
+      let height: Int
+      let hz: Int
+      let isHiDPI: Bool
+    }
+
+    var deduped: [Key: CGDisplayMode] = [:]
+    for mode in usable {
+      let isHiDPI = mode.pixelWidth > mode.width
+      if hasHiDPI && !isHiDPI && mode.width < (usable.map(\.pixelWidth).max() ?? mode.width) / 2 {
+        continue
+      }
+      let key = Key(
+        width: mode.width,
+        height: mode.height,
+        hz: Int(mode.refreshRate.rounded()),
+        isHiDPI: isHiDPI
+      )
+      if let existing = deduped[key] {
+        if current?.ioDisplayModeID == mode.ioDisplayModeID || mode.pixelWidth > existing.pixelWidth {
+          deduped[key] = mode
+        }
+      } else {
+        deduped[key] = mode
+      }
+    }
+
+    let sorted: [CGDisplayMode] = deduped.values.sorted { lhs, rhs in
+      if lhs.width != rhs.width { return lhs.width < rhs.width }
+      let lhsHiDPI = lhs.pixelWidth > lhs.width
+      let rhsHiDPI = rhs.pixelWidth > rhs.width
+      if lhsHiDPI != rhsHiDPI { return lhsHiDPI }
+      return lhs.refreshRate > rhs.refreshRate
+    }
+
+    let distinctWidths = Array(Set(sorted.map(\.width))).sorted()
+    let minW = distinctWidths.first
+    let midW = distinctWidths.count >= 3 ? distinctWidths[distinctWidths.count / 2] : nil
+    let maxW = distinctWidths.count >= 2 ? distinctWidths.last : nil
+
+    return sorted.map { mode in
+      let tag: String? = switch mode.width {
+      case let w where w == minW && distinctWidths.count >= 2: "Größerer Text"
+      case let w where w == midW: "Standard"
+      case let w where w == maxW && distinctWidths.count >= 2: "Mehr Fläche"
+      default: nil
+      }
+      return Option(
+        ioDisplayModeID: mode.ioDisplayModeID,
+        width: mode.width,
+        height: mode.height,
+        refreshHz: Int(mode.refreshRate.rounded()),
+        isHiDPI: mode.pixelWidth > mode.width,
+        isCurrent: current?.ioDisplayModeID == mode.ioDisplayModeID,
+        roleTag: tag
+      )
+    }
+  }
+
+  static func apply(_ option: Option, to displayID: CGDirectDisplayID) -> Bool {
+    let options = [kCGDisplayShowDuplicateLowResolutionModes: kCFBooleanTrue] as CFDictionary
+    guard let raw = CGDisplayCopyAllDisplayModes(displayID, options) as? [CGDisplayMode],
+          let target = raw.first(where: { $0.ioDisplayModeID == option.ioDisplayModeID })
+    else {
+      return false
+    }
+    var config: CGDisplayConfigRef?
+    guard CGBeginDisplayConfiguration(&config) == .success, let config else {
+      return false
+    }
+    let configureStatus = CGConfigureDisplayWithDisplayMode(config, displayID, target, nil)
+    guard configureStatus == .success else {
+      CGCancelDisplayConfiguration(config)
+      return false
+    }
+    return CGCompleteDisplayConfiguration(config, .permanently) == .success
   }
 }
