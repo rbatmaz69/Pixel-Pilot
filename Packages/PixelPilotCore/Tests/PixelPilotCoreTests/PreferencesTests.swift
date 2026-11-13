@@ -303,6 +303,21 @@ struct PreferencesTests {
     )
   }
 
+  @Test("Ambient mood override round-trips and falls back safely on legacy blobs")
+  func ambientMoodOverrideRoundTrips() {
+    let defaults = makeDefaults()
+    let preferences = Preferences(defaults: defaults)
+    #expect(preferences.global.ambientMoodOverride == .auto)
+
+    preferences.updateGlobal { $0.ambientMoodOverride = .evening }
+    #expect(Preferences(defaults: defaults).global.ambientMoodOverride == .evening)
+
+    defaults.set(Data(#"{"themeMode":"unknownMode","ambientMoodOverride":"futureMood"}"#.utf8), forKey: "global")
+    let fallback = Preferences(defaults: defaults).global
+    #expect(fallback.themeMode == .system)
+    #expect(fallback.ambientMoodOverride == .auto)
+  }
+
   /// What a build predating the style wrote. Everything it *did* write has to
   /// come through, and the style has to land on the look that build had.
   @Test("A blob written before the style keeps its settings")

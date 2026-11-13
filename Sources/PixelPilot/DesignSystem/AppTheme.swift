@@ -212,6 +212,8 @@ struct AppTheme: Equatable, Sendable {
   let style: ThemeStyle
   /// User-configured translucency (`0.55 ... 0.98`) for Liquid Glass surfaces.
   let glassOpacity: Double
+  /// User preference for the time-of-day ambient wash.
+  let ambientMoodPreference: AmbientMoodPreference
 
   /// The window field. Two stops, lighter at the top, the way a lit surface is.
   let backdropTop: Color
@@ -243,7 +245,8 @@ struct AppTheme: Equatable, Sendable {
     backdropTone: Color? = nil,
     isDark: Bool,
     style: ThemeStyle = .glass,
-    glassOpacity: Double = GlobalSettings.defaultGlassOpacity
+    glassOpacity: Double = GlobalSettings.defaultGlassOpacity,
+    ambientMoodPreference: AmbientMoodPreference = .auto
   ) {
     let field = backdropTone ?? tone
     let recipe = Self.recipe(for: style, isDark: isDark)
@@ -256,6 +259,7 @@ struct AppTheme: Equatable, Sendable {
     self.isDark = isDark
     self.style = style
     self.glassOpacity = clampedGlass
+    self.ambientMoodPreference = ambientMoodPreference
     self.recipe = recipe
 
     let sink: Color = Self.sink(isDark: isDark)
@@ -591,11 +595,17 @@ struct AppTheme: Equatable, Sendable {
     Self.warmEspressoInk
   }
 
+  /// Concrete time-of-day studio mood resolved from `ambientMoodPreference`.
+  var resolvedAmbientMood: AmbientDaylightMood {
+    AmbientDaylightMood.resolve(for: ambientMoodPreference)
+  }
+
   /// Subtle time-of-day atmospheric top gradient (`4–6%` opacity) for popovers and sidebars.
-  func ambientDaylightGradient(mood: AmbientDaylightMood = .current()) -> LinearGradient {
-    LinearGradient(
+  func ambientDaylightGradient(mood: AmbientDaylightMood? = nil) -> LinearGradient {
+    let activeMood = mood ?? resolvedAmbientMood
+    return LinearGradient(
       colors: [
-        mood.topTint(isDark: isDark),
+        activeMood.topTint(isDark: isDark),
         .clear,
       ],
       startPoint: .top,
@@ -710,6 +720,15 @@ final class ThemeStore {
     }
   }
 
+  /// Preferred time-of-day studio atmosphere (`auto` follows the clock).
+  var ambientMoodPreference: AmbientMoodPreference {
+    didSet {
+      guard ambientMoodPreference != oldValue else { return }
+      Preferences.shared.updateGlobal { $0.ambientMoodOverride = ambientMoodPreference }
+      rebuild()
+    }
+  }
+
   /// Kept current by `AppModel`, which already observes the effective
   /// appearance for the preset bindings.
   var systemIsDark: Bool {
@@ -728,7 +747,7 @@ final class ThemeStore {
     let stored = Preferences.shared.global
     let indices = AccentPalette.tones.indices
     // Locals first, then the stored properties: `theme` is derived from the
-    // other five, and a derived property cannot read them until every one of
+    // other properties, and a derived property cannot read them until every one of
     // them has been assigned.
     let tone = indices.contains(stored.themeToneIndex) ? stored.themeToneIndex : 0
     let field = stored.themeBackdropToneIndex.flatMap { indices.contains($0) ? $0 : nil }
@@ -738,6 +757,7 @@ final class ThemeStore {
       max(stored.glassOpacity, GlobalSettings.glassOpacityRange.lowerBound),
       GlobalSettings.glassOpacityRange.upperBound
     )
+    let ambientMoodPreference = stored.ambientMoodOverride
     let systemIsDark = NSApplication.shared.effectiveAppearance
       .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
 
@@ -749,17 +769,20 @@ final class ThemeStore {
     self.mode = mode
     self.style = style
     self.glassOpacity = glassOpacity
+    self.ambientMoodPreference = ambientMoodPreference
     self.systemIsDark = systemIsDark
     theme = Self.build(
       tone: tone, field: field, mode: mode, style: style,
-      glassOpacity: glassOpacity, systemIsDark: systemIsDark
+      glassOpacity: glassOpacity, ambientMoodPreference: ambientMoodPreference,
+      systemIsDark: systemIsDark
     )
   }
 
   private func rebuild() {
     theme = Self.build(
       tone: toneIndex, field: backdropToneIndex, mode: mode, style: style,
-      glassOpacity: glassOpacity, systemIsDark: systemIsDark
+      glassOpacity: glassOpacity, ambientMoodPreference: ambientMoodPreference,
+      systemIsDark: systemIsDark
     )
   }
 
@@ -769,6 +792,7 @@ final class ThemeStore {
     mode: ThemeMode,
     style: ThemeStyle,
     glassOpacity: Double,
+    ambientMoodPreference: AmbientMoodPreference,
     systemIsDark: Bool
   ) -> AppTheme {
     let isDark: Bool = switch mode {
@@ -781,7 +805,8 @@ final class ThemeStore {
       backdropTone: field.map { AccentPalette.tones[$0] },
       isDark: isDark,
       style: style,
-      glassOpacity: glassOpacity
+      glassOpacity: glassOpacity,
+      ambientMoodPreference: ambientMoodPreference
     )
   }
 }

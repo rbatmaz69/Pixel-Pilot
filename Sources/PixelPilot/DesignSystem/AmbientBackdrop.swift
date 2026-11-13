@@ -1,4 +1,5 @@
 import Foundation
+import PixelPilotCore
 import SwiftUI
 
 /// Time-of-day studio atmosphere, evaluated on demand when a surface opens.
@@ -27,6 +28,20 @@ enum AmbientDaylightMood: String, CaseIterable, Sendable, Equatable {
   ) -> AmbientDaylightMood {
     let hour = calendar.component(.hour, from: date)
     return mood(forHour: hour)
+  }
+
+  /// Resolves a user mood preference into the concrete daylight mood.
+  static func resolve(
+    for preference: AmbientMoodPreference,
+    date: Date = Date(),
+    calendar: Calendar = .current
+  ) -> AmbientDaylightMood {
+    switch preference {
+    case .auto: current(for: date, calendar: calendar)
+    case .morning: .morning
+    case .afternoon: .afternoon
+    case .evening: .evening
+    }
   }
 
   /// Warm personal companion greeting title.
@@ -87,7 +102,7 @@ struct AmbientBackdrop: View {
   let accent: Color
   var intensity: Double?
   var isVisible: Bool = true
-  var mood: AmbientDaylightMood = .current()
+  var mood: AmbientDaylightMood? = nil
 
   @Environment(\.theme) private var theme
 
@@ -97,9 +112,10 @@ struct AmbientBackdrop: View {
     if strength <= 0 {
       EmptyView()
     } else {
+      let resolvedMood = mood ?? theme.resolvedAmbientMood
       LinearGradient(
         colors: [
-          mood.topTint(isDark: theme.isDark),
+          resolvedMood.topTint(isDark: theme.isDark),
           accent.opacity(min(0.045 * strength, 0.08)),
           .clear,
         ],

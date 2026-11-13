@@ -28,7 +28,7 @@ struct MenuBarPanel: View {
   @State private var previewed: Preset?
   @State private var previewTask: Task<Void, Never>?
 
-  private let mood = AmbientDaylightMood.current()
+  private var mood: AmbientDaylightMood { theme.resolvedAmbientMood }
 
   var body: some View {
     VStack(alignment: .leading, spacing: Layout.snug) {
