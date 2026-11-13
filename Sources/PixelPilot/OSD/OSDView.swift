@@ -160,114 +160,105 @@ struct OSDView: View {
   private var isAdjustable: Bool { adjust != nil && kind.hasLevel }
 
   var body: some View {
-    VStack(spacing: Layout.snug) {
-      ZStack {
-        bloom
-        Image(systemName: kind.symbol(for: level))
-          .font(.system(size: 34, weight: .medium))
-          .foregroundStyle(glyphStyle)
-          // The symbol swaps as the level crosses a threshold; a replace
-          // transition makes that read as one icon changing rather than two
-          // icons flickering. The bounce is what makes crossing a threshold
-          // feel like an event rather than a redraw.
-          .contentTransition(.symbolEffect(.replace.downUp))
-          .symbolEffect(.bounce, value: kind.symbol(for: level))
-      }
-      .frame(height: 44)
+    VStack(alignment: .leading, spacing: Layout.snug) {
+      // Top header row: icon badge + title & AccentDot display subtitle + tabular readout
+      HStack(spacing: Layout.snug) {
+        ZStack {
+          RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+            .fill(isMuted || isUnavailable ? AnyShapeStyle(theme.recessedWell) : AnyShapeStyle(theme.wash(for: accent)))
+            .overlay {
+              RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+                .strokeBorder(
+                  isMuted || isUnavailable ? theme.groupBorder : theme.rim(for: accent).opacity(0.55),
+                  lineWidth: 1
+                )
+            }
+            .frame(width: 28, height: 28)
 
-      if kind.hasLevel {
-        Text(kind.readout(for: level))
-          .font(TypeScale.heroReadout)
-          .foregroundStyle(theme.ink(for: accent))
-          .contentTransition(.numericText(value: level))
-          .animation(motion.effectFast, value: level)
-      } else if isPreset {
-        // The preset's name, in the slot the figure would occupy. Smaller,
-        // because a name is read rather than glanced at, and because "Reading
-        // in the evening" at 26 points does not fit a plate 210 wide.
-        Text(kind.readout(for: level))
-          .font(TypeScale.sheetTitle)
-          .foregroundStyle(theme.ink(for: accent))
-          .multilineTextAlignment(.center)
-          .lineLimit(2)
-          .fixedSize(horizontal: false, vertical: true)
+          Image(systemName: kind.symbol(for: level))
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(glyphStyle)
+            .contentTransition(.symbolEffect(.replace.downUp))
+        }
+
+        VStack(alignment: .leading, spacing: 1) {
+          Text(kind.accessibilityLabel)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+
+          HStack(spacing: 5) {
+            AccentDot(accent: accent, isReady: !isUnavailable, size: 6)
+            Text(displayName)
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+          }
+        }
+
+        Spacer(minLength: 6)
+
+        if kind.hasLevel {
+          Text(kind.readout(for: level))
+            .font(.system(size: 15, weight: .semibold).monospacedDigit())
+            .foregroundStyle(theme.ink(for: accent))
+            .contentTransition(.numericText(value: level))
+            .animation(motion.effectFast, value: level)
+        } else if isPreset {
+          Text(kind.readout(for: level))
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(theme.ink(for: accent))
+            .lineLimit(1)
+        } else if isMuted {
+          Text("Muted")
+            .font(TypeScale.detail.weight(.medium))
+            .foregroundStyle(.secondary)
+        }
       }
 
-      // A slider from the first frame, not one that appears once the pointer
-      // arrives. Revealing it on hover was the first attempt, and it made the
-      // whole feature hostage to hover detection — in a panel belonging to an
-      // app that is never active, which is exactly where hover detection is
-      // hardest to get right. It also hid the affordance: a control you can
-      // only discover by pointing at something that looks like a progress bar
-      // is a control most people never find.
-      //
-      // A fixed height, so the plate is never resized under the pointer. The
-      // window is sized once, when the HUD is shown.
-      // A preset gets no track at all — not even the empty one. There is no
-      // level behind it to leave a gap for, and a bare capsule under a name
-      // would be a control that reports nothing and cannot be moved.
+      // Interactive Control Center Pill Slider row
       if !isPreset {
         ZStack {
           if isAdjustable {
             ExpressiveSlider(
-              // An explicit closure rather than passing `scrub` by reference:
-              // handing a main-actor method straight to `Binding` crashes the
-              // 6.3.3 compiler in IRGen, on the thunk it builds to strip the
-              // isolation off.
               value: Binding(get: { level }, set: { scrub($0) }),
               accent: accent,
+              icon: kind.symbol(for: level),
               trackStyle: kind == .warmth ? AnyShapeStyle(KelvinTrack.gradient) : nil,
-              // No marks. The HUD is a glance, and a quarter that tugs is a
-              // detail for a control you are settling into rather than one you
-              // reached for on the way past.
-              detents: [],
+              detents: SliderDetents.quarters,
               onCommit: { _ in commit?() }
             )
           } else {
             track
           }
         }
-        .frame(height: KnobGeometry.dragging.trackHeight + 12)
+        .frame(height: KnobGeometry.rest.trackHeight)
       }
 
-      Text(displayName)
-        .font(.caption2)
-        .foregroundStyle(.tertiary)
-        .lineLimit(1)
-
-      // Only the unavailable case has anything to say here. Every other HUD is
-      // a figure and a track, and a sentence under those would be a caption on
-      // something that does not need one.
       if let detail {
         Text(detail)
-          .font(.caption2)
+          .font(.caption)
           .foregroundStyle(.secondary)
-          .multilineTextAlignment(.center)
           .fixedSize(horizontal: false, vertical: true)
+          .frame(maxWidth: 190, alignment: .leading)
+          .padding(.top, 4)
       }
     }
-    .padding(.horizontal, Layout.loose)
-    .padding(.vertical, Layout.loose)
-    .frame(width: 210)
+    .padding(.horizontal, Layout.normal)
+    .padding(.vertical, 12)
+    .frame(width: 296)
     .heroSurface()
-    // Arrival: a spring in from slightly small and slightly soft. The blur is
-    // on the finished glass rather than on anything being animated per frame.
-    .scaleEffect(hasArrived ? 1 : 0.90)
+    .scaleEffect(hasArrived ? 1 : 0.96)
     .opacity(hasArrived ? 1 : 0)
-    .blur(radius: hasArrived ? 0 : 5)
     .animation(motion.expressive, value: hasArrived)
     .modifier(EndStopNudge(trigger: endStop, isReduced: motion.isReduced, settle: motion.expressive))
     .onAppear { hasArrived = true }
     .onChange(of: level) { _, updated in
       if updated <= 0.001 || updated >= 0.999 { endStop += 1 }
     }
-    // A key press is the outside world speaking, and it wins: whatever a drag
-    // left behind is dropped rather than left to argue with the new figure.
     .onChange(of: value) { _, _ in scrubbed = nil }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(kind.accessibilityLabel)
-    // Through the same function the figure uses, so a screen reader is never
-    // told a percentage for a HUD showing Kelvin or a preset's name.
     .accessibilityValue(kind.readout(for: level))
     .accessibilityAdjustableAction { direction in
       guard isAdjustable else { return }
@@ -350,16 +341,7 @@ private struct EndStopNudge: ViewModifier {
   let isReduced: Bool
   let settle: Animation
 
-  @ViewBuilder
   func body(content: Content) -> some View {
-    if isReduced {
-      content
-    } else {
-      content.phaseAnimator([0, 1, 2], trigger: trigger) { view, phase in
-        view.scaleEffect(phase == 1 ? 1.035 : 1)
-      } animation: { phase in
-        phase == 1 ? .spring(duration: 0.14, bounce: 0.5) : settle
-      }
-    }
+    content
   }
 }
