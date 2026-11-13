@@ -410,6 +410,20 @@ struct ThemeTests {
     #expect(flatTheme.panelTintOpacity == 1.0)
   }
 
+  @Test("Apple HIG concentric corner radii follow the 5/6/10/12/14pt hierarchy")
+  func higConcentricRadii() {
+    #expect(Layout.radiusSegment == 5)
+    #expect(Layout.radiusControl == 6)
+    #expect(Layout.radiusCard == 10)
+    #expect(Layout.radiusWindow == 12)
+    #expect(Layout.radiusPanel == 14)
+    #expect(Layout.radiusHero == 14)
+    #expect(Layout.radiusSegment < Layout.radiusControl)
+    #expect(Layout.radiusControl < Layout.radiusCard)
+    #expect(Layout.radiusCard < Layout.radiusWindow)
+    #expect(Layout.radiusWindow < Layout.radiusPanel)
+  }
+
   @Test("legible(on:) reaches the ratio it is asked for")
   func legibleReachesRatio() {
     for background in AccentPalette.tones {

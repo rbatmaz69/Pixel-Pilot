@@ -14,41 +14,48 @@ enum Layout {
   static let loose: CGFloat = 20
   static let section: CGFloat = 26
 
-  /// Softer than the system default. Generous radii are the cheapest way to
-  /// read as playful — but only if they are consistent. Two radii that are
-  /// close but not equal look like a mistake rather than a decision, which is
-  /// the whole reason these live here instead of at the call site.
+  /// Strict Apple macOS Human Interface Guidelines (HIG) concentric radius scale.
   ///
-  /// The scale is a hierarchy, not four sizes: controls, then the cards that
-  /// hold them, then the containers that hold the cards, then the two surfaces
-  /// that are nothing but themselves.
-  /// Buttons, toggles, segments.
-  static let radiusControl: CGFloat = 9
-  /// `PanelCard` and anything else using `cardSurface`.
-  static let radiusCard: CGFloat = 16
-  /// Containers of cards: the menu bar panel, sheets, the onboarding window.
-  static let radiusPanel: CGFloat = 22
-  /// The OSD and the identify overlay — one thing, alone on screen.
-  static let radiusHero: CGFloat = 28
+  /// Outer containers wrap inner cards and controls concentrically:
+  /// - `radiusWindow = 12pt`: Standard macOS `NSWindow` & `NSSheet` corner radius.
+  /// - `radiusPanel = 14pt`: Menu Bar Popover & OSD Control Center Pill outer radius.
+  /// - `radiusCard = 10pt`: Grouped `Form(.grouped)` containers & Control Center modules (`14pt - 4pt` padding).
+  /// - `radiusControl = 6pt`: Native `NSButton` push buttons, sidebar selection rows, text fields & outer segmented wells.
+  /// - `radiusSegment = 5pt`: Inner segment selection indicator & `20×20pt` category icon badges.
+  /// - `radiusHero = 14pt`: OSD Pill & Identify Overlay plates.
+  static let radiusSegment: CGFloat = 5
+  /// Buttons, toggles, sidebar rows, outer segmented frame.
+  static let radiusControl: CGFloat = 6
+  /// `PanelCard` and grouped `Form(.grouped)` containers.
+  static let radiusCard: CGFloat = 10
+  /// Standard macOS `NSWindow` and `NSSheet` corner radius.
+  static let radiusWindow: CGFloat = 12
+  /// Menu Bar Popover and Control Center containers.
+  static let radiusPanel: CGFloat = 14
+  /// The OSD Pill and the identify overlay plate.
+  static let radiusHero: CGFloat = 14
 }
 
 /// The type scale.
 ///
-/// SF Rounded for numbers and headings is the largest change in character
-/// available without shipping a font: it is unmistakably softer than SF Pro
-/// while still being a system face, so it stays legible at 9pt in a menu bar
-/// panel. Body copy stays on SF Pro — rounded paragraphs read as a toy.
+/// Combines clean SF Pro UI typography (`cardTitle`, `rowTitle`, `detail`),
+/// tabular monospaced readouts (`readout`, `heroReadout`, `mono`), and warm
+/// editorial New York serif accents (`editorialAccent`) for companion greetings,
+/// atmospheric scene subtitles, and the Panel Care Seal.
 enum TypeScale {
   static let cardTitle = Font.callout.weight(.semibold)
   static let rowTitle = Font.callout.weight(.medium)
   static let detail = Font.caption
   static let mono = Font.caption.monospaced()
 
-  /// Percentages in the panel and the window. Monospaced digits are what keep
-  /// `.numericText()` from shuffling the whole row as the value changes.
-  static let readout = Font.system(.callout, design: .rounded).weight(.semibold).monospacedDigit()
-  static let heroReadout = Font.system(size: 26, weight: .semibold, design: .rounded).monospacedDigit()
-  static let sheetTitle = Font.system(.title3, design: .rounded).weight(.semibold)
+  /// Warm editorial serif italic (New York) for companion headers, scene mood subtitles, and the Panel Care Seal.
+  static let editorialAccent = Font.system(.caption, design: .serif).italic()
+
+  /// Percentages and Kelvin readouts in the panel, HUD, and settings window.
+  /// Monospaced digits keep `.numericText()` from shifting the row as the value changes.
+  static let readout = Font.system(.callout, design: .default).weight(.semibold).monospacedDigit()
+  static let heroReadout = Font.system(size: 26, weight: .semibold, design: .default).monospacedDigit()
+  static let sheetTitle = Font.system(.title3, design: .default).weight(.semibold)
 
   /// The identify overlay's numeral. Sized to be read from across a desk rather
   /// than from in front of the keyboard, which is the whole point of it.
