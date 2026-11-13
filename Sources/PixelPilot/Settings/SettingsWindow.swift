@@ -57,6 +57,19 @@ enum AppPage: String, CaseIterable, Hashable {
     case .shortcuts: "command"
     }
   }
+
+  /// Warm category badge tint for the 20×20pt rounded-square sidebar icon.
+  var badgeTint: Color {
+    switch self {
+    case .general: Color(.sRGB, red: 0.851, green: 0.420, blue: 0.122)
+    case .schedule: Color(.sRGB, red: 0.918, green: 0.545, blue: 0.165)
+    case .presets: Color(.sRGB, red: 0.784, green: 0.365, blue: 0.275)
+    case .apps: Color(.sRGB, red: 0.255, green: 0.525, blue: 0.745)
+    case .shortcuts: Color(.sRGB, red: 0.545, green: 0.392, blue: 0.725)
+    case .keys: Color(.sRGB, red: 0.275, green: 0.588, blue: 0.471)
+    case .updates: Color(.sRGB, red: 0.392, green: 0.545, blue: 0.647)
+    }
+  }
 }
 
 /// Where the settings window is, kept outside the window.
@@ -102,6 +115,7 @@ struct SettingsWindow: View {
   let router: SettingsRouter
 
   @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
 
   var body: some View {
     NavigationSplitView {
@@ -149,14 +163,20 @@ struct SettingsWindow: View {
           ForEach(model.displays) { display in
             SidebarRow(
               title: display.name,
-              summary: display.isBuiltin ? "Built-in" : display.routeDescription
+              summary: display.isBuiltin ? "Built-in" : display.routeDescription,
+              trailingText: "\(Int((display.brightness * 100).rounded()))%"
             ) {
-              // The dot rather than a symbol: this row is the one place the
-              // display's own colour has to be recognisable, because it is what
-              // ties the sidebar to the map above it and to the cards on the
-              // right.
-              AccentDot(accent: display.accent, isReady: display.isReady, size: 9)
-                .frame(width: 22)
+              ZStack {
+                RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+                  .fill(theme.wash(for: display.accent))
+                  .overlay {
+                    RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+                      .strokeBorder(theme.rim(for: display.accent).opacity(0.45), lineWidth: 0.75)
+                  }
+                  .frame(width: 20, height: 20)
+
+                AccentDot(accent: display.accent, isReady: display.isReady, size: 8)
+              }
             }
             .tag(SettingsRoute.display(display.id))
           }
@@ -174,19 +194,40 @@ struct SettingsWindow: View {
             SidebarRow(
               title: app.title,
               summary: app.summary,
-              symbolName: app.symbolName
+              symbolName: app.symbolName,
+              tint: app.badgeTint
             )
             .tag(SettingsRoute.app(app))
           }
         }
       }
-      // A `List` paints the system's sidebar material over whatever is behind
-      // it, which here is the theme's field. Hiding it is what keeps the
-      // sidebar the same colour as the rest of the window.
       .scrollContentBackground(.hidden)
       .animation(motion.spatialDefault, value: model.displays.map(\.id))
+
+      Divider()
+      sidebarFooter
     }
-    .navigationSplitViewColumnWidth(min: 240, ideal: 260)
+    .background(alignment: .top) {
+      theme.ambientDaylightGradient()
+        .frame(height: 120)
+        .allowsHitTesting(false)
+    }
+    .navigationSplitViewColumnWidth(min: 245, ideal: 265)
+  }
+
+  private var sidebarFooter: some View {
+    HStack(spacing: 6) {
+      AccentDot(accent: Status.ok, size: 6)
+      Text("0.0% CPU while idle")
+        .font(.system(size: 10.5, weight: .medium, design: .rounded).monospacedDigit())
+        .foregroundStyle(.secondary)
+      Spacer()
+      Text("HIG Studio")
+        .font(TypeScale.editorialAccent)
+        .foregroundStyle(.tertiary)
+    }
+    .padding(.horizontal, Layout.normal)
+    .padding(.vertical, 8)
   }
 
   /// The list's selection, which is optional where the router's is not.
@@ -274,48 +315,68 @@ struct SettingsWindow: View {
 private struct SidebarRow<Leading: View>: View {
   let title: String
   let summary: String
+  var trailingText: String? = nil
   @ViewBuilder var leading: Leading
 
   var body: some View {
     HStack(spacing: Layout.tight) {
       leading
       VStack(alignment: .leading, spacing: 1) {
-        Text(title).font(TypeScale.rowTitle)
+        HStack(spacing: 4) {
+          Text(title)
+            .font(TypeScale.rowTitle)
+            .lineLimit(1)
+          Spacer(minLength: 2)
+          if let trailingText {
+            Text(trailingText)
+              .font(.caption2.weight(.semibold).monospacedDigit())
+              .foregroundStyle(.secondary)
+          }
+        }
         Text(summary)
           .font(TypeScale.detail)
           .foregroundStyle(.secondary)
-          .lineLimit(2)
-          .fixedSize(horizontal: false, vertical: true)
+          .lineLimit(1)
       }
     }
-    .padding(.vertical, 3)
+    .padding(.vertical, 2)
   }
 }
 
 extension SidebarRow {
-  /// The symbol form, drawn the way a card's heading draws its symbol — so a
-  /// page and the row that leads to it are recognisably the same thing.
-  init(title: String, summary: String, symbolName: String) where Leading == SidebarSymbol {
+  init(
+    title: String,
+    summary: String,
+    symbolName: String,
+    tint: Color? = nil
+  ) where Leading == SidebarSymbol {
     self.init(title: title, summary: summary) {
-      SidebarSymbol(systemImage: symbolName)
+      SidebarSymbol(systemImage: symbolName, tint: tint)
     }
   }
 }
 
-/// The same glyph a card puts beside its heading, at the same size — so a page
-/// and the row that leads to it are recognisably the same thing.
+/// 20×20pt rounded-square category badge (`5pt` `Layout.radiusSegment` radius).
 private struct SidebarSymbol: View {
   let systemImage: String
+  var tint: Color?
 
   @Environment(\.theme) private var theme
 
-  private var tone: Color { theme.tone }
+  private var tone: Color { tint ?? theme.tone }
 
   var body: some View {
     Image(systemName: systemImage)
       .font(.caption.weight(.semibold))
       .foregroundStyle(theme.ink(for: tone))
-      .frame(width: 22, height: 22)
-      .background(Circle().fill(theme.wash(for: tone)))
+      .frame(width: 20, height: 20)
+      .background(
+        RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+          .fill(theme.wash(for: tone))
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+          .strokeBorder(theme.rim(for: tone).opacity(0.45), lineWidth: 0.75)
+      )
   }
 }
