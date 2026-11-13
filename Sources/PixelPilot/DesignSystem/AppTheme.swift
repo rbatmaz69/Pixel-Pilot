@@ -570,6 +570,18 @@ struct AppTheme: Equatable, Sendable {
     Self.warmEspressoInk
   }
 
+  /// Subtle time-of-day atmospheric top gradient (`4–6%` opacity) for popovers and sidebars.
+  func ambientDaylightGradient(mood: AmbientDaylightMood = .current()) -> LinearGradient {
+    LinearGradient(
+      colors: [
+        mood.topTint(isDark: isDark),
+        .clear,
+      ],
+      startPoint: .top,
+      endPoint: .bottom
+    )
+  }
+
   /// An accent set as type on one of this theme's cards.
   ///
   /// The palette is tuned for fills, and a fill colour is not a text colour.

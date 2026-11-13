@@ -424,6 +424,24 @@ struct ThemeTests {
     #expect(Layout.radiusWindow < Layout.radiusPanel)
   }
 
+  @Test("AmbientDaylightMood maps morning, afternoon and evening hours deterministically")
+  func ambientDaylightMoodHours() {
+    #expect(AmbientDaylightMood.mood(forHour: 8) == .morning)
+    #expect(AmbientDaylightMood.mood(forHour: 11) == .morning)
+    #expect(AmbientDaylightMood.mood(forHour: 12) == .afternoon)
+    #expect(AmbientDaylightMood.mood(forHour: 16) == .afternoon)
+    #expect(AmbientDaylightMood.mood(forHour: 19) == .evening)
+    #expect(AmbientDaylightMood.mood(forHour: 2) == .evening)
+
+    for mood in AmbientDaylightMood.allCases {
+      #expect(!mood.greetingTitle.isEmpty)
+      #expect(!mood.greetingSubtitle.isEmpty)
+      #expect(!mood.symbolName.isEmpty)
+      #expect(mood.topTint(isDark: false).srgb.alpha <= 0.08)
+      #expect(mood.topTint(isDark: true).srgb.alpha <= 0.08)
+    }
+  }
+
   @Test("legible(on:) reaches the ratio it is asked for")
   func legibleReachesRatio() {
     for background in AccentPalette.tones {

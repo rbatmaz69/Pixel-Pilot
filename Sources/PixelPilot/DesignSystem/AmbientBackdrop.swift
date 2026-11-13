@@ -1,113 +1,114 @@
+import Foundation
 import SwiftUI
 
-/// A slowly drifting wash of the display's accent, for the back of a card.
+/// Time-of-day studio atmosphere, evaluated on demand when a surface opens.
 ///
-/// The one thing in this app that moves on its own — so how it moves matters
-/// more here than anywhere else.
-///
-/// `.phaseAnimator` rather than `TimelineView`: a timeline re-runs its body on
-/// the main actor every frame, which for a decorative glow is the exact cost
-/// this app exists to refuse. Phases animate offset, scale and opacity, and
-/// Core Animation interpolates those on the render server — so a full drift
-/// cycle costs two main-actor passes rather than several hundred.
-///
-/// The blur is applied to the static shapes and never animated. An animating
-/// blur radius is an offscreen pass per frame; `.compositingGroup()` is what
-/// keeps the blurred result cached while only the transform moves.
-///
-/// Nothing here needs tearing down. There is no timer and no task — closing the
-/// panel destroys the hierarchy, and the animation goes with it.
-///
-/// **It sizes itself to its blobs, not to what it is put behind.** All three
-/// call sites therefore say what they want: two ask for a height, and the one
-/// that clips asks for the whole offer first. Clipping this without a frame
-/// clips to a 170 pt square in the middle of the host rather than to the host,
-/// and because the blur carries colour to that edge the result is a hard band
-/// rather than a glow — which is a bug that shipped, not a hypothetical.
-struct AmbientBackdrop: View {
-  let accent: Color
-  /// How strongly to draw it. `nil` takes the theme's answer, which is what
-  /// every call site wants — the three of them pass a number only when the
-  /// surface they are on needs less than the style asks for.
-  var intensity: Double?
-  /// False parks the drift without removing the view. Callers pass window
-  /// activity here, so a window sitting behind another stops moving instead of
-  /// glowing away at nobody.
-  var isVisible: Bool = true
+/// Zero background timers (`0.0% CPU while idle`): the mood is resolved from
+/// the clock at render time and provides both the subtle 4–6% top atmospheric
+/// wash and the companion header greeting for the Menu Bar Popover.
+enum AmbientDaylightMood: String, CaseIterable, Sendable, Equatable {
+  case morning
+  case afternoon
+  case evening
 
-  @Environment(\.motion) private var motion
-  @Environment(\.theme) private var theme
-
-  /// The style's strength scaled by whatever the call site asked for, so a
-  /// surface that wants a quieter wash stays quieter under every style — and
-  /// so a style with no wash at all silences every one of them.
-  private var strength: Double { theme.ambientIntensity * (intensity ?? 1) }
-
-  private enum Drift: CaseIterable {
-    case ebb, flow
-
-    var offset: CGSize {
-      self == .ebb ? CGSize(width: -14, height: -9) : CGSize(width: 16, height: 11)
+  /// Resolves the studio mood for a given hour (`0...23`).
+  static func mood(forHour hour: Int) -> AmbientDaylightMood {
+    switch hour {
+    case 6..<12: .morning
+    case 12..<18: .afternoon
+    default: .evening
     }
-
-    var scale: CGFloat { self == .ebb ? 0.92 : 1.10 }
-    var opacity: Double { self == .ebb ? 0.75 : 1.0 }
   }
 
-  private var isStill: Bool { motion.isReduced || motion.ambientPeriod <= 0 || !isVisible }
+  /// Resolves the studio mood for `date` using `calendar`.
+  static func current(
+    for date: Date = Date(),
+    calendar: Calendar = .current
+  ) -> AmbientDaylightMood {
+    let hour = calendar.component(.hour, from: date)
+    return mood(forHour: hour)
+  }
+
+  /// Warm personal companion greeting title.
+  var greetingTitle: String {
+    switch self {
+    case .morning: "Guten Morgen im Studio"
+    case .afternoon: "Goldener Nachmittag"
+    case .evening: "Gemütlicher Feierabend"
+    }
+  }
+
+  /// Editorial companion subtitle.
+  var greetingSubtitle: String {
+    switch self {
+    case .morning: "Frisches Tageslicht · bereit für klaren Fokus"
+    case .afternoon: "Warmes Studiolicht · ausgewogene Kontraste"
+    case .evening: "Sanfte Bernsteinglut · schont deine Augen"
+    }
+  }
+
+  /// SF Symbol representing the time of day.
+  var symbolName: String {
+    switch self {
+    case .morning: "sun.haze.fill"
+    case .afternoon: "sun.max.fill"
+    case .evening: "moon.stars.fill"
+    }
+  }
+
+  /// Warm orb color for companion badges.
+  var orbColor: Color {
+    switch self {
+    case .morning: Color(.sRGB, red: 0.961, green: 0.620, blue: 0.235)
+    case .afternoon: Color(.sRGB, red: 0.918, green: 0.518, blue: 0.176)
+    case .evening: Color(.sRGB, red: 0.847, green: 0.431, blue: 0.188)
+    }
+  }
+
+  /// Subtle 4–6% top atmospheric tint for popover, sidebar, and studio headers.
+  func topTint(isDark: Bool) -> Color {
+    switch self {
+    case .morning:
+      return Color(.sRGB, red: 1.0, green: 0.706, blue: 0.392, opacity: isDark ? 0.055 : 0.06)
+    case .afternoon:
+      return Color(.sRGB, red: 0.941, green: 0.588, blue: 0.275, opacity: isDark ? 0.05 : 0.055)
+    case .evening:
+      return Color(.sRGB, red: 0.784, green: 0.431, blue: 0.235, opacity: isDark ? 0.06 : 0.05)
+    }
+  }
+}
+
+/// Calm, zero-CPU top daylight & display-accent wash replacing the old blurred blobs.
+///
+/// Renders a static, ultra-soft top linear gradient (`4–6%` opacity) that gives
+/// the window and popover a living time-of-day studio atmosphere without any
+/// offscreen blur passes or continuous animations (`0.0% CPU while idle`).
+struct AmbientBackdrop: View {
+  let accent: Color
+  var intensity: Double?
+  var isVisible: Bool = true
+  var mood: AmbientDaylightMood = .current()
+
+  @Environment(\.theme) private var theme
+
+  private var strength: Double { theme.ambientIntensity * (intensity ?? 1) }
 
   var body: some View {
-    // A style with no wash removes it rather than fading it out. `.opacity(0)`
-    // would leave the phase animator scheduling a frame callback forever for
-    // something nobody can see — the same argument the reduced-motion branch
-    // below makes, and the same reason this type has no timer in it.
     if strength <= 0 {
       EmptyView()
     } else {
-      blobStack
-    }
-  }
-
-  private var blobStack: some View {
-    Group {
-      if isStill {
-        // A branch, not a zero duration. A repeating animation with no duration
-        // still schedules a frame callback forever, which is the opposite of
-        // what someone asking for reduced motion wants.
-        blobs
-      } else {
-        blobs.phaseAnimator(Drift.allCases) { content, drift in
-          content
-            .offset(drift.offset)
-            .scaleEffect(drift.scale)
-            .opacity(drift.opacity)
-        } animation: { _ in
-          .easeInOut(duration: motion.ambientPeriod)
-        }
-      }
-    }
-    .compositingGroup()
-    .allowsHitTesting(false)
-    .accessibilityHidden(true)
-  }
-
-  /// The strength is carried by the fills rather than by an opacity on the
-  /// group. At full strength the two are identical, and above it only the fills
-  /// can go — an opacity has nowhere above 1 to put a style that wants *more*
-  /// wash than the default rather than less.
-  private var blobs: some View {
-    ZStack {
-      Circle()
-        .fill(accent.opacity(min(0.30 * strength, 1)))
-        .frame(width: 170, height: 170)
-        .blur(radius: 42)
-        .offset(x: -52, y: -26)
-
-      Circle()
-        .fill(theme.lifted(accent).opacity(min(0.22 * strength, 1)))
-        .frame(width: 130, height: 130)
-        .blur(radius: 36)
-        .offset(x: 62, y: 30)
+      LinearGradient(
+        colors: [
+          mood.topTint(isDark: theme.isDark),
+          accent.opacity(min(0.045 * strength, 0.08)),
+          .clear,
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+      )
+      .frame(maxWidth: .infinity, maxHeight: 180, alignment: .top)
+      .allowsHitTesting(false)
+      .accessibilityHidden(true)
     }
   }
 }
