@@ -451,6 +451,39 @@ struct ThemeTests {
     #expect(KnobGeometry.rest.cornerRadius == 10)
   }
 
+  @Test("Warm Studio Craft semantic tokens provide distinct light paper and dark walnut values")
+  func warmStudioCraftSemanticTokens() {
+    let light = AppTheme(tone: AccentPalette.tones[2], isDark: false, style: .glass)
+    let dark = AppTheme(tone: AccentPalette.tones[2], isDark: true, style: .glass)
+
+    #expect(light.studioAccent.srgb != dark.studioAccent.srgb)
+    #expect(light.specularRim.srgb.alpha > dark.specularRim.srgb.alpha)
+    #expect(light.groupBorder.srgb.alpha > 0)
+    #expect(dark.groupBorder.srgb.alpha > 0)
+    #expect(light.separator.srgb.alpha > 0)
+    #expect(dark.separator.srgb.alpha > 0)
+    #expect(light.sliderFill.srgb.alpha > 0.9)
+    #expect(dark.sliderFill.srgb.alpha > 0.85)
+    #expect(light.sliderGlyphInk.contrastRatio(to: light.sliderFill) >= 4.5)
+  }
+
+  @Test("Critically damped macOS motion tokens eliminate stagger and background ambient periods")
+  func criticallyDampedMotionTokens() {
+    #expect(MotionTokens.standard.stagger == 0)
+    #expect(MotionTokens.standard.ambientPeriod == 0)
+    #expect(MotionTokens.reduced.stagger == 0)
+    #expect(MotionTokens.reduced.ambientPeriod == 0)
+    #expect(MotionTokens.unfoldSpring == Spring(response: 0.18, dampingRatio: 0.96))
+  }
+
+  @Test("Onboarding steps provide both titles and warm editorial subtitles")
+  func onboardingStepTitlesAndSubtitles() {
+    for step in OnboardingFlow.Step.allCases {
+      #expect(!step.title.isEmpty)
+      #expect(!step.subtitle.isEmpty)
+    }
+  }
+
   @Test("legible(on:) reaches the ratio it is asked for")
   func legibleReachesRatio() {
     for background in AccentPalette.tones {

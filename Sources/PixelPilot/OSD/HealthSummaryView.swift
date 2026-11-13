@@ -24,15 +24,20 @@ struct HealthSummaryView: View {
         .onTapGesture(perform: onClose)
 
       VStack(alignment: .leading, spacing: Layout.normal) {
-        VStack(alignment: .leading, spacing: Layout.hair) {
-          Text(displayName)
-            .font(TypeScale.detail)
-            .foregroundStyle(.secondary)
-          Text(report.overall.displayName)
-            .font(TypeScale.sheetTitle)
-          Text(report.headline)
-            .font(TypeScale.detail)
-            .foregroundStyle(.secondary)
+        HStack(spacing: Layout.snug) {
+          Image(systemName: report.overall == .clean ? "checkmark.seal.fill" : "sparkles")
+            .font(.system(size: 22, weight: .semibold))
+            .foregroundStyle(report.overall == .clean ? Status.ok : Status.info)
+          VStack(alignment: .leading, spacing: Layout.hair) {
+            Text(displayName)
+              .font(TypeScale.detail)
+              .foregroundStyle(.secondary)
+            Text(report.overall.displayName)
+              .font(TypeScale.sheetTitle)
+            Text(report.headline)
+              .font(TypeScale.editorialAccent)
+              .foregroundStyle(.secondary)
+          }
         }
 
         Divider()
