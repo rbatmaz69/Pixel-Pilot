@@ -489,4 +489,16 @@ struct ThemeTests {
     #expect(Color.white.opacity(1).over(.black).srgb.red == 1)
     #expect(Color.white.opacity(0).over(.black).srgb.red == 0)
   }
+
+  @Test("KelvinTrack warm studio range maps 2700K...6500K monotonically")
+  func kelvinTrackWarmStudioRange() {
+    #expect(KelvinTrack.warmRange == 2700 ... 6500)
+    #expect(KelvinTrack.warmFraction(of: 2700) == 0)
+    #expect(KelvinTrack.warmFraction(of: 6500) == 1)
+    let mid = KelvinTrack.warmFraction(of: 4600)
+    #expect(abs(mid - 0.5) < 0.001)
+    #expect(KelvinTrack.warmDetents.count == 5)
+    #expect(KelvinTrack.warmDetents.first == 0)
+    #expect(KelvinTrack.warmDetents.last == 1)
+  }
 }

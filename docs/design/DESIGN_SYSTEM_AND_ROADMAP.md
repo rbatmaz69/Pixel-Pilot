@@ -86,7 +86,7 @@ Pixel Pilot verbindet **100 % treue Apple Human Interface Guidelines (HIG)** in 
 
 ## 5. GitHub Meilensteine & Issues (Implementierungs-Reihenfolge)
 
-> **Aktueller Stand:** Phase 1 (`M1–M5`, Issues `#2–#17`) wurde vollständig umgesetzt und gemerged. Basierend auf der Usability-, Farb-, Feature- & Gimmick-Analyse folgen in Phase 2 die Meilensteine `M6–M9` (Issues `#34–#45`).
+> **Aktueller Stand:** Phase 1 (`M1–M5`, Issues `#2–#17`) sowie Phase 2 (`M6–M9`, Issues `#34–#45`) sind vollständig umgesetzt und gemerged.
 
 ### Phase 1 — Basis-Redesign (Abgeschlossen, PRs `#18–#33` gemerged)
 
@@ -118,24 +118,24 @@ Pixel Pilot verbindet **100 % treue Apple Human Interface Guidelines (HIG)** in 
 
 ---
 
-### Phase 2 — Usability-Upgrade, Echte Mockup-Farben, Display-Anordnung & Studio-Gimmicks (`M6–M9`)
+### Phase 2 — Usability-Upgrade, Echte Mockup-Farben, Display-Anordnung & Studio-Gimmicks (`M6–M9` ✔︎, PRs gemerged)
 
-#### [M6: 100 % Warm Studio Paper & Dark Walnut Farbtreue & Deutsche Studio-Sprache](https://github.com/rbatmaz69/Pixel-Pilot/milestone/6)
-- **[Issue #34](https://github.com/rbatmaz69/Pixel-Pilot/issues/34)**: `[Design System & Colors]` Echte „Warm Studio Paper“ & „Dark Walnut“ Oberflächen ohne bunte Flächen-Einfärbung in `AppTheme` & `CardSurface`
-- **[Issue #35](https://github.com/rbatmaz69/Pixel-Pilot/issues/35)**: `[General & Appearance]` Verschlankung von `GeneralSettings.swift` auf `☀︎ Warm Paper · 🌙 Dark Walnut · Automatisch` & Liquid Glass Deckkraft
-- **[Issue #36](https://github.com/rbatmaz69/Pixel-Pilot/issues/36)**: `[Localization & Copy]` 100 % durchgängige warme deutsche Studio-Sprache & Streichung langer englischer `CardFooter`-Textwände
+#### [M6: 100 % Warm Studio Paper & Dark Walnut Farbtreue & Deutsche Studio-Sprache](https://github.com/rbatmaz69/Pixel-Pilot/milestone/6) ✔︎
+- **[Issue #34](https://github.com/rbatmaz69/Pixel-Pilot/issues/34)**: `[Design System & Colors]` Echte „Warm Studio Paper“ & „Dark Walnut“ Oberflächen ohne bunte Flächen-Einfärbung in `AppTheme` & `CardSurface` ✔︎
+- **[Issue #35](https://github.com/rbatmaz69/Pixel-Pilot/issues/35)**: `[General & Appearance]` Verschlankung von `GeneralSettings.swift` auf `☀︎ Warm Paper · 🌙 Dark Walnut · Automatisch` & Liquid Glass Deckkraft ✔︎
+- **[Issue #36](https://github.com/rbatmaz69/Pixel-Pilot/issues/36)**: `[Localization & Copy]` 100 % durchgängige warme deutsche Studio-Sprache & Streichung langer englischer `CardFooter`-Textwände ✔︎
 
-#### [M7: Radikale Entschlackung, Vereintes Licht-Atelier & Popover-Direkt-Usability](https://github.com/rbatmaz69/Pixel-Pilot/milestone/7)
-- **[Issue #37](https://github.com/rbatmaz69/Pixel-Pilot/issues/37)**: `[DisplayPage Simplification]` Radikale Entschlackung von `DisplayPage.swift` — Wegfall von *„Brightness via“* & *„Timing“* aus der Hauptansicht
-- **[Issue #38](https://github.com/rbatmaz69/Pixel-Pilot/issues/38)**: `[Unified Light Atelier]` Verschmelzung von Helligkeit, Kontrast, Ton, Kelvin-Farbwärme & Papier-Finish zu einem direkten „Licht- & Ton-Atelier“
-- **[Issue #39](https://github.com/rbatmaz69/Pixel-Pilot/issues/39)**: `[Menu Bar Direct Usability]` Schnellzugriff auf Farbwärme (Kelvin), Papier-Finish & Monitor-Aktionen direkt im Menüleisten-Popover
+#### [M7: Radikale Entschlackung, Vereintes Licht-Atelier & Popover-Direkt-Usability](https://github.com/rbatmaz69/Pixel-Pilot/milestone/7) ✔︎
+- **[Issue #37](https://github.com/rbatmaz69/Pixel-Pilot/issues/37)**: `[DisplayPage Simplification]` Radikale Entschlackung von `DisplayPage.swift` — Wegfall von *„Brightness via“* & *„Timing“* aus der Hauptansicht ✔︎
+- **[Issue #38](https://github.com/rbatmaz69/Pixel-Pilot/issues/38)**: `[Unified Light Atelier]` Verschmelzung von Helligkeit, Kontrast, Ton, Kelvin-Farbwärme & Papier-Finish zu einem direkten „Licht- & Ton-Atelier“ ✔︎
+- **[Issue #39](https://github.com/rbatmaz69/Pixel-Pilot/issues/39)**: `[Menu Bar Direct Usability]` Schnellzugriff auf Farbwärme (Kelvin), Papier-Finish & Monitor-Aktionen direkt im Menüleisten-Popover ✔︎
 
-#### [M8: Interaktive 2D-Monitor-Anordnung (Studio Desk), Echtes Wallpaper & HiDPI-Switch](https://github.com/rbatmaz69/Pixel-Pilot/milestone/8)
-- **[Issue #40](https://github.com/rbatmaz69/Pixel-Pilot/issues/40)**: `[CoreGraphics Display Arrangement]` `DisplayArrangementController` für native 2D-Monitor-Anordnung, Kanten-Snapping & Hauptmonitor-Wechsel
-- **[Issue #41](https://github.com/rbatmaz69/Pixel-Pilot/issues/41)**: `[Interactive Studio Desk UI]` Interaktiver „Anordnen ↔︎ Licht“-Modus in `DisplayMap` & Studio-Schreibtisch mit Drag & Drop & physischem Highlight-Rahmen
-- **[Issue #42](https://github.com/rbatmaz69/Pixel-Pilot/issues/42)**: `[Real Wallpaper & Resolution Switcher]` Echtes macOS-Schreibtischbild in `StudioWallpaperCanvas` + HiDPI-/Hz-Schnellwahl in der Hero-Card
+#### [M8: Interaktive 2D-Monitor-Anordnung (Studio Desk), Echtes Wallpaper & HiDPI-Switch](https://github.com/rbatmaz69/Pixel-Pilot/milestone/8) ✔︎
+- **[Issue #40](https://github.com/rbatmaz69/Pixel-Pilot/issues/40)**: `[CoreGraphics Display Arrangement]` `DisplayArrangementController` für native 2D-Monitor-Anordnung, Kanten-Snapping & Hauptmonitor-Wechsel ✔︎
+- **[Issue #41](https://github.com/rbatmaz69/Pixel-Pilot/issues/41)**: `[Interactive Studio Desk UI]` Interaktiver „Anordnen ↔︎ Licht“-Modus in `DisplayMap` & Studio-Schreibtisch mit Drag & Drop & physischem Highlight-Rahmen ✔︎
+- **[Issue #42](https://github.com/rbatmaz69/Pixel-Pilot/issues/42)**: `[Real Wallpaper & Resolution Switcher]` Echtes macOS-Schreibtischbild in `StudioWallpaperCanvas` + HiDPI-/Hz-Schnellwahl in der Hero-Card ✔︎
 
-#### [M9: Lebendige Animationen & Einzigartige „Studio Craft“-Gimmicks](https://github.com/rbatmaz69/Pixel-Pilot/milestone/9)
-- **[Issue #43](https://github.com/rbatmaz69/Pixel-Pilot/issues/43)**: `[Gimmick: 2D Studio Light Pad]` Interaktives 2D-Licht-Pad direkt im Studio-Hero-Monitor (`X = Kelvin`, `Y = Helligkeit`) & Pointer-Parallax-Glasreflexion
-- **[Issue #44](https://github.com/rbatmaz69/Pixel-Pilot/issues/44)**: `[Gimmick: Menu Bar Scroll & Status Readout]` Zero-Click-Dimming per Scrollrad/Trackpad auf dem Menüleisten-Icon & Option-Klick-Szenenwechsel
-- **[Issue #45](https://github.com/rbatmaz69/Pixel-Pilot/issues/45)**: `[Animations & Studio Polish]` Analoge Sonnen-Rotation (`0°–180°`) im Slider, leuchtende Detent-Kerben, Companion-Orb-Stimmungswechsel & Tests
+#### [M9: Lebendige Animationen & Einzigartige „Studio Craft“-Gimmicks](https://github.com/rbatmaz69/Pixel-Pilot/milestone/9) ✔︎
+- **[Issue #43](https://github.com/rbatmaz69/Pixel-Pilot/issues/43)**: `[Gimmick: 2D Studio Light Pad]` Interaktives 2D-Licht-Pad direkt im Studio-Hero-Monitor (`X = Kelvin`, `Y = Helligkeit`) & Pointer-Parallax-Glasreflexion ✔︎
+- **[Issue #44](https://github.com/rbatmaz69/Pixel-Pilot/issues/44)**: `[Gimmick: Menu Bar Scroll & Status Readout]` Zero-Click-Dimming per Scrollrad/Trackpad auf dem Menüleisten-Icon & Option-Klick-Szenenwechsel ✔︎
+- **[Issue #45](https://github.com/rbatmaz69/Pixel-Pilot/issues/45)**: `[Animations & Studio Polish]` Analoge Sonnen-Rotation (`0°–180°`) im Slider, leuchtende Detent-Kerben, Companion-Orb-Stimmungswechsel & Tests ✔︎
