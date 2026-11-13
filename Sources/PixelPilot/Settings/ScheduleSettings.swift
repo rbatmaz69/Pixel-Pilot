@@ -39,6 +39,10 @@ struct ScheduleSettings: View {
   private var arcCard: some View {
     PanelCard(title: "Through the day", systemImage: "sun.horizon") {
       VStack(alignment: .leading, spacing: Layout.normal) {
+        Text("Sanfte Lichtpunkte entlang des natürlichen Tageshorizonts — ereignisgesteuert ohne Hintergrund-Timer.")
+          .font(TypeScale.editorialAccent)
+          .foregroundStyle(.secondary)
+
         Toggle("Change the displays on a schedule", isOn: Binding(
           get: { schedule.isEnabled },
           set: { enabled in
@@ -60,11 +64,19 @@ struct ScheduleSettings: View {
           .transition(.blurReplace)
 
           HStack {
-            Text("Midnight").font(TypeScale.detail).foregroundStyle(.secondary)
+            Text("00:00 · Midnight").font(TypeScale.detail).foregroundStyle(.secondary)
             Spacer()
-            Text("Noon").font(TypeScale.detail).foregroundStyle(.secondary)
+            Label("Sunrise", systemImage: "sunrise.fill")
+              .font(TypeScale.detail)
+              .foregroundStyle(.secondary)
             Spacer()
-            Text("Midnight").font(TypeScale.detail).foregroundStyle(.secondary)
+            Text("12:00 · Noon").font(TypeScale.detail.weight(.medium)).foregroundStyle(.primary.opacity(0.75))
+            Spacer()
+            Label("Sunset", systemImage: "sunset.fill")
+              .font(TypeScale.detail)
+              .foregroundStyle(.secondary)
+            Spacer()
+            Text("24:00 · Midnight").font(TypeScale.detail).foregroundStyle(.secondary)
           }
 
           scrubReadout
