@@ -283,6 +283,26 @@ struct PreferencesTests {
     #expect(Preferences(defaults: defaults).global.themeStyle == .vivid)
   }
 
+  @Test("Liquid Glass opacity survives a round trip and clamps out-of-range values")
+  func glassOpacityRoundTripsAndClamps() {
+    let defaults = makeDefaults()
+    let preferences = Preferences(defaults: defaults)
+    #expect(preferences.global.glassOpacity == GlobalSettings.defaultGlassOpacity)
+
+    preferences.updateGlobal { $0.glassOpacity = 0.72 }
+    #expect(Preferences(defaults: defaults).global.glassOpacity == 0.72)
+
+    defaults.set(Data(#"{"glassOpacity":0.10}"#.utf8), forKey: "global")
+    #expect(
+      Preferences(defaults: defaults).global.glassOpacity == GlobalSettings.glassOpacityRange.lowerBound
+    )
+
+    defaults.set(Data(#"{"glassOpacity":1.50}"#.utf8), forKey: "global")
+    #expect(
+      Preferences(defaults: defaults).global.glassOpacity == GlobalSettings.glassOpacityRange.upperBound
+    )
+  }
+
   /// What a build predating the style wrote. Everything it *did* write has to
   /// come through, and the style has to land on the look that build had.
   @Test("A blob written before the style keeps its settings")

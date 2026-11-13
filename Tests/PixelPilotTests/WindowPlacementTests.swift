@@ -35,7 +35,8 @@ struct WindowPlacementTests {
   /// which is why a size check let it through.
   @Test("A window at the origin is off the usable area and is brought back")
   func originIsCorrected() throws {
-    let atOrigin = CGRect(x: 0, y: 0, width: 560, height: 492)
+    let underDockY = visible.minY > 0 ? 0 : visible.minY - 24
+    let atOrigin = CGRect(x: 0, y: underDockY, width: 560, height: 492)
     let corrected = try #require(
       WindowCoordinator.broughtOnScreenForTesting(atOrigin),
       "a window sitting under the Dock was left where it was"

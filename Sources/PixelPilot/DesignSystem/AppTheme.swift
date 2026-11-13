@@ -177,6 +177,21 @@ private struct ThemeRecipe: Equatable, Sendable {
 /// which is also why `ThemeStore` holds one of these rather than making a new
 /// one per access.
 struct AppTheme: Equatable, Sendable {
+  /// Warm Studio Paper & Dark Walnut anchor constants.
+  static let warmPaperSink = Color(.sRGB, red: 1.0, green: 0.992, blue: 0.976) // #FFFDF9
+  static let darkWalnutSink = Color(.sRGB, red: 0.025, green: 0.020, blue: 0.016) // #060504
+  static let warmPaperWindow = Color(.sRGB, red: 0.961, green: 0.945, blue: 0.914) // #F5F1E9
+  static let darkWalnutWindow = Color(.sRGB, red: 0.106, green: 0.094, blue: 0.086) // #1B1816
+  static let warmEspressoInk = Color(.sRGB, red: 0.125, green: 0.114, blue: 0.102) // #201D1A
+  static let warmCreamInk = Color(.sRGB, red: 0.980, green: 0.965, blue: 0.941) // #FAF6F0
+  static let studioAmberLight = Color(.sRGB, red: 0.851, green: 0.420, blue: 0.122) // #D96B1F
+  static let studioAmberDark = Color(.sRGB, red: 0.878, green: 0.478, blue: 0.180) // #E07A2E
+
+  /// The pole each mode blends toward (`warmPaperSink` in Light, `darkWalnutSink` in Dark).
+  static func sink(isDark: Bool) -> Color {
+    isDark ? darkWalnutSink : warmPaperSink
+  }
+
   /// The accent, undiluted. Sliders, switches, rings and glows use this; it is
   /// the one place the theme is at full strength.
   let tone: Color
@@ -187,6 +202,8 @@ struct AppTheme: Equatable, Sendable {
   let isDark: Bool
   /// How much of those tones reaches the surface, and out of what.
   let style: ThemeStyle
+  /// User-configured translucency (`0.55 ... 0.98`) for Liquid Glass surfaces.
+  let glassOpacity: Double
 
   /// The window field. Two stops, lighter at the top, the way a lit surface is.
   let backdropTop: Color
@@ -225,16 +242,28 @@ struct AppTheme: Equatable, Sendable {
   /// - Parameter style: How much of those tones a surface carries. Defaulted,
   ///   and the default is the look the app shipped with — so every caller that
   ///   does not care about styles keeps the theme it always had.
-  init(tone: Color, backdropTone: Color? = nil, isDark: Bool, style: ThemeStyle = .glass) {
+  /// - Parameter glassOpacity: Translucency of glass surfaces (`0.55 ... 0.98`).
+  init(
+    tone: Color,
+    backdropTone: Color? = nil,
+    isDark: Bool,
+    style: ThemeStyle = .glass,
+    glassOpacity: Double = GlobalSettings.defaultGlassOpacity
+  ) {
     let field = backdropTone ?? tone
     let recipe = Self.recipe(for: style, isDark: isDark)
+    let clampedGlass = min(
+      max(glassOpacity, GlobalSettings.glassOpacityRange.lowerBound),
+      GlobalSettings.glassOpacityRange.upperBound
+    )
     self.tone = tone
     self.backdropTone = field
     self.isDark = isDark
     self.style = style
+    self.glassOpacity = clampedGlass
     self.recipe = recipe
 
-    let sink: Color = isDark ? .black : .white
+    let sink: Color = Self.sink(isDark: isDark)
 
     // Each amount is a *target*, not a result. See `settled(_:resolvedBy:)`:
     // a style may ask for more colour than a particular tone can carry and
@@ -272,10 +301,9 @@ struct AppTheme: Equatable, Sendable {
     // chosen accent visible against a field made of something else.
     rim = tone.opacity(recipe.rimOpacity)
 
-    // Tinted with the field rather than the accent, so body copy belongs to the
-    // surface it sits on, then held to 7:1 — the stricter of the two WCAG
-    // thresholds, because this is the level `.secondary` and `.tertiary` are
-    // derived down from and they inherit whatever slack is left here.
+    // Tinted near-white or near-black, held to a contrast ratio rather than a
+    // fixed blend: some tones are lighter than others, and a blend that looks
+    // right on amber can leave blue a touch dim.
     let ink: Color = isDark
       ? field.blended(with: .white, by: 0.88)
       : field.blended(with: .black, by: 0.86)
@@ -476,18 +504,71 @@ struct AppTheme: Equatable, Sendable {
 
   /// What the OSD and the identify overlay are made of: a tint over real glass
   /// where there is material, and the plate itself where there is not.
-  var overlayTint: Color { surface.opacity(recipe.overlayTintOpacity) }
+  var overlayTint: Color {
+    let alpha = usesMaterial ? min(max(recipe.overlayTintOpacity * (glassOpacity / 0.82), 0.35), 0.98) : 1.0
+    return surface.opacity(alpha)
+  }
 
   /// Whether the two overlays and the menu bar panel draw material at all.
   var usesMaterial: Bool { recipe.usesMaterial }
 
   /// The theme's field over the menu bar panel's material. At 1 nothing of the
-  /// desktop survives, which is how Flat has no material there.
-  var panelTintOpacity: Double { recipe.panelTintOpacity }
+  /// desktop survives, which is how Flat has no material there; when material is
+  /// active, this follows the user's `glassOpacity` (`0.55 ... 0.98`).
+  var panelTintOpacity: Double {
+    usesMaterial ? glassOpacity : 1.0
+  }
 
   /// How strongly the drifting wash behind the cards is drawn. Zero means it is
   /// not drawn at all — and, in `AmbientBackdrop`, not animated either.
   var ambientIntensity: Double { recipe.ambientIntensity }
+
+  // MARK: Warm Studio Craft semantic tokens
+
+  /// Warm Amber studio accent (`#D96B1F` in Warm Paper, `#E07A2E` in Dark Walnut).
+  var studioAccent: Color {
+    isDark ? Self.studioAmberDark : Self.studioAmberLight
+  }
+
+  /// Subtle 1px top inner specular highlight on grouped cards and Control Center modules.
+  var specularRim: Color {
+    isDark
+      ? Color(.sRGB, red: 1.0, green: 0.973, blue: 0.933, opacity: 0.07)
+      : Color.white.opacity(0.90)
+  }
+
+  /// 1px warm border for `Form(.grouped)`-style containers (`10pt` radius).
+  var groupBorder: Color {
+    isDark
+      ? Color(.sRGB, red: 1.0, green: 0.961, blue: 0.910, opacity: 0.10)
+      : Color(.sRGB, red: 0.188, green: 0.141, blue: 0.094, opacity: 0.11)
+  }
+
+  /// 1px inset row separator inside grouped containers.
+  var separator: Color {
+    isDark
+      ? Color(.sRGB, red: 1.0, green: 0.961, blue: 0.910, opacity: 0.09)
+      : Color(.sRGB, red: 0.188, green: 0.141, blue: 0.094, opacity: 0.09)
+  }
+
+  /// Recessed track well for Control Center pill sliders and segmented controls.
+  var recessedWell: Color {
+    isDark
+      ? Color(.sRGB, red: 0.031, green: 0.024, blue: 0.020, opacity: 0.48)
+      : Color(.sRGB, red: 0.188, green: 0.141, blue: 0.094, opacity: 0.14)
+  }
+
+  /// Crisp warm ivory/white fill bar for Control Center pill sliders.
+  var sliderFill: Color {
+    isDark
+      ? Color(.sRGB, red: 1.0, green: 0.992, blue: 0.976, opacity: 0.94)
+      : Color(.sRGB, red: 1.0, green: 0.996, blue: 0.988)
+  }
+
+  /// High-contrast espresso ink for embedded leading glyphs inside bright slider fills.
+  var sliderGlyphInk: Color {
+    Self.warmEspressoInk
+  }
 
   /// An accent set as type on one of this theme's cards.
   ///
@@ -579,6 +660,23 @@ final class ThemeStore {
     }
   }
 
+  /// Translucency (`0.55 ... 0.98`) of the Menu Bar Popover, Sidebar & HUD.
+  var glassOpacity: Double {
+    didSet {
+      let clamped = min(
+        max(glassOpacity, GlobalSettings.glassOpacityRange.lowerBound),
+        GlobalSettings.glassOpacityRange.upperBound
+      )
+      if glassOpacity != clamped {
+        glassOpacity = clamped
+        return
+      }
+      guard glassOpacity != oldValue else { return }
+      Preferences.shared.updateGlobal { $0.glassOpacity = glassOpacity }
+      rebuild()
+    }
+  }
+
   /// Kept current by `AppModel`, which already observes the effective
   /// appearance for the preset bindings.
   var systemIsDark: Bool {
@@ -597,12 +695,16 @@ final class ThemeStore {
     let stored = Preferences.shared.global
     let indices = AccentPalette.tones.indices
     // Locals first, then the stored properties: `theme` is derived from the
-    // other four, and a derived property cannot read them until every one of
+    // other five, and a derived property cannot read them until every one of
     // them has been assigned.
     let tone = indices.contains(stored.themeToneIndex) ? stored.themeToneIndex : 0
     let field = stored.themeBackdropToneIndex.flatMap { indices.contains($0) ? $0 : nil }
     let mode = stored.themeMode
     let style = stored.themeStyle
+    let glassOpacity = min(
+      max(stored.glassOpacity, GlobalSettings.glassOpacityRange.lowerBound),
+      GlobalSettings.glassOpacityRange.upperBound
+    )
     let systemIsDark = NSApplication.shared.effectiveAppearance
       .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
 
@@ -613,21 +715,28 @@ final class ThemeStore {
     backdropToneIndex = field
     self.mode = mode
     self.style = style
+    self.glassOpacity = glassOpacity
     self.systemIsDark = systemIsDark
     theme = Self.build(
-      tone: tone, field: field, mode: mode, style: style, systemIsDark: systemIsDark
+      tone: tone, field: field, mode: mode, style: style,
+      glassOpacity: glassOpacity, systemIsDark: systemIsDark
     )
   }
 
   private func rebuild() {
     theme = Self.build(
       tone: toneIndex, field: backdropToneIndex, mode: mode, style: style,
-      systemIsDark: systemIsDark
+      glassOpacity: glassOpacity, systemIsDark: systemIsDark
     )
   }
 
   private static func build(
-    tone: Int, field: Int?, mode: ThemeMode, style: ThemeStyle, systemIsDark: Bool
+    tone: Int,
+    field: Int?,
+    mode: ThemeMode,
+    style: ThemeStyle,
+    glassOpacity: Double,
+    systemIsDark: Bool
   ) -> AppTheme {
     let isDark: Bool = switch mode {
     case .system: systemIsDark
@@ -638,7 +747,8 @@ final class ThemeStore {
       tone: AccentPalette.tones[tone],
       backdropTone: field.map { AccentPalette.tones[$0] },
       isDark: isDark,
-      style: style
+      style: style,
+      glassOpacity: glassOpacity
     )
   }
 }

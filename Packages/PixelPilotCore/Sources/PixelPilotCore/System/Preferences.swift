@@ -192,8 +192,8 @@ public enum ThemeMode: String, Codable, Sendable, CaseIterable {
   public var displayName: String {
     switch self {
     case .system: "Automatic"
-    case .light: "Light"
-    case .dark: "Dark"
+    case .light: "Warm Paper"
+    case .dark: "Dark Walnut"
     }
   }
 }
@@ -381,6 +381,15 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   /// installation comes through an update unchanged.
   public var themeStyle: ThemeStyle = .glass
 
+  /// Bounds and default for the translucency of glass surfaces (menu bar
+  /// popover, HUD pill, and settings sidebar).
+  public static let defaultGlassOpacity: Double = 0.82
+  public static let glassOpacityRange: ClosedRange<Double> = 0.55 ... 0.98
+
+  /// How opaque the glass surfaces (menu bar panel, sidebar, and HUD) are over
+  /// the desktop material behind them. Clamped to `0.55 ... 0.98`.
+  public var glassOpacity: Double = GlobalSettings.defaultGlassOpacity
+
   /// Whether the app asks GitHub for a newer release on its own.
   ///
   /// On by default, and it is the one thing in this app that reaches the
@@ -449,6 +458,14 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
     themeMode = try container.decodeIfPresent(ThemeMode.self, forKey: .themeMode) ?? fallback.themeMode
     themeStyle = try container.decodeIfPresent(ThemeStyle.self, forKey: .themeStyle)
       ?? fallback.themeStyle
+    if let rawGlassOpacity = try container.decodeIfPresent(Double.self, forKey: .glassOpacity) {
+      glassOpacity = min(
+        max(rawGlassOpacity, Self.glassOpacityRange.lowerBound),
+        Self.glassOpacityRange.upperBound
+      )
+    } else {
+      glassOpacity = fallback.glassOpacity
+    }
     // `try?` for the composite, same reasoning as `DisplaySettings.timing`.
     schedule = (try? container.decodeIfPresent(DaySchedule.self, forKey: .schedule)) ?? fallback.schedule
     latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)

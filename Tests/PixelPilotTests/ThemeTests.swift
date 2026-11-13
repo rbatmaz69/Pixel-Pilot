@@ -242,7 +242,7 @@ struct ThemeTests {
   @Test("Vivid puts more colour into a surface than Glass does")
   func vividIsVividerThanGlass() {
     func distanceFromSink(_ colour: Color, isDark: Bool) -> Double {
-      let sink: Color = isDark ? .black : .white
+      let sink = AppTheme.sink(isDark: isDark)
       let a = colour.srgb
       let b = sink.srgb
       return ((a.red - b.red) * (a.red - b.red)
@@ -363,7 +363,7 @@ struct ThemeTests {
       for field in AccentPalette.tones {
         for isDark in [true, false] {
           let theme = AppTheme(tone: tone, backdropTone: field, isDark: isDark)
-          let sink: Color = isDark ? .black : .white
+          let sink = AppTheme.sink(isDark: isDark)
           let amounts: [(String, Color, Double)] = isDark
             ? [
               ("backdropTop", theme.backdropTop, 0.87),
@@ -398,6 +398,16 @@ struct ThemeTests {
         }
       }
     }
+  }
+
+  @Test("Liquid Glass opacity controls panelTintOpacity for material styles and clamps")
+  func glassOpacityControlsPanelTint() {
+    let glassTheme = AppTheme(tone: AccentPalette.tones[2], isDark: false, style: .glass, glassOpacity: 0.70)
+    #expect(glassTheme.panelTintOpacity == 0.70)
+    #expect(glassTheme.recessedWell.srgb.alpha > 0.10)
+
+    let flatTheme = AppTheme(tone: AccentPalette.tones[2], isDark: true, style: .flat, glassOpacity: 0.70)
+    #expect(flatTheme.panelTintOpacity == 1.0)
   }
 
   @Test("legible(on:) reaches the ratio it is asked for")
