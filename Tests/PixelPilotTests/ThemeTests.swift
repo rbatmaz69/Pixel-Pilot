@@ -558,8 +558,27 @@ struct ThemeTests {
           let top = theme.backdropTop.srgb
           let spread = max(top.red, top.green, top.blue) - min(top.red, top.green, top.blue)
           #expect(spread > 0.01, "\(label) backdropTop is flat grey")
+
+          #expect(
+            theme.primaryText.contrastRatio(to: theme.sidebarSelectionFill) >= 4.5,
+            "\(label) primary/sidebarSelectionFill"
+          )
         }
       }
+    }
+  }
+
+  @Test("Sidebar selection colours derive directly from each ThemeTriplet and ignore macOS accent colour")
+  func sidebarSelectionFollowsThemeTriplet() {
+    for isDark in [false, true] {
+      let terracotta = AppTheme(triplet: .atelierTerracotta, isDark: isDark)
+      let fjord = AppTheme(triplet: .nordicFjord, isDark: isDark)
+      let matcha = AppTheme(triplet: .matchaOat, isDark: isDark)
+
+      #expect(terracotta.sidebarSelectionFill.srgb != fjord.sidebarSelectionFill.srgb)
+      #expect(fjord.sidebarSelectionFill.srgb != matcha.sidebarSelectionFill.srgb)
+      #expect(terracotta.sidebarSelectionBorder().srgb != fjord.sidebarSelectionBorder().srgb)
+      #expect(terracotta.sidebarSelectionBorder().srgb == terracotta.studioAccent.opacity(isDark ? 0.55 : 0.45).srgb)
     }
   }
 }

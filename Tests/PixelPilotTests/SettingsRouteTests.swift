@@ -93,4 +93,34 @@ struct SettingsRouteTests {
       #expect(indices[i] > indices[i - 1])
     }
   }
+
+  @Test("Stepping sidebar routes moves monotonically across displays, remembered and studio pages and clamps at ends")
+  func stepRouteMovesCleanly() {
+    let displays = ["d1", "d2"]
+    let router = SettingsRouter()
+    router.route = .display("d1")
+
+    // Clamps at first item when stepping up.
+    router.stepRoute(by: -1, displayIDs: displays)
+    #expect(router.route == .display("d1"))
+
+    router.stepRoute(by: 1, displayIDs: displays)
+    #expect(router.route == .display("d2"))
+
+    router.stepRoute(by: 1, displayIDs: displays)
+    #expect(router.route == .remembered)
+
+    router.stepRoute(by: 1, displayIDs: displays)
+    #expect(router.route == .app(AppPage.allCases[0]))
+
+    // Steps through remaining app pages and clamps on the last one.
+    for _ in 0 ..< AppPage.allCases.count {
+      router.stepRoute(by: 1, displayIDs: displays)
+    }
+    #expect(router.route == .app(AppPage.allCases[AppPage.allCases.count - 1]))
+
+    // Stepping back up returns through the ordered list.
+    router.stepRoute(by: -1, displayIDs: displays)
+    #expect(router.route == .app(AppPage.allCases[AppPage.allCases.count - 2]))
+  }
 }

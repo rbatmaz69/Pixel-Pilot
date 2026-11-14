@@ -891,6 +891,22 @@ struct AppTheme: Equatable, Sendable {
     return usesMaterial ? base.opacity(glassOpacity) : base
   }
 
+  /// Active sidebar selection pill fill derived directly from the active triplet
+  /// (`surfaceRaised` tinted with `studioAccent`), independent of macOS accent preferences.
+  var sidebarSelectionFill: Color {
+    surfaceRaised.blended(with: studioAccent, by: isDark ? 0.22 : 0.14)
+  }
+
+  /// Subtle accent rim around the active sidebar selection pill.
+  func sidebarSelectionBorder(for accent: Color? = nil) -> Color {
+    (accent ?? studioAccent).opacity(isDark ? 0.55 : 0.45)
+  }
+
+  /// Subtle hover wash for unselected sidebar rows matching the active triplet.
+  var sidebarHoverFill: Color {
+    surface.opacity(isDark ? 0.38 : 0.48)
+  }
+
   /// Crisp warm ivory/white fill bar for Control Center pill sliders.
   var sliderFill: Color {
     isDark

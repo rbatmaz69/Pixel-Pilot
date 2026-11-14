@@ -96,19 +96,31 @@ final class SettingsRouter {
     route = ids.first.map(SettingsRoute.display) ?? .remembered
   }
 
+  /// Ordered top-to-bottom sidebar routes matching `SettingsWindow`'s list.
+  static func orderedRoutes(displayIDs: [DisplayViewModel.ID]) -> [SettingsRoute] {
+    displayIDs.map(SettingsRoute.display)
+      + [.remembered]
+      + AppPage.allCases.map(SettingsRoute.app)
+  }
+
   /// Monotonic top-to-bottom order of sidebar routes for directional page transitions.
   static func routeOrderIndex(
     for route: SettingsRoute,
     displayIDs: [DisplayViewModel.ID]
   ) -> Int {
-    switch route {
-    case let .display(id):
-      displayIDs.firstIndex(of: id) ?? 0
-    case .remembered:
-      displayIDs.count
-    case let .app(app):
-      displayIDs.count + 1 + (AppPage.allCases.firstIndex(of: app) ?? 0)
+    orderedRoutes(displayIDs: displayIDs).firstIndex(of: route) ?? 0
+  }
+
+  /// Moves selection up (`-1`) or down (`+1`) across the ordered sidebar routes.
+  func stepRoute(by delta: Int, displayIDs: [DisplayViewModel.ID]) {
+    let routes = Self.orderedRoutes(displayIDs: displayIDs)
+    guard !routes.isEmpty else { return }
+    guard let currentIndex = routes.firstIndex(of: route) else {
+      route = routes[0]
+      return
     }
+    let nextIndex = min(max(0, currentIndex + delta), routes.count - 1)
+    route = routes[nextIndex]
   }
 }
 
@@ -132,6 +144,7 @@ struct SettingsWindow: View {
   @Environment(\.motion) private var motion
   @Environment(\.theme) private var theme
   @State private var navigationDirection: Int = 1
+  @Namespace private var sidebarSelectionNamespace
 
   var body: some View {
     NavigationSplitView {
@@ -198,57 +211,98 @@ struct SettingsWindow: View {
         .padding(.vertical, Layout.tight)
       }
 
-      List(selection: listSelection) {
-        Section("Displays") {
-          ForEach(model.displays) { display in
-            let route = SettingsRoute.display(display.id)
-            SidebarRow(
-              title: display.name,
-              summary: display.isBuiltin ? "Integriert" : display.routeDescription,
-              trailingText: "\(Int((display.brightness * 100).rounded()))%",
-              isSelected: router.route == route
-            ) { isHovered in
-              ZStack {
-                RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
-                  .fill(theme.wash(for: display.accent))
-                  .overlay {
-                    RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
-                      .strokeBorder(theme.rim(for: display.accent).opacity(0.45), lineWidth: 0.75)
+      ScrollViewReader { scrollProxy in
+        ScrollView {
+          VStack(alignment: .leading, spacing: Layout.tight) {
+            sidebarSectionHeader("Displays")
+
+            VStack(alignment: .leading, spacing: 2) {
+              ForEach(model.displays) { display in
+                let route = SettingsRoute.display(display.id)
+                let isSelected = router.route == route
+                SidebarItemButton(
+                  isSelected: isSelected,
+                  accent: display.accent,
+                  namespace: sidebarSelectionNamespace,
+                  action: { router.route = route }
+                ) { isHovered in
+                  SidebarRow(
+                    title: display.name,
+                    summary: display.isBuiltin ? "Integriert" : display.routeDescription,
+                    trailingText: "\(Int((display.brightness * 100).rounded()))%",
+                    isSelected: isSelected,
+                    isHovered: isHovered
+                  ) { hovered in
+                    displayLeadingBadge(display: display, isHovered: hovered)
                   }
-                  .frame(width: 20, height: 20)
-
-                AccentDot(accent: display.accent, isReady: display.isReady, size: 8)
+                }
+                .id(route)
               }
-              .scaleEffect(isHovered && !motion.isReduced ? 1.08 : 1.0)
-              .animation(motion.spatialFast, value: isHovered)
+
+              let rememberedSelected = router.route == .remembered
+              SidebarItemButton(
+                isSelected: rememberedSelected,
+                accent: theme.studioAccent,
+                namespace: sidebarSelectionNamespace,
+                action: { router.route = .remembered }
+              ) { isHovered in
+                SidebarRow(
+                  title: "Bekannte Displays",
+                  summary: "Früher verbundene Monitore",
+                  symbolName: "externaldrive.badge.checkmark",
+                  isSelected: rememberedSelected,
+                  isHovered: isHovered
+                )
+              }
+              .id(SettingsRoute.remembered)
             }
-            .tag(route)
+
+            sidebarSectionHeader("Studio")
+              .padding(.top, Layout.tight)
+
+            VStack(alignment: .leading, spacing: 2) {
+              ForEach(AppPage.allCases, id: \.self) { app in
+                let route = SettingsRoute.app(app)
+                let isSelected = router.route == route
+                SidebarItemButton(
+                  isSelected: isSelected,
+                  accent: theme.studioAccent,
+                  namespace: sidebarSelectionNamespace,
+                  action: { router.route = route }
+                ) { isHovered in
+                  SidebarRow(
+                    title: app.title,
+                    summary: app.summary,
+                    symbolName: app.symbolName,
+                    tint: app.badgeTint,
+                    isSelected: isSelected,
+                    isHovered: isHovered
+                  )
+                }
+                .id(route)
+              }
+            }
           }
-
-          SidebarRow(
-            title: "Bekannte Displays",
-            summary: "Früher verbundene Monitore",
-            symbolName: "externaldrive.badge.checkmark",
-            isSelected: router.route == .remembered
-          )
-          .tag(SettingsRoute.remembered)
+          .padding(.horizontal, Layout.snug)
+          .padding(.vertical, Layout.tight)
         }
-
-        Section("Studio") {
-          ForEach(AppPage.allCases, id: \.self) { app in
-            let route = SettingsRoute.app(app)
-            SidebarRow(
-              title: app.title,
-              summary: app.summary,
-              symbolName: app.symbolName,
-              tint: app.badgeTint,
-              isSelected: router.route == route
-            )
-            .tag(route)
+        .onChange(of: router.route) { _, newRoute in
+          withAnimation(motion.spatialFast) {
+            scrollProxy.scrollTo(newRoute, anchor: .center)
           }
         }
       }
-      .scrollContentBackground(.hidden)
+      .focusable()
+      .focusEffectDisabled()
+      .onKeyPress(.upArrow) {
+        router.stepRoute(by: -1, displayIDs: model.displays.map(\.id))
+        return .handled
+      }
+      .onKeyPress(.downArrow) {
+        router.stepRoute(by: 1, displayIDs: model.displays.map(\.id))
+        return .handled
+      }
+      .animation(motion.tactileSnap ?? motion.spatialDefault, value: router.route)
       .animation(motion.spatialDefault, value: model.displays.map(\.id))
 
       Divider()
@@ -266,32 +320,44 @@ struct SettingsWindow: View {
     .navigationSplitViewColumnWidth(min: 245, ideal: 265)
   }
 
+  private func sidebarSectionHeader(_ title: String) -> some View {
+    Text(title)
+      .font(.caption.weight(.semibold))
+      .foregroundStyle(theme.secondaryInk)
+      .padding(.horizontal, 8)
+      .padding(.top, 4)
+      .padding(.bottom, 2)
+  }
+
+  private func displayLeadingBadge(display: DisplayViewModel, isHovered: Bool) -> some View {
+    ZStack {
+      RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+        .fill(theme.wash(for: display.accent))
+        .overlay {
+          RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+            .strokeBorder(theme.rim(for: display.accent).opacity(0.45), lineWidth: 0.75)
+        }
+        .frame(width: 20, height: 20)
+
+      AccentDot(accent: display.accent, isReady: display.isReady, size: 8)
+    }
+    .scaleEffect(isHovered && !motion.isReduced ? 1.08 : 1.0)
+    .animation(motion.spatialFast, value: isHovered)
+  }
+
   private var sidebarFooter: some View {
     HStack(spacing: 6) {
       AccentDot(accent: Status.ok, size: 6)
       Text("0,0 % CPU im Leerlauf")
         .font(.system(size: 10.5, weight: .medium, design: .rounded).monospacedDigit())
-        .foregroundStyle(.secondary)
+        .foregroundStyle(theme.secondaryInk)
       Spacer()
       Text("Warm Studio")
         .font(TypeScale.editorialAccent)
-        .foregroundStyle(.tertiary)
+        .foregroundStyle(theme.secondaryInk.opacity(0.75))
     }
     .padding(.horizontal, Layout.normal)
     .padding(.vertical, 8)
-  }
-
-  /// The list's selection, which is optional where the router's is not.
-  ///
-  /// A `List` hands back `nil` for "nothing is selected" — clicking the empty
-  /// space under the last row does it. There is no such page, so that is
-  /// dropped and the window stays where it is, rather than emptying the whole
-  /// right-hand side because of a stray click.
-  private var listSelection: Binding<SettingsRoute?> {
-    Binding(
-      get: { router.route },
-      set: { route in if let route { router.route = route } }
-    )
   }
 
   /// The map speaks in displays; the sidebar speaks in pages.
@@ -362,15 +428,64 @@ struct SettingsWindow: View {
 /// The summary line is the point of the row. A sidebar of six nouns has to be
 /// opened one page at a time to find anything; a sidebar that says "Media keys,
 /// permissions, detection" under "Keys" does not.
+private struct SidebarItemButton<Content: View>: View {
+  let isSelected: Bool
+  let accent: Color
+  let namespace: Namespace.ID
+  let action: () -> Void
+  @ViewBuilder let content: (Bool) -> Content
+
+  @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
+  @State private var isHovered = false
+
+  var body: some View {
+    Button {
+      action()
+      Haptics.detent()
+    } label: {
+      content(isHovered)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+          if isSelected {
+            RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+              .fill(theme.sidebarSelectionFill)
+              .overlay {
+                RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+                  .strokeBorder(theme.specularRim, lineWidth: 0.75)
+              }
+              .overlay {
+                RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+                  .strokeBorder(theme.sidebarSelectionBorder(for: accent), lineWidth: 1)
+              }
+              .shadow(color: accent.opacity(theme.isDark ? 0.20 : 0.10), radius: 4, y: 1)
+              .matchedGeometryEffect(id: "sidebarSelection", in: namespace)
+          } else if isHovered {
+            RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+              .fill(theme.sidebarHoverFill)
+          }
+        }
+        .contentShape(RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous))
+    }
+    .buttonStyle(.plain)
+    .onHover { isHovered = $0 }
+    .animation(motion.effectFast, value: isHovered)
+    .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+  }
+}
+
 private struct SidebarRow<Leading: View>: View {
   let title: String
   let summary: String
   var trailingText: String? = nil
   var isSelected: Bool = false
+  var isHovered: Bool = false
   @ViewBuilder var leading: (Bool) -> Leading
 
   @Environment(\.motion) private var motion
-  @State private var isHovered = false
+  @Environment(\.theme) private var theme
 
   var body: some View {
     HStack(spacing: Layout.tight) {
@@ -379,24 +494,23 @@ private struct SidebarRow<Leading: View>: View {
         HStack(spacing: 4) {
           Text(title)
             .font(TypeScale.rowTitle)
+            .foregroundStyle(theme.primaryText)
             .lineLimit(1)
           Spacer(minLength: 2)
           if let trailingText {
             Text(trailingText)
               .font(.caption2.weight(.semibold).monospacedDigit())
-              .foregroundStyle(.secondary)
+              .foregroundStyle(theme.secondaryInk)
               .contentTransition(.numericText())
               .animation(motion.effectFast, value: trailingText)
           }
         }
         Text(summary)
           .font(TypeScale.detail)
-          .foregroundStyle(.secondary)
+          .foregroundStyle(theme.secondaryInk)
           .lineLimit(1)
       }
     }
-    .padding(.vertical, 2)
-    .onHover { isHovered = $0 }
   }
 }
 
@@ -406,14 +520,20 @@ extension SidebarRow {
     summary: String,
     symbolName: String,
     tint: Color? = nil,
-    isSelected: Bool = false
+    isSelected: Bool = false,
+    isHovered: Bool = false
   ) where Leading == SidebarSymbol {
-    self.init(title: title, summary: summary, isSelected: isSelected) { isHovered in
+    self.init(
+      title: title,
+      summary: summary,
+      isSelected: isSelected,
+      isHovered: isHovered
+    ) { hovered in
       SidebarSymbol(
         systemImage: symbolName,
         tint: tint,
         isSelected: isSelected,
-        isHovered: isHovered
+        isHovered: hovered
       )
     }
   }
