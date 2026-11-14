@@ -501,4 +501,43 @@ struct ThemeTests {
     #expect(KelvinTrack.warmDetents.first == 0)
     #expect(KelvinTrack.warmDetents.last == 1)
   }
+
+  @Test("Every 60-30-10 colour triplet passes contrast, separation and accent locks in light and dark modes")
+  func allColorTripletsAreAccessibleAndHarmonious() {
+    for triplet in ThemeTriplet.allCases {
+      #expect(!triplet.displayName.isEmpty)
+      #expect(!triplet.summary.isEmpty)
+      #expect(!triplet.lightSubtitle.isEmpty)
+      #expect(!triplet.darkSubtitle.isEmpty)
+
+      for isDark in [false, true] {
+        let palette = triplet.palette(isDark: isDark)
+
+        for style in ThemeStyle.allCases {
+          let theme = AppTheme(triplet: triplet, isDark: isDark, style: style)
+          let label = "\(triplet.rawValue) \(style.displayName) \(isDark ? "dark" : "light")"
+
+          #expect(theme.tone.srgb == palette.accent.srgb, "\(label) accent mismatch")
+          #expect(theme.studioAccent.srgb == palette.accent.srgb, "\(label) studioAccent mismatch")
+          #expect(theme.primaryText.contrastRatio(to: theme.surface) >= 7.0, "\(label) primary/surface")
+          #expect(theme.primaryText.contrastRatio(to: theme.backdropTop) >= 4.5, "\(label) primary/backdrop")
+          let secondary = theme.primaryText.opacity(0.5).over(theme.surface)
+          #expect(secondary.contrastRatio(to: theme.surface) >= 3.0, "\(label) secondary/surface")
+          #expect(theme.surface.contrastRatio(to: theme.backdropTop) >= 1.08, "\(label) surface separation")
+          #expect(theme.ink(for: theme.tone).contrastRatio(to: theme.surface) >= 4.49, "\(label) accent ink")
+
+          let rimOver = theme.rim.over(theme.surface).srgb
+          let card = theme.surface.srgb
+          let rimDistance = ((rimOver.red - card.red) * (rimOver.red - card.red)
+            + (rimOver.green - card.green) * (rimOver.green - card.green)
+            + (rimOver.blue - card.blue) * (rimOver.blue - card.blue)).squareRoot()
+          #expect(rimDistance >= 0.04, "\(label) rim distance")
+
+          let top = theme.backdropTop.srgb
+          let spread = max(top.red, top.green, top.blue) - min(top.red, top.green, top.blue)
+          #expect(spread > 0.01, "\(label) backdropTop is flat grey")
+        }
+      }
+    }
+  }
 }

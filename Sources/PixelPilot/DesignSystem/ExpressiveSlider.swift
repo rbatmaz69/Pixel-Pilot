@@ -135,11 +135,14 @@ struct ExpressiveSlider: View {
       // Embedded leading glyph with smooth sun rotation
       if let icon {
         let isCovered = fillWidth > 26
+        let coveredInk = accent.relativeLuminance > 0.40
+          ? AppTheme.warmEspressoInk.opacity(0.88)
+          : Color.white.opacity(0.95)
         Image(systemName: icon)
           .font(.system(size: 11, weight: .semibold))
           .foregroundStyle(
             isCovered
-              ? (trackStyle == nil ? theme.sliderGlyphInk.opacity(0.82) : Color.white.opacity(0.92))
+              ? (trackStyle == nil ? coveredInk : Color.white.opacity(0.92))
               : Color.secondary
           )
           .rotationEffect(.degrees(rotatesGlyph ? fraction * 180 : 0))
@@ -159,8 +162,8 @@ struct ExpressiveSlider: View {
     return AnyShapeStyle(
       LinearGradient(
         colors: [
-          theme.sliderFill,
-          theme.sliderFill.blended(with: accent, by: isDragging ? 0.14 : 0.06),
+          accent.blended(with: .white, by: theme.isDark ? 0.22 : 0.18),
+          accent,
         ],
         startPoint: .top,
         endPoint: .bottom
@@ -172,6 +175,9 @@ struct ExpressiveSlider: View {
   @ViewBuilder
   private func scaleAndDetentMarks(width: CGFloat, fillWidth: CGFloat) -> some View {
     let interiorDetents = detents.filter { $0 > 0.001 && $0 < 0.999 }
+    let coveredMarkInk = accent.relativeLuminance > 0.40
+      ? AppTheme.warmEspressoInk
+      : Color.white
     ZStack(alignment: .leading) {
       // Fine decile scale ticks along bottom edge
       ForEach(Self.scaleDeciles, id: \.self) { mark in
@@ -180,7 +186,7 @@ struct ExpressiveSlider: View {
         Rectangle()
           .fill(
             isCovered
-              ? theme.sliderGlyphInk.opacity(isDragging || isHovered ? 0.24 : 0.12)
+              ? coveredMarkInk.opacity(isDragging || isHovered ? 0.30 : 0.16)
               : Color.primary.opacity(isDragging || isHovered ? 0.26 : 0.12)
           )
           .frame(width: 1, height: 3.5)
@@ -195,9 +201,9 @@ struct ExpressiveSlider: View {
         Capsule(style: .continuous)
           .fill(
             isSnapped
-              ? theme.studioAccent
+              ? (isCovered ? coveredMarkInk.opacity(0.92) : theme.studioAccent)
               : (isCovered
-                ? theme.sliderGlyphInk.opacity(isDragging || isHovered ? 0.42 : 0.22)
+                ? coveredMarkInk.opacity(isDragging || isHovered ? 0.46 : 0.24)
                 : Color.primary.opacity(isDragging || isHovered ? 0.42 : 0.22))
           )
           .frame(width: isSnapped ? 2 : 1.25, height: isSnapped ? 8.5 : 5.5)

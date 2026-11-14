@@ -75,9 +75,13 @@ struct MenuBarPanel: View {
     .padding(Layout.normal)
     .frame(width: 332)
     .background(alignment: .top) {
-      theme.ambientDaylightGradient(mood: mood)
-        .frame(height: 110)
-        .allowsHitTesting(false)
+      ZStack(alignment: .top) {
+        theme.backdrop
+          .opacity(theme.panelTintOpacity)
+        theme.ambientDaylightGradient(mood: mood)
+          .frame(height: 150)
+      }
+      .allowsHitTesting(false)
     }
     .animation(motion.spatialDefault, value: model.needsAccessibilityPermission)
     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _, _ in

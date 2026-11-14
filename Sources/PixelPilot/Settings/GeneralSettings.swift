@@ -35,28 +35,25 @@ struct GeneralSettings: View {
               }
             ),
             options: [
-              (.light, "☀︎ Warm Paper"),
-              (.dark, "🌙 Dark Walnut"),
+              (.light, "☀︎ \(theme.triplet.lightSubtitle)"),
+              (.dark, "🌙 \(theme.triplet.darkSubtitle)"),
               (.system, "Automatisch"),
             ]
           )
         }
 
-        HStack {
+        VStack(alignment: .leading, spacing: Layout.tight) {
           VStack(alignment: .leading, spacing: 1) {
-            Text("Studio-Akzent").font(TypeScale.rowTitle)
-            Text("Schieberegler, Schalter und Fokusringe")
+            Text("Farb-Triplet (60 · 30 · 10)").font(TypeScale.rowTitle)
+            Text("Abgestimmter Dreiklang aus Hintergrund, Struktur & Akzent")
               .font(TypeScale.detail)
               .foregroundStyle(.secondary)
           }
-          Spacer(minLength: Layout.snug)
-          AccentSwatchPicker(
+          TripletThemePicker(
             selection: Binding(
-              get: { theme.toneIndex },
-              set: { value in if let value { theme.toneIndex = value } }
-            ),
-            allowsNone: false,
-            accessibilityLabel: "Studio-Akzent"
+              get: { theme.triplet },
+              set: { theme.triplet = $0 }
+            )
           )
         }
 
@@ -102,8 +99,8 @@ struct GeneralSettings: View {
         )
 
         CardFooter(
-          "Warm Paper nutzt warmes Elfenbeinpapier mit Espresso-Typografie; "
-            + "Dark Walnut kombiniert tiefes Walnussholz mit feinen Lichtkanten. "
+          "Jedes Farb-Triplet stimmt Hintergrund (60 %), Karten & Tinte (30 %) "
+            + "sowie Studio-Akzent (10 %) in heller und dunkler Variante aufeinander ab. "
             + "Die Glas-Deckkraft wirkt direkt auf Popover, Seitenleiste und HUD."
         )
       }

@@ -198,6 +198,72 @@ public enum ThemeMode: String, Codable, Sendable, CaseIterable {
   }
 }
 
+/// A curated 3-colour triplet following the 60-30-10 visual hierarchy:
+/// 60% dominant canvas/window background, 30% structural surfaces & ink,
+/// 10% accent pop. Each triplet provides dedicated light and dark variants.
+public enum ThemeTriplet: String, Codable, Sendable, CaseIterable {
+  case atelierTerracotta
+  case crimsonGold
+  case matchaOat
+  case nordicFjord
+  case cyberSlate
+  case bauhausSignal
+  case velvetIndigo
+  case sakuraEditorial
+
+  public var displayName: String {
+    switch self {
+    case .atelierTerracotta: "Atelier Terracotta"
+    case .crimsonGold: "Royal Bordeaux & Gold"
+    case .matchaOat: "Matcha & Oat"
+    case .nordicFjord: "Nordic Fjord"
+    case .cyberSlate: "Cyber Slate"
+    case .bauhausSignal: "Bauhaus Signal"
+    case .velvetIndigo: "Velvet Indigo"
+    case .sakuraEditorial: "Sakura Editorial"
+    }
+  }
+
+  public var summary: String {
+    switch self {
+    case .atelierTerracotta: "Elfenbein · Espresso · Terracotta"
+    case .crimsonGold: "Dunkelrot · Imperial-Gold · Champagner"
+    case .matchaOat: "Hafer · Zeder · Matcha"
+    case .nordicFjord: "Alabaster · Fjord · Gletscherblau"
+    case .cyberSlate: "Eisnebel · Schiefer · Cyber-Mint"
+    case .bauhausSignal: "Kreide · Preußischblau · Signal-Ocker"
+    case .velvetIndigo: "Kaschmir · Violett · Elektrisch-Iris"
+    case .sakuraEditorial: "Seidenblush · Aubergine · Kirschblüte"
+    }
+  }
+
+  public var lightSubtitle: String {
+    switch self {
+    case .atelierTerracotta: "Warm Paper"
+    case .crimsonGold: "Champagner & Rot"
+    case .matchaOat: "Oatmilk"
+    case .nordicFjord: "Alabaster"
+    case .cyberSlate: "Cool Vapor"
+    case .bauhausSignal: "Warm Chalk"
+    case .velvetIndigo: "Cashmere"
+    case .sakuraEditorial: "Silk Blush"
+    }
+  }
+
+  public var darkSubtitle: String {
+    switch self {
+    case .atelierTerracotta: "Dark Walnut"
+    case .crimsonGold: "Bordeaux & Gold"
+    case .matchaOat: "Deep Moss"
+    case .nordicFjord: "Arctic Night"
+    case .cyberSlate: "Midnight"
+    case .bauhausSignal: "Graphite"
+    case .velvetIndigo: "Cosmic Onyx"
+    case .sakuraEditorial: "Dusk Plum"
+    }
+  }
+}
+
 /// How much of the chosen colour a surface carries, and what it is made of.
 ///
 /// The second axis of the theme, and deliberately orthogonal to the first. The
@@ -390,6 +456,10 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
   /// decides.
   public var themeMode: ThemeMode = .system
 
+  /// The selected 60-30-10 colour triplet governing canvas, surfaces, ink and
+  /// studio accent.
+  public var themeTriplet: ThemeTriplet = .atelierTerracotta
+
   /// How much of those colours reaches the surface, and out of what.
   ///
   /// `.glass` by default, and that is not a taste call: it is what the app
@@ -479,6 +549,8 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
       Int.self, forKey: .themeBackdropToneIndex
     )
     themeMode = (try? container.decodeIfPresent(ThemeMode.self, forKey: .themeMode)) ?? fallback.themeMode
+    themeTriplet = (try? container.decodeIfPresent(ThemeTriplet.self, forKey: .themeTriplet))
+      ?? fallback.themeTriplet
     themeStyle = (try? container.decodeIfPresent(ThemeStyle.self, forKey: .themeStyle))
       ?? fallback.themeStyle
     if let rawGlassOpacity = try container.decodeIfPresent(Double.self, forKey: .glassOpacity) {

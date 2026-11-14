@@ -1,4 +1,5 @@
 import AppKit
+import PixelPilotCore
 import SwiftUI
 
 // The pieces every surface was rebuilding by hand: a titled card, a status
@@ -646,6 +647,118 @@ struct AccentSwatchPicker: View {
         Haptics.detent()
       }
       .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+  }
+}
+
+/// Grid picker of curated 60-30-10 colour triplets (`ThemeTriplet`).
+///
+/// Each card previews the triplet's proportional 60% dominant canvas, 30%
+/// structural ink/surface tone, and 10% accent pop for the active light/dark
+/// appearance so users can choose a complete harmonious palette at a glance.
+struct TripletThemePicker: View {
+  @Binding var selection: ThemeTriplet
+
+  @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
+  @Namespace private var ring
+  @State private var hovered: ThemeTriplet?
+
+  private let columns = [
+    GridItem(.flexible(), spacing: Layout.snug),
+    GridItem(.flexible(), spacing: Layout.snug),
+  ]
+
+  var body: some View {
+    LazyVGrid(columns: columns, spacing: Layout.snug) {
+      ForEach(ThemeTriplet.allCases, id: \.self) { triplet in
+        tripletCard(triplet)
+      }
+    }
+    .animation(motion.spatialDefault, value: selection)
+    .animation(motion.spatialFast, value: hovered)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Farb-Triplet")
+  }
+
+  private func tripletCard(_ triplet: ThemeTriplet) -> some View {
+    let isSelected = selection == triplet
+    let isHovered = hovered == triplet
+    let palette = triplet.palette(isDark: theme.isDark)
+    let cardShape = RoundedRectangle(cornerRadius: Layout.radiusControl, style: .continuous)
+    let barShape = RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
+
+    return VStack(alignment: .leading, spacing: Layout.tight) {
+      GeometryReader { proxy in
+        HStack(spacing: 0) {
+          Rectangle()
+            .fill(palette.swatchDominant)
+            .frame(width: proxy.size.width * 0.60)
+          Rectangle()
+            .fill(palette.swatchSecondary)
+            .frame(width: proxy.size.width * 0.30)
+          Rectangle()
+            .fill(palette.swatchAccent)
+            .frame(width: max(0, proxy.size.width * 0.10))
+        }
+      }
+      .frame(height: 20)
+      .clipShape(barShape)
+      .overlay {
+        barShape.strokeBorder(theme.groupBorder, lineWidth: 0.75)
+      }
+
+      HStack(spacing: Layout.tight) {
+        VStack(alignment: .leading, spacing: 1) {
+          Text(triplet.displayName)
+            .font(TypeScale.rowTitle)
+            .fontWeight(isSelected ? .semibold : .medium)
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+          Text(triplet.summary)
+            .font(TypeScale.detail)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
+        Spacer(minLength: Layout.tight)
+        if isSelected {
+          AccentDot(accent: palette.accent, isReady: true, size: 8)
+        } else {
+          Circle()
+            .strokeBorder(theme.groupBorder, lineWidth: 1)
+            .frame(width: 8, height: 8)
+        }
+      }
+    }
+    .padding(Layout.snug)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background {
+      cardShape.fill(
+        isSelected
+          ? theme.surfaceRaised
+          : (isHovered ? theme.surfaceRaised.opacity(0.65) : theme.subtleWell)
+      )
+    }
+    .overlay {
+      if isSelected {
+        cardShape
+          .strokeBorder(palette.accent.opacity(0.85), lineWidth: 1.5)
+          .matchedGeometryEffect(id: "tripletSelection", in: ring)
+      } else {
+        cardShape.strokeBorder(theme.groupBorder, lineWidth: 0.75)
+      }
+    }
+    .contentShape(cardShape)
+    .onHover { hovering in
+      hovered = hovering ? triplet : (hovered == triplet ? nil : hovered)
+    }
+    .onTapGesture {
+      guard !isSelected else { return }
+      selection = triplet
+      Haptics.detent()
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(triplet.displayName), \(triplet.summary)")
+    .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
   }
 }
 

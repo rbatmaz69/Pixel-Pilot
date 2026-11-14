@@ -39,7 +39,16 @@ final class DisplayViewModel: Identifiable {
   /// Raw value of VCP 0x60, believed only when it matches a declared input.
   private(set) var reportedInput: UInt8?
 
-  private(set) var accent: Color
+  private var accentOverride: Int?
+  private var settingsRevision: Int = 0
+
+  var accent: Color {
+    _ = settingsRevision
+    if let accentOverride, AccentPalette.tones.indices.contains(accentOverride) {
+      return AccentPalette.tones[accentOverride]
+    }
+    return ThemeStore.shared.theme.tone
+  }
 
   /// Marks and the last health check, mirrored out of `Preferences`.
   ///
@@ -90,7 +99,7 @@ final class DisplayViewModel: Identifiable {
     let settings = preferences.settings(for: display.key)
     self.capabilities = settings.capabilities
     self.capabilityString = settings.capabilityString.map(CapabilityString.init(raw:))
-    self.accent = AccentPalette.color(for: display.key, override: settings.accentOverride)
+    self.accentOverride = settings.accentOverride
     self.colorTemperatureKelvin = settings.colorTemperatureKelvin
     self.toneCurve = settings.toneCurve
     self.colorCapabilities = settings.colorCapabilities
@@ -547,7 +556,8 @@ final class DisplayViewModel: Identifiable {
     preferences.update(key, mutate)
     let after = preferences.settings(for: key)
 
-    accent = AccentPalette.color(for: key, override: after.accentOverride)
+    accentOverride = after.accentOverride
+    settingsRevision &+= 1
 
     Task {
       if after.timing != before.timing {

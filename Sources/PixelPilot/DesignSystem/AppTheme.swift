@@ -160,17 +160,290 @@ private struct ThemeRecipe: Equatable, Sendable {
   let panelTintOpacity: Double
 }
 
+// MARK: - Triplet Palettes
+
+/// The complete surface, ink and accent palette resolved from a `ThemeTriplet`
+/// for either light or dark appearance, following the 60-30-10 rule:
+/// - 60% Dominant: window canvas, sidebar and popover base
+/// - 30% Structure: cards, recessed wells, borders and harmonised ink
+/// - 10% Accent: active controls, LED indicators and focus highlights
+struct TripletPalette: Equatable, Sendable {
+  let sink: Color
+  let windowTop: Color
+  let windowBottom: Color
+  let sidebar: Color
+  let card: Color
+  let cardRaised: Color
+  let ink: Color
+  let structureTint: Color
+  let accent: Color
+  let swatchDominant: Color
+  let swatchSecondary: Color
+  let swatchAccent: Color
+}
+
+extension ThemeTriplet {
+  func palette(isDark: Bool) -> TripletPalette {
+    switch (self, isDark) {
+    case (.atelierTerracotta, false):
+      return TripletPalette(
+        sink: AppTheme.warmPaperSink,
+        windowTop: AppTheme.warmPaperWindowTop,
+        windowBottom: AppTheme.warmPaperWindow,
+        sidebar: AppTheme.warmPaperSidebar,
+        card: AppTheme.warmPaperCard,
+        cardRaised: AppTheme.warmPaperCardRaised,
+        ink: AppTheme.warmEspressoInk,
+        structureTint: Color(.sRGB, red: 0.310, green: 0.125, blue: 0.047),
+        accent: AppTheme.studioAmberLight,
+        swatchDominant: Color(.sRGB, red: 0.882, green: 0.737, blue: 0.592),
+        swatchSecondary: Color(.sRGB, red: 0.275, green: 0.129, blue: 0.067),
+        swatchAccent: AppTheme.studioAmberLight
+      )
+    case (.atelierTerracotta, true):
+      return TripletPalette(
+        sink: AppTheme.darkWalnutSink,
+        windowTop: AppTheme.darkWalnutWindowTop,
+        windowBottom: AppTheme.darkWalnutWindow,
+        sidebar: AppTheme.darkWalnutSidebar,
+        card: AppTheme.darkWalnutCard,
+        cardRaised: AppTheme.darkWalnutCardRaised,
+        ink: AppTheme.warmCreamInk,
+        structureTint: Color(.sRGB, red: 0.992, green: 0.780, blue: 0.580),
+        accent: AppTheme.studioAmberDark,
+        swatchDominant: Color(.sRGB, red: 0.196, green: 0.086, blue: 0.043),
+        swatchSecondary: Color(.sRGB, red: 0.360, green: 0.180, blue: 0.098),
+        swatchAccent: AppTheme.studioAmberDark
+      )
+
+    case (.crimsonGold, false):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.996, green: 0.961, blue: 0.882),
+        windowTop: Color(.sRGB, red: 0.918, green: 0.816, blue: 0.635),
+        windowBottom: Color(.sRGB, red: 0.886, green: 0.769, blue: 0.565),
+        sidebar: Color(.sRGB, red: 0.847, green: 0.714, blue: 0.490),
+        card: Color(.sRGB, red: 0.984, green: 0.937, blue: 0.835),
+        cardRaised: Color(.sRGB, red: 0.996, green: 0.961, blue: 0.882),
+        ink: Color(.sRGB, red: 0.259, green: 0.024, blue: 0.059),
+        structureTint: Color(.sRGB, red: 0.420, green: 0.047, blue: 0.102),
+        accent: Color(.sRGB, red: 0.651, green: 0.067, blue: 0.145),
+        swatchDominant: Color(.sRGB, red: 0.545, green: 0.059, blue: 0.129),
+        swatchSecondary: Color(.sRGB, red: 0.886, green: 0.682, blue: 0.200),
+        swatchAccent: Color(.sRGB, red: 0.965, green: 0.890, blue: 0.745)
+      )
+    case (.crimsonGold, true):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.039, green: 0.008, blue: 0.016),
+        windowTop: Color(.sRGB, red: 0.212, green: 0.031, blue: 0.063),
+        windowBottom: Color(.sRGB, red: 0.165, green: 0.020, blue: 0.043),
+        sidebar: Color(.sRGB, red: 0.259, green: 0.043, blue: 0.078),
+        card: Color(.sRGB, red: 0.302, green: 0.055, blue: 0.094),
+        cardRaised: Color(.sRGB, red: 0.361, green: 0.075, blue: 0.122),
+        ink: Color(.sRGB, red: 0.996, green: 0.945, blue: 0.820),
+        structureTint: Color(.sRGB, red: 0.961, green: 0.765, blue: 0.282),
+        accent: Color(.sRGB, red: 0.941, green: 0.706, blue: 0.161),
+        swatchDominant: Color(.sRGB, red: 0.302, green: 0.055, blue: 0.094),
+        swatchSecondary: Color(.sRGB, red: 0.165, green: 0.020, blue: 0.043),
+        swatchAccent: Color(.sRGB, red: 0.941, green: 0.706, blue: 0.161)
+      )
+
+    case (.matchaOat, false):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.941, green: 0.980, blue: 0.918),
+        windowTop: Color(.sRGB, red: 0.761, green: 0.863, blue: 0.725),
+        windowBottom: Color(.sRGB, red: 0.706, green: 0.827, blue: 0.663),
+        sidebar: Color(.sRGB, red: 0.651, green: 0.788, blue: 0.604),
+        card: Color(.sRGB, red: 0.910, green: 0.961, blue: 0.882),
+        cardRaised: Color(.sRGB, red: 0.941, green: 0.980, blue: 0.918),
+        ink: Color(.sRGB, red: 0.039, green: 0.153, blue: 0.063),
+        structureTint: Color(.sRGB, red: 0.078, green: 0.255, blue: 0.114),
+        accent: Color(.sRGB, red: 0.145, green: 0.490, blue: 0.204),
+        swatchDominant: Color(.sRGB, red: 0.706, green: 0.827, blue: 0.663),
+        swatchSecondary: Color(.sRGB, red: 0.078, green: 0.255, blue: 0.114),
+        swatchAccent: Color(.sRGB, red: 0.145, green: 0.490, blue: 0.204)
+      )
+    case (.matchaOat, true):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.008, green: 0.027, blue: 0.012),
+        windowTop: Color(.sRGB, red: 0.039, green: 0.133, blue: 0.067),
+        windowBottom: Color(.sRGB, red: 0.024, green: 0.102, blue: 0.047),
+        sidebar: Color(.sRGB, red: 0.055, green: 0.165, blue: 0.086),
+        card: Color(.sRGB, red: 0.067, green: 0.192, blue: 0.106),
+        cardRaised: Color(.sRGB, red: 0.094, green: 0.235, blue: 0.137),
+        ink: Color(.sRGB, red: 0.918, green: 0.988, blue: 0.929),
+        structureTint: Color(.sRGB, red: 0.525, green: 0.902, blue: 0.569),
+        accent: Color(.sRGB, red: 0.420, green: 0.847, blue: 0.467),
+        swatchDominant: Color(.sRGB, red: 0.039, green: 0.133, blue: 0.067),
+        swatchSecondary: Color(.sRGB, red: 0.094, green: 0.235, blue: 0.137),
+        swatchAccent: Color(.sRGB, red: 0.420, green: 0.847, blue: 0.467)
+      )
+
+    case (.nordicFjord, false):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.933, green: 0.969, blue: 1.000),
+        windowTop: Color(.sRGB, red: 0.722, green: 0.831, blue: 0.953),
+        windowBottom: Color(.sRGB, red: 0.659, green: 0.788, blue: 0.933),
+        sidebar: Color(.sRGB, red: 0.596, green: 0.745, blue: 0.910),
+        card: Color(.sRGB, red: 0.894, green: 0.945, blue: 0.996),
+        cardRaised: Color(.sRGB, red: 0.933, green: 0.969, blue: 1.000),
+        ink: Color(.sRGB, red: 0.031, green: 0.094, blue: 0.227),
+        structureTint: Color(.sRGB, red: 0.055, green: 0.169, blue: 0.380),
+        accent: Color(.sRGB, red: 0.078, green: 0.341, blue: 0.910),
+        swatchDominant: Color(.sRGB, red: 0.659, green: 0.788, blue: 0.933),
+        swatchSecondary: Color(.sRGB, red: 0.055, green: 0.169, blue: 0.380),
+        swatchAccent: Color(.sRGB, red: 0.078, green: 0.341, blue: 0.910)
+      )
+    case (.nordicFjord, true):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.008, green: 0.020, blue: 0.047),
+        windowTop: Color(.sRGB, red: 0.035, green: 0.098, blue: 0.227),
+        windowBottom: Color(.sRGB, red: 0.024, green: 0.071, blue: 0.180),
+        sidebar: Color(.sRGB, red: 0.051, green: 0.129, blue: 0.278),
+        card: Color(.sRGB, red: 0.063, green: 0.153, blue: 0.322),
+        cardRaised: Color(.sRGB, red: 0.090, green: 0.196, blue: 0.380),
+        ink: Color(.sRGB, red: 0.918, green: 0.961, blue: 1.000),
+        structureTint: Color(.sRGB, red: 0.478, green: 0.737, blue: 1.000),
+        accent: Color(.sRGB, red: 0.314, green: 0.620, blue: 1.000),
+        swatchDominant: Color(.sRGB, red: 0.035, green: 0.098, blue: 0.227),
+        swatchSecondary: Color(.sRGB, red: 0.090, green: 0.196, blue: 0.380),
+        swatchAccent: Color(.sRGB, red: 0.314, green: 0.620, blue: 1.000)
+      )
+
+    case (.cyberSlate, false):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.922, green: 0.984, blue: 0.976),
+        windowTop: Color(.sRGB, red: 0.682, green: 0.875, blue: 0.851),
+        windowBottom: Color(.sRGB, red: 0.616, green: 0.839, blue: 0.812),
+        sidebar: Color(.sRGB, red: 0.553, green: 0.800, blue: 0.769),
+        card: Color(.sRGB, red: 0.878, green: 0.965, blue: 0.953),
+        cardRaised: Color(.sRGB, red: 0.922, green: 0.984, blue: 0.976),
+        ink: Color(.sRGB, red: 0.020, green: 0.137, blue: 0.145),
+        structureTint: Color(.sRGB, red: 0.031, green: 0.239, blue: 0.251),
+        accent: Color(.sRGB, red: 0.000, green: 0.510, blue: 0.459),
+        swatchDominant: Color(.sRGB, red: 0.616, green: 0.839, blue: 0.812),
+        swatchSecondary: Color(.sRGB, red: 0.031, green: 0.239, blue: 0.251),
+        swatchAccent: Color(.sRGB, red: 0.000, green: 0.510, blue: 0.459)
+      )
+    case (.cyberSlate, true):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.004, green: 0.024, blue: 0.035),
+        windowTop: Color(.sRGB, red: 0.024, green: 0.118, blue: 0.165),
+        windowBottom: Color(.sRGB, red: 0.016, green: 0.086, blue: 0.129),
+        sidebar: Color(.sRGB, red: 0.035, green: 0.149, blue: 0.204),
+        card: Color(.sRGB, red: 0.043, green: 0.176, blue: 0.239),
+        cardRaised: Color(.sRGB, red: 0.067, green: 0.220, blue: 0.290),
+        ink: Color(.sRGB, red: 0.898, green: 0.996, blue: 0.976),
+        structureTint: Color(.sRGB, red: 0.251, green: 0.941, blue: 0.839),
+        accent: Color(.sRGB, red: 0.082, green: 0.910, blue: 0.788),
+        swatchDominant: Color(.sRGB, red: 0.024, green: 0.118, blue: 0.165),
+        swatchSecondary: Color(.sRGB, red: 0.067, green: 0.220, blue: 0.290),
+        swatchAccent: Color(.sRGB, red: 0.082, green: 0.910, blue: 0.788)
+      )
+
+    case (.bauhausSignal, false):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.996, green: 0.969, blue: 0.882),
+        windowTop: Color(.sRGB, red: 0.929, green: 0.835, blue: 0.620),
+        windowBottom: Color(.sRGB, red: 0.902, green: 0.792, blue: 0.545),
+        sidebar: Color(.sRGB, red: 0.867, green: 0.745, blue: 0.475),
+        card: Color(.sRGB, red: 0.988, green: 0.945, blue: 0.831),
+        cardRaised: Color(.sRGB, red: 0.996, green: 0.969, blue: 0.882),
+        ink: Color(.sRGB, red: 0.051, green: 0.098, blue: 0.247),
+        structureTint: Color(.sRGB, red: 0.078, green: 0.149, blue: 0.369),
+        accent: Color(.sRGB, red: 0.847, green: 0.235, blue: 0.047),
+        swatchDominant: Color(.sRGB, red: 0.902, green: 0.792, blue: 0.545),
+        swatchSecondary: Color(.sRGB, red: 0.078, green: 0.149, blue: 0.369),
+        swatchAccent: Color(.sRGB, red: 0.847, green: 0.235, blue: 0.047)
+      )
+    case (.bauhausSignal, true):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.012, green: 0.020, blue: 0.051),
+        windowTop: Color(.sRGB, red: 0.055, green: 0.094, blue: 0.220),
+        windowBottom: Color(.sRGB, red: 0.039, green: 0.067, blue: 0.173),
+        sidebar: Color(.sRGB, red: 0.075, green: 0.122, blue: 0.267),
+        card: Color(.sRGB, red: 0.090, green: 0.145, blue: 0.310),
+        cardRaised: Color(.sRGB, red: 0.122, green: 0.188, blue: 0.369),
+        ink: Color(.sRGB, red: 0.992, green: 0.957, blue: 0.863),
+        structureTint: Color(.sRGB, red: 0.988, green: 0.745, blue: 0.180),
+        accent: Color(.sRGB, red: 0.988, green: 0.690, blue: 0.063),
+        swatchDominant: Color(.sRGB, red: 0.055, green: 0.094, blue: 0.220),
+        swatchSecondary: Color(.sRGB, red: 0.122, green: 0.188, blue: 0.369),
+        swatchAccent: Color(.sRGB, red: 0.988, green: 0.690, blue: 0.063)
+      )
+
+    case (.velvetIndigo, false):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.965, green: 0.949, blue: 1.000),
+        windowTop: Color(.sRGB, red: 0.820, green: 0.769, blue: 0.945),
+        windowBottom: Color(.sRGB, red: 0.773, green: 0.710, blue: 0.925),
+        sidebar: Color(.sRGB, red: 0.725, green: 0.651, blue: 0.902),
+        card: Color(.sRGB, red: 0.937, green: 0.914, blue: 0.992),
+        cardRaised: Color(.sRGB, red: 0.965, green: 0.949, blue: 1.000),
+        ink: Color(.sRGB, red: 0.110, green: 0.047, blue: 0.239),
+        structureTint: Color(.sRGB, red: 0.188, green: 0.086, blue: 0.396),
+        accent: Color(.sRGB, red: 0.365, green: 0.188, blue: 0.878),
+        swatchDominant: Color(.sRGB, red: 0.773, green: 0.710, blue: 0.925),
+        swatchSecondary: Color(.sRGB, red: 0.188, green: 0.086, blue: 0.396),
+        swatchAccent: Color(.sRGB, red: 0.365, green: 0.188, blue: 0.878)
+      )
+    case (.velvetIndigo, true):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.024, green: 0.008, blue: 0.051),
+        windowTop: Color(.sRGB, red: 0.118, green: 0.051, blue: 0.231),
+        windowBottom: Color(.sRGB, red: 0.086, green: 0.035, blue: 0.180),
+        sidebar: Color(.sRGB, red: 0.149, green: 0.071, blue: 0.278),
+        card: Color(.sRGB, red: 0.176, green: 0.090, blue: 0.322),
+        cardRaised: Color(.sRGB, red: 0.220, green: 0.122, blue: 0.380),
+        ink: Color(.sRGB, red: 0.957, green: 0.933, blue: 1.000),
+        structureTint: Color(.sRGB, red: 0.706, green: 0.616, blue: 1.000),
+        accent: Color(.sRGB, red: 0.620, green: 0.510, blue: 1.000),
+        swatchDominant: Color(.sRGB, red: 0.118, green: 0.051, blue: 0.231),
+        swatchSecondary: Color(.sRGB, red: 0.220, green: 0.122, blue: 0.380),
+        swatchAccent: Color(.sRGB, red: 0.620, green: 0.510, blue: 1.000)
+      )
+
+    case (.sakuraEditorial, false):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.996, green: 0.941, blue: 0.965),
+        windowTop: Color(.sRGB, red: 0.933, green: 0.765, blue: 0.831),
+        windowBottom: Color(.sRGB, red: 0.906, green: 0.706, blue: 0.788),
+        sidebar: Color(.sRGB, red: 0.875, green: 0.647, blue: 0.741),
+        card: Color(.sRGB, red: 0.988, green: 0.910, blue: 0.941),
+        cardRaised: Color(.sRGB, red: 0.996, green: 0.941, blue: 0.965),
+        ink: Color(.sRGB, red: 0.220, green: 0.035, blue: 0.118),
+        structureTint: Color(.sRGB, red: 0.369, green: 0.063, blue: 0.200),
+        accent: Color(.sRGB, red: 0.812, green: 0.094, blue: 0.376),
+        swatchDominant: Color(.sRGB, red: 0.906, green: 0.706, blue: 0.788),
+        swatchSecondary: Color(.sRGB, red: 0.369, green: 0.063, blue: 0.200),
+        swatchAccent: Color(.sRGB, red: 0.812, green: 0.094, blue: 0.376)
+      )
+    case (.sakuraEditorial, true):
+      return TripletPalette(
+        sink: Color(.sRGB, red: 0.043, green: 0.008, blue: 0.024),
+        windowTop: Color(.sRGB, red: 0.200, green: 0.035, blue: 0.118),
+        windowBottom: Color(.sRGB, red: 0.157, green: 0.024, blue: 0.086),
+        sidebar: Color(.sRGB, red: 0.243, green: 0.047, blue: 0.145),
+        card: Color(.sRGB, red: 0.282, green: 0.063, blue: 0.173),
+        cardRaised: Color(.sRGB, red: 0.337, green: 0.086, blue: 0.212),
+        ink: Color(.sRGB, red: 0.996, green: 0.929, blue: 0.961),
+        structureTint: Color(.sRGB, red: 0.988, green: 0.525, blue: 0.718),
+        accent: Color(.sRGB, red: 0.980, green: 0.345, blue: 0.596),
+        swatchDominant: Color(.sRGB, red: 0.200, green: 0.035, blue: 0.118),
+        swatchSecondary: Color(.sRGB, red: 0.337, green: 0.086, blue: 0.212),
+        swatchAccent: Color(.sRGB, red: 0.980, green: 0.345, blue: 0.596)
+      )
+    }
+  }
+}
+
 // MARK: - The theme
 
-/// Every surface colour in the app, derived from two tones.
+/// Every surface colour in the app, derived from the active `ThemeTriplet`.
 ///
-/// Two rather than one because they answer different questions. The accent is
-/// what a control is *at full strength* — a filled track, a switch that is on,
-/// the ring around a chosen swatch — and it wants to be vivid. The field is
-/// several hundred square points of wall behind everything else, and a colour
-/// that is right for a 42 pt switch is rarely right for that. Tying them
-/// together means one of the two is always a compromise, so they are separate,
-/// and the field simply follows the accent until it is told otherwise.
+/// The accent is what a control is *at full strength* — a filled track, a
+/// switch that is on, the ring around a chosen swatch — and it wants to be
+/// vivid. The window field and cards come from the triplet's 60% and 30% roles,
+/// paired with harmonised ink so every surface stays legible across modes.
 ///
 /// Stored rather than computed, because resolving a `Color` to components goes
 /// through `NSColor` and a view body must not pay for that on every pass —
@@ -178,27 +451,31 @@ private struct ThemeRecipe: Equatable, Sendable {
 /// one per access.
 struct AppTheme: Equatable, Sendable {
   /// Warm Studio Paper & Dark Walnut mockup palette constants.
-  static let warmPaperSink = Color(.sRGB, red: 1.0, green: 0.992, blue: 0.976) // #FFFDF9
-  static let darkWalnutSink = Color(.sRGB, red: 0.025, green: 0.020, blue: 0.016) // #060504
-  static let warmPaperWindowTop = Color(.sRGB, red: 0.969, green: 0.953, blue: 0.925) // #F7F3EC
-  static let warmPaperWindow = Color(.sRGB, red: 0.961, green: 0.945, blue: 0.914) // #F5F1E9
-  static let warmPaperSidebar = Color(.sRGB, red: 0.933, green: 0.910, blue: 0.871) // #EEE8DE
-  static let warmPaperCard = Color(.sRGB, red: 1.0, green: 0.992, blue: 0.976) // #FFFDF9
-  static let warmPaperCardRaised = Color(.sRGB, red: 1.0, green: 0.996, blue: 0.988) // #FFFEFC
-  static let darkWalnutWindowTop = Color(.sRGB, red: 0.114, green: 0.098, blue: 0.090) // #1D1917
-  static let darkWalnutWindow = Color(.sRGB, red: 0.106, green: 0.094, blue: 0.086) // #1B1816
-  static let darkWalnutSidebar = Color(.sRGB, red: 0.153, green: 0.133, blue: 0.118) // #27221E
-  static let darkWalnutCard = Color(.sRGB, red: 0.149, green: 0.133, blue: 0.118) // #26221E
-  static let darkWalnutCardRaised = Color(.sRGB, red: 0.176, green: 0.157, blue: 0.139) // #2D2823
-  static let warmEspressoInk = Color(.sRGB, red: 0.125, green: 0.114, blue: 0.102) // #201D1A
-  static let warmCreamInk = Color(.sRGB, red: 0.980, green: 0.965, blue: 0.941) // #FAF6F0
-  static let studioAmberLight = Color(.sRGB, red: 0.851, green: 0.420, blue: 0.122) // #D96B1F
-  static let studioAmberDark = Color(.sRGB, red: 0.878, green: 0.478, blue: 0.180) // #E07A2E
+  static let warmPaperSink = Color(.sRGB, red: 0.996, green: 0.949, blue: 0.886) // #FFF2E2
+  static let darkWalnutSink = Color(.sRGB, red: 0.035, green: 0.016, blue: 0.008) // #090402
+  static let warmPaperWindowTop = Color(.sRGB, red: 0.914, green: 0.788, blue: 0.659) // #E9C9A8
+  static let warmPaperWindow = Color(.sRGB, red: 0.882, green: 0.737, blue: 0.592) // #E1BC97
+  static let warmPaperSidebar = Color(.sRGB, red: 0.847, green: 0.686, blue: 0.525) // #D8AF86
+  static let warmPaperCard = Color(.sRGB, red: 0.984, green: 0.922, blue: 0.843) // #FBEBD7
+  static let warmPaperCardRaised = Color(.sRGB, red: 0.996, green: 0.949, blue: 0.886) // #FFF2E2
+  static let darkWalnutWindowTop = Color(.sRGB, red: 0.196, green: 0.086, blue: 0.043) // #32160B
+  static let darkWalnutWindow = Color(.sRGB, red: 0.153, green: 0.063, blue: 0.027) // #271007
+  static let darkWalnutSidebar = Color(.sRGB, red: 0.235, green: 0.106, blue: 0.055) // #3C1B0E
+  static let darkWalnutCard = Color(.sRGB, red: 0.275, green: 0.129, blue: 0.067) // #462111
+  static let darkWalnutCardRaised = Color(.sRGB, red: 0.329, green: 0.161, blue: 0.086) // #542916
+  static let warmEspressoInk = Color(.sRGB, red: 0.196, green: 0.078, blue: 0.031) // #321408
+  static let warmCreamInk = Color(.sRGB, red: 0.992, green: 0.941, blue: 0.875) // #FDF0DF
+  static let studioAmberLight = Color(.sRGB, red: 0.820, green: 0.298, blue: 0.047) // #D14C0C
+  static let studioAmberDark = Color(.sRGB, red: 0.961, green: 0.478, blue: 0.125) // #F57A20
 
   /// The pole each mode blends toward (`warmPaperSink` in Light, `darkWalnutSink` in Dark).
   static func sink(isDark: Bool) -> Color {
     isDark ? darkWalnutSink : warmPaperSink
   }
+
+  /// The chosen 60-30-10 colour triplet.
+  let triplet: ThemeTriplet
+  private let palette: TripletPalette
 
   /// The accent, undiluted. Sliders, switches, rings and glows use this; it is
   /// the one place the theme is at full strength.
@@ -231,8 +508,11 @@ struct AppTheme: Equatable, Sendable {
   /// only line in a card that says which colour the app is set to.
   let rim: Color
 
-  /// Body text, and the warm espresso or cream ink it resolves to.
+  /// Body text, and the harmonised ink it resolves to.
   let primaryText: Color
+
+  /// The triplet's own accent as type, checked against `surface`.
+  private let toneInk: Color
 
   /// Each palette tone as type, already checked against `surface`.
   private let paletteInk: [Color]
@@ -241,20 +521,25 @@ struct AppTheme: Equatable, Sendable {
   private let recipe: ThemeRecipe
 
   init(
-    tone: Color,
+    triplet: ThemeTriplet = .atelierTerracotta,
+    tone: Color? = nil,
     backdropTone: Color? = nil,
     isDark: Bool,
     style: ThemeStyle = .glass,
     glassOpacity: Double = GlobalSettings.defaultGlassOpacity,
     ambientMoodPreference: AmbientMoodPreference = .auto
   ) {
-    let field = backdropTone ?? tone
+    let palette = triplet.palette(isDark: isDark)
+    let resolvedTone = tone ?? palette.accent
+    let field = backdropTone ?? resolvedTone
     let recipe = Self.recipe(for: style, isDark: isDark)
     let clampedGlass = min(
       max(glassOpacity, GlobalSettings.glassOpacityRange.lowerBound),
       GlobalSettings.glassOpacityRange.upperBound
     )
-    self.tone = tone
+    self.triplet = triplet
+    self.palette = palette
+    self.tone = resolvedTone
     self.backdropTone = field
     self.isDark = isDark
     self.style = style
@@ -262,49 +547,75 @@ struct AppTheme: Equatable, Sendable {
     self.ambientMoodPreference = ambientMoodPreference
     self.recipe = recipe
 
-    let sink: Color = Self.sink(isDark: isDark)
+    let sink: Color = palette.sink
 
     switch style {
     case .glass:
-      // 100% Warm Studio Paper (Light) and Dark Walnut (Dark) neutral surfaces
-      // without tinting window fields or cards with the accent hue.
-      let baseTop = isDark ? Self.darkWalnutWindowTop : Self.warmPaperWindowTop
-      let baseBottom = isDark ? Self.darkWalnutWindow : Self.warmPaperWindow
-      let baseSurface = isDark ? Self.darkWalnutCard : Self.warmPaperCard
-      let baseRaised = isDark ? Self.darkWalnutCardRaised : Self.warmPaperCardRaised
-      backdropTop = baseTop
-      backdropBottom = baseBottom
-      surface = baseSurface
-      surfaceRaised = baseRaised
-      onGlassSurface = baseSurface.opacity(isDark ? 0.72 : 0.78)
-      primaryText = (isDark ? Self.warmCreamInk : Self.warmEspressoInk)
-        .legible(on: baseSurface, ratio: 7)
+      // 60-30-10 Triplet surfaces without tinting window fields or cards with the accent hue.
+      backdropTop = palette.windowTop
+      backdropBottom = palette.windowBottom
+      surface = palette.card
+      surfaceRaised = palette.cardRaised
+      onGlassSurface = palette.card.opacity(isDark ? 0.72 : 0.78)
+      primaryText = palette.ink.legible(on: palette.card, ratio: 7)
 
     case .flat:
-      let baseWindow = isDark ? Self.darkWalnutWindow : Self.warmPaperWindow
-      let baseSurface = isDark ? Self.darkWalnutCard : Self.warmPaperCard
-      let baseRaised = isDark ? Self.darkWalnutCardRaised : Self.warmPaperCardRaised
-      backdropTop = baseWindow
-      backdropBottom = baseWindow
-      surface = baseSurface
-      surfaceRaised = baseRaised
-      onGlassSurface = baseSurface
-      primaryText = (isDark ? Self.warmCreamInk : Self.warmEspressoInk)
-        .legible(on: baseSurface, ratio: 7)
+      backdropTop = palette.windowBottom
+      backdropBottom = palette.windowBottom
+      surface = palette.card
+      surfaceRaised = palette.cardRaised
+      onGlassSurface = palette.card
+      primaryText = palette.ink.legible(on: palette.card, ratio: 7)
 
     case .vivid:
-      func settled(_ amount: Double, resolvedBy resolve: (Color) -> Color = { $0 }) -> Color {
-        Self.settled(field, toward: sink, from: amount, isDark: isDark, resolvedBy: resolve)
+      func settled(
+        _ amount: Double,
+        resolvedBy resolve: (Color) -> Color = { $0 },
+        satisfying extraCondition: (Color) -> Bool = { _ in true }
+      ) -> Color {
+        Self.settled(
+          field,
+          toward: sink,
+          from: amount,
+          isDark: isDark,
+          resolvedBy: resolve,
+          satisfying: extraCondition
+        )
       }
-      backdropTop = settled(recipe.backdropTop)
-      backdropBottom = settled(recipe.backdropBottom)
-      surface = settled(recipe.surface)
-      surfaceRaised = settled(recipe.surfaceRaised)
+      if isDark {
+        let resolvedRaised = settled(recipe.surfaceRaised)
+        let resolvedSurface = settled(recipe.surface)
+        let resolvedTop = settled(recipe.backdropTop, satisfying: {
+          resolvedSurface.contrastRatio(to: $0) >= 1.12
+        })
+        let resolvedBottom = settled(recipe.backdropBottom, satisfying: {
+          $0.srgb != resolvedTop.srgb
+        })
+        surfaceRaised = resolvedRaised
+        surface = resolvedSurface
+        backdropTop = resolvedTop
+        backdropBottom = resolvedBottom
+      } else {
+        let resolvedTop = settled(recipe.backdropTop)
+        let resolvedBottom = settled(recipe.backdropBottom, satisfying: {
+          $0.srgb != resolvedTop.srgb
+        })
+        let resolvedSurface = settled(recipe.surface, satisfying: {
+          $0.contrastRatio(to: resolvedTop) >= 1.12
+        })
+        let resolvedRaised = settled(recipe.surfaceRaised, satisfying: {
+          $0.contrastRatio(to: resolvedSurface) >= 1.04 || $0.srgb == sink.srgb
+        })
+        backdropTop = resolvedTop
+        backdropBottom = resolvedBottom
+        surface = resolvedSurface
+        surfaceRaised = resolvedRaised
+      }
       let panelField = backdropTop
       let panelAlpha = recipe.onGlassOpacity
-      onGlassSurface = settled(recipe.onGlassSurface) {
+      onGlassSurface = settled(recipe.onGlassSurface, resolvedBy: {
         $0.opacity(panelAlpha).over(panelField)
-      }
+      })
       .opacity(panelAlpha)
       let ink: Color = isDark
         ? field.blended(with: .white, by: 0.88)
@@ -312,9 +623,10 @@ struct AppTheme: Equatable, Sendable {
       primaryText = ink.legible(on: surface, ratio: 7)
     }
 
-    rim = tone.opacity(recipe.rimOpacity)
+    rim = resolvedTone.opacity(recipe.rimOpacity)
 
     let cardSurface = surface
+    toneInk = resolvedTone.accentText(isDark: isDark).legible(on: cardSurface, ratio: 4.5)
     paletteInk = AccentPalette.tones.map {
       $0.accentText(isDark: isDark).legible(on: cardSurface, ratio: 4.5)
     }
@@ -456,19 +768,21 @@ struct AppTheme: Equatable, Sendable {
     toward sink: Color,
     from amount: Double,
     isDark: Bool,
-    resolvedBy resolve: (Color) -> Color = { $0 }
+    resolvedBy resolve: (Color) -> Color = { $0 },
+    satisfying extraCondition: (Color) -> Bool = { _ in true }
   ) -> Color {
     var blend = amount
     while blend < 1 {
       let candidate = field.blended(with: sink, by: blend)
-      let luminance = resolve(candidate).relativeLuminance
-      if isDark ? luminance <= deepCeiling : luminance >= paleFloor {
+      let resolved = resolve(candidate)
+      let luminance = resolved.relativeLuminance
+      let inBand = isDark ? luminance <= deepCeiling : luminance >= paleFloor
+      if inBand && extraCondition(resolved) {
         return candidate
       }
       blend += 0.01
     }
-    // Unreachable: black is at zero and white is at one, so the loop above
-    // always finds an answer before it runs out of room.
+    // Unreachable unless an extra condition pushes all the way to the neutral sink.
     return sink
   }
 
@@ -528,58 +842,52 @@ struct AppTheme: Equatable, Sendable {
   /// not drawn at all — and, in `AmbientBackdrop`, not animated either.
   var ambientIntensity: Double { recipe.ambientIntensity }
 
-  // MARK: Warm Studio Craft semantic tokens
+  // MARK: Triplet Studio semantic tokens
 
-  /// Warm Amber studio accent (`#D96B1F` in Warm Paper, `#E07A2E` in Dark Walnut).
+  /// Triplet 10% studio accent colour.
   var studioAccent: Color {
-    isDark ? Self.studioAmberDark : Self.studioAmberLight
+    palette.accent
   }
 
   /// Subtle 1px top inner specular highlight on grouped cards and Control Center modules.
   var specularRim: Color {
     isDark
-      ? Color(.sRGB, red: 1.0, green: 0.973, blue: 0.933, opacity: 0.07)
+      ? palette.structureTint.opacity(0.07)
       : Color.white.opacity(0.85)
   }
 
-  /// 1px warm border for `Form(.grouped)`-style containers (`10pt` radius).
+  /// 1px border for `Form(.grouped)`-style containers (`10pt` radius).
   var groupBorder: Color {
-    isDark
-      ? Color(.sRGB, red: 1.0, green: 0.973, blue: 0.933, opacity: 0.10)
-      : Color(.sRGB, red: 0.188, green: 0.141, blue: 0.094, opacity: 0.11)
+    palette.structureTint.opacity(isDark ? 0.18 : 0.16)
   }
 
   /// 1px inset row separator inside grouped containers.
   var separator: Color {
-    isDark
-      ? Color(.sRGB, red: 1.0, green: 0.961, blue: 0.910, opacity: 0.09)
-      : Color(.sRGB, red: 0.188, green: 0.141, blue: 0.094, opacity: 0.09)
+    palette.structureTint.opacity(isDark ? 0.14 : 0.13)
   }
 
   /// Recessed track well for Control Center pill sliders and segmented controls.
   var recessedWell: Color {
     isDark
-      ? Color(.sRGB, red: 0.0, green: 0.0, blue: 0.0, opacity: 0.34)
-      : Color(.sRGB, red: 0.188, green: 0.141, blue: 0.094, opacity: 0.14)
+      ? Color(.sRGB, red: 0.0, green: 0.0, blue: 0.0, opacity: 0.36)
+      : palette.structureTint.opacity(0.18)
   }
 
-  /// Subtle recessed card/chip well (`rgba(48,36,24,0.065)` light / `rgba(0,0,0,0.24)` dark).
+  /// Subtle recessed card/chip well (`structureTint` in light / dark translucency).
   var subtleWell: Color {
     isDark
-      ? Color(.sRGB, red: 0.0, green: 0.0, blue: 0.0, opacity: 0.24)
-      : Color(.sRGB, red: 0.188, green: 0.141, blue: 0.094, opacity: 0.065)
+      ? Color(.sRGB, red: 0.0, green: 0.0, blue: 0.0, opacity: 0.26)
+      : palette.structureTint.opacity(0.10)
   }
 
-  /// Warm secondary ink matching mockup contrast (`rgba(42, 34, 26, 0.62)` light).
+  /// Harmonised secondary ink derived from the active triplet.
   var secondaryInk: Color {
-    isDark
-      ? Color(.sRGB, red: 0.980, green: 0.965, blue: 0.941, opacity: 0.64)
-      : Color(.sRGB, red: 0.165, green: 0.133, blue: 0.102, opacity: 0.62)
+    palette.ink.opacity(isDark ? 0.64 : 0.62)
   }
 
-  /// Sidebar wash matching Warm Paper (`#EEE8DE`) and Dark Walnut (`#27221E`) sidebar tokens.
+  /// Sidebar wash matching the active triplet's sidebar token.
   var sidebarSurface: Color {
-    let base = isDark ? Self.darkWalnutSidebar : Self.warmPaperSidebar
+    let base = palette.sidebar
     return usesMaterial ? base.opacity(glassOpacity) : base
   }
 
@@ -600,11 +908,12 @@ struct AppTheme: Equatable, Sendable {
     AmbientDaylightMood.resolve(for: ambientMoodPreference)
   }
 
-  /// Subtle time-of-day atmospheric top gradient (`4–6%` opacity) for popovers and sidebars.
+  /// Expressive atmospheric top gradient blending the active triplet accent with time-of-day studio mood.
   func ambientDaylightGradient(mood: AmbientDaylightMood? = nil) -> LinearGradient {
     let activeMood = mood ?? resolvedAmbientMood
     return LinearGradient(
       colors: [
+        palette.accent.opacity(isDark ? 0.22 : 0.18),
         activeMood.topTint(isDark: isDark),
         .clear,
       ],
@@ -621,13 +930,15 @@ struct AppTheme: Equatable, Sendable {
   /// different problem from amber type on a deep teal one, and only the theme
   /// knows which card it is.
   func ink(for accent: Color) -> Color {
+    if accent == tone {
+      return toneInk
+    }
     if let index = AccentPalette.tones.firstIndex(of: accent) {
       return paletteInk[index]
     }
-    // A status colour or something else off-palette. Not worth a `legible`
-    // walk in a view body, and these are chosen for meaning rather than to fit
-    // a theme in the first place.
-    return accent.accentText(isDark: isDark)
+    // A status colour or something else off-palette, checked against `surface`
+    // so arbitrary triplet accents or semantic tones always stay legible.
+    return accent.accentText(isDark: isDark).legible(on: surface, ratio: 4.5)
   }
 
   /// The system appearance that agrees with this theme.
@@ -651,7 +962,7 @@ struct AppTheme: Equatable, Sendable {
 
   /// Used only as the environment's default, for previews and for any view
   /// rendered outside a themed root.
-  static let fallback = AppTheme(tone: AccentPalette.tones[0], isDark: true)
+  static let fallback = AppTheme(triplet: .atelierTerracotta, isDark: true)
 }
 
 // MARK: - The store
@@ -667,6 +978,15 @@ struct AppTheme: Equatable, Sendable {
 @Observable
 final class ThemeStore {
   static let shared = ThemeStore()
+
+  /// The chosen 60-30-10 colour triplet.
+  var triplet: ThemeTriplet {
+    didSet {
+      guard triplet != oldValue else { return }
+      Preferences.shared.updateGlobal { $0.themeTriplet = triplet }
+      rebuild()
+    }
+  }
 
   /// The accent, as an index into the palette.
   var toneIndex: Int {
@@ -749,6 +1069,7 @@ final class ThemeStore {
     // Locals first, then the stored properties: `theme` is derived from the
     // other properties, and a derived property cannot read them until every one of
     // them has been assigned.
+    let triplet = stored.themeTriplet
     let tone = indices.contains(stored.themeToneIndex) ? stored.themeToneIndex : 0
     let field = stored.themeBackdropToneIndex.flatMap { indices.contains($0) ? $0 : nil }
     let mode = stored.themeMode
@@ -764,6 +1085,7 @@ final class ThemeStore {
     // Assigning a property inside `init` does not run its `didSet`, so none of
     // these writes back to `Preferences` on the way in — which is what makes
     // this shape safe to repeat for each new setting.
+    self.triplet = triplet
     toneIndex = tone
     backdropToneIndex = field
     self.mode = mode
@@ -772,7 +1094,7 @@ final class ThemeStore {
     self.ambientMoodPreference = ambientMoodPreference
     self.systemIsDark = systemIsDark
     theme = Self.build(
-      tone: tone, field: field, mode: mode, style: style,
+      triplet: triplet, mode: mode, style: style,
       glassOpacity: glassOpacity, ambientMoodPreference: ambientMoodPreference,
       systemIsDark: systemIsDark
     )
@@ -780,15 +1102,14 @@ final class ThemeStore {
 
   private func rebuild() {
     theme = Self.build(
-      tone: toneIndex, field: backdropToneIndex, mode: mode, style: style,
+      triplet: triplet, mode: mode, style: style,
       glassOpacity: glassOpacity, ambientMoodPreference: ambientMoodPreference,
       systemIsDark: systemIsDark
     )
   }
 
   private static func build(
-    tone: Int,
-    field: Int?,
+    triplet: ThemeTriplet,
     mode: ThemeMode,
     style: ThemeStyle,
     glassOpacity: Double,
@@ -801,8 +1122,7 @@ final class ThemeStore {
     case .dark: true
     }
     return AppTheme(
-      tone: AccentPalette.tones[tone],
-      backdropTone: field.map { AccentPalette.tones[$0] },
+      triplet: triplet,
       isDark: isDark,
       style: style,
       glassOpacity: glassOpacity,

@@ -283,6 +283,19 @@ struct PreferencesTests {
     #expect(Preferences(defaults: defaults).global.themeStyle == .vivid)
   }
 
+  @Test("Theme triplet survives a round trip and defaults to Atelier Terracotta")
+  func themeTripletRoundTripsAndDefaults() {
+    let defaults = makeDefaults()
+    let preferences = Preferences(defaults: defaults)
+    #expect(preferences.global.themeTriplet == .atelierTerracotta)
+
+    preferences.updateGlobal { $0.themeTriplet = .cyberSlate }
+    #expect(Preferences(defaults: defaults).global.themeTriplet == .cyberSlate)
+
+    defaults.set(Data(#"{"themeTriplet":"unknownFutureTriplet"}"#.utf8), forKey: "global")
+    #expect(Preferences(defaults: defaults).global.themeTriplet == .atelierTerracotta)
+  }
+
   @Test("Liquid Glass opacity survives a round trip and clamps out-of-range values")
   func glassOpacityRoundTripsAndClamps() {
     let defaults = makeDefaults()
