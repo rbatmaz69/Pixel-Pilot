@@ -93,6 +93,7 @@ struct ScheduleSettings: View {
 
         CardFooter("Jeder Lichtpunkt setzt Helligkeit & Wärme oder aktiviert ein Preset.")
       }
+      .animation(motion.effectFast, value: scrubbed != nil)
     }
   }
 
@@ -105,6 +106,7 @@ struct ScheduleSettings: View {
         title: "Um \(DayArc.timeLabel(at: scrubbed)): \(summary(of: stop))",
         detail: "Gesetzt durch \(DayArc.label(for: stop)). Vorschau ändert noch nichts."
       )
+      .contentTransition(.numericText())
       .transition(.blurReplace)
     }
   }
@@ -134,7 +136,7 @@ struct ScheduleSettings: View {
       VStack(alignment: .leading, spacing: Layout.snug) {
         ForEach(schedule.stops) { stop in
           stopRow(stop)
-            .transition(.blurReplace)
+            .transition(.blurReplace.combined(with: .scale(0.97, anchor: .top)))
         }
 
         HStack(spacing: Layout.tight) {

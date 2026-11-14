@@ -69,6 +69,7 @@ struct EditableReadout: View {
   private var tone: Color { accent ?? theme.tone }
 
   var body: some View {
+    let detentTrigger = Self.quarterDetentTrigger(for: value)
     HStack(spacing: 1) {
       // Three digits' worth of the actual font, drawn and hidden, so the width
       // is the same before, during and after an edit — and stays right if the
@@ -117,8 +118,10 @@ struct EditableReadout: View {
           .strokeBorder(theme.fill(for: tone), lineWidth: 1)
       }
     }
+    .scaleEffect(isEditing && !motion.isReduced ? 1.04 : 1.0)
+    .tickOnChange(detentTrigger, motion: motion)
     .animation(motion.effectFast, value: isHovered)
-    .animation(motion.effectFast, value: isEditing)
+    .animation(motion.tactileSnap ?? motion.effectFast, value: isEditing)
     // The app draws its own indication of an edit — the wash and the accent
     // edge above. The system focus ring on top of that was a second, squarer
     // answer to the same question, in a corner radius this interface does not
@@ -166,5 +169,12 @@ struct EditableReadout: View {
   private func cancel() {
     isEditing = false
     isFocused = false
+  }
+
+  /// Returns the snapped percentage (`25, 50, 75`) when `value` hits an interior
+  /// quarter detent, keeping readout numbers steady everywhere else while pulsing on detents.
+  private static func quarterDetentTrigger(for value: Double) -> Int {
+    let pct = Int((value * 100).rounded())
+    return (pct == 25 || pct == 50 || pct == 75) ? pct : 0
   }
 }

@@ -466,10 +466,13 @@ struct LabeledReadout<Content: View>: View {
           EditableReadout(value: value, font: font, accent: accent, onCommit: onCommit)
             .foregroundStyle(theme.ink(for: accent ?? theme.tone))
         } else {
-          Text("\(Int((value * 100).rounded()))%")
+          let pct = Int((value * 100).rounded())
+          let detentTick = (pct == 25 || pct == 50 || pct == 75) ? pct : 0
+          Text("\(pct)%")
             .font(font)
             .foregroundStyle(theme.ink(for: accent ?? theme.tone))
             .contentTransition(.numericText(value: value))
+            .tickOnChange(detentTick, motion: motion)
             .animation(motion.effectFast, value: value)
         }
       }
@@ -489,6 +492,7 @@ struct AccentDot: View {
 
   @Environment(\.motion) private var motion
   @Environment(\.theme) private var theme
+  @State private var ignitionCount = 0
 
   var body: some View {
     Circle()
@@ -510,9 +514,27 @@ struct AccentDot: View {
           .strokeBorder(Color.white.opacity(0.38), lineWidth: 0.75)
       }
       .overlay { ring }
-      .shadow(color: theme.glow(for: accent, active: isReady), radius: 5)
+      .phaseAnimator([0, 1, 2], trigger: ignitionCount) { dot, phase in
+        let isIgniting = !motion.isReduced && phase == 1
+        dot
+          .scaleEffect(isIgniting ? 1.26 : 1.0)
+          .shadow(
+            color: theme.glow(for: accent, active: isReady || isIgniting),
+            radius: isIgniting ? 11 : 5
+          )
+      } animation: { phase in
+        switch phase {
+        case 1: .spring(duration: 0.16, bounce: 0.25)
+        case 2: motion.effectDefault
+        default: .linear(duration: 0.005)
+        }
+      }
       .opacity(isReady ? 1 : 0.55)
       .animation(motion.effectDefault, value: isReady)
+      .onChange(of: isReady) { wasReady, nowReady in
+        guard !wasReady, nowReady, !motion.isReduced else { return }
+        ignitionCount += 1
+      }
   }
 
   @ViewBuilder
@@ -616,7 +638,7 @@ struct AccentSwatchPicker: View {
         swatch(index: index, tone: tone)
       }
     }
-    .animation(motion.spatialDefault, value: selection)
+    .animation(motion.tactileSnap ?? motion.spatialDefault, value: selection)
     .animation(motion.spatialFast, value: hovered)
     .accessibilityElement(children: .contain)
     .accessibilityLabel(accessibilityLabel)
@@ -637,7 +659,7 @@ struct AccentSwatchPicker: View {
             .matchedGeometryEffect(id: "accentRing", in: ring)
         }
       }
-      .scaleEffect(hovered == index ? 1.25 : 1)
+      .scaleEffect(hovered == index ? 1.25 : (isSelected && !motion.isReduced ? 1.08 : 1.0))
       .onHover { hovering in
         hovered = hovering ? index : (hovered == index ? nil : hovered)
       }
@@ -674,7 +696,7 @@ struct TripletThemePicker: View {
         tripletCard(triplet)
       }
     }
-    .animation(motion.spatialDefault, value: selection)
+    .animation(motion.tactileSnap ?? motion.spatialDefault, value: selection)
     .animation(motion.spatialFast, value: hovered)
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Farb-Triplet")
@@ -748,6 +770,7 @@ struct TripletThemePicker: View {
       }
     }
     .contentShape(cardShape)
+    .scaleEffect(isHovered && !isSelected && !motion.isReduced ? 1.015 : 1.0)
     .onHover { hovering in
       hovered = hovering ? triplet : (hovered == triplet ? nil : hovered)
     }
@@ -811,9 +834,10 @@ struct SoftButtonStyle: ButtonStyle {
               lineWidth: 1
             )
         }
-        // Native macOS NSButton physics: 0ms instantaneous press highlight,
-        // 120ms ease-out release, and zero scale shrinkage.
-        .animation(configuration.isPressed ? nil : motion.effectFast,
+        .scaleEffect(configuration.isPressed && !motion.isReduced ? 0.97 : 1.0)
+        // Tactile Aperture press: 0ms instantaneous press highlight & 0.97x sink,
+        // followed by a crisp spring release.
+        .animation(configuration.isPressed ? nil : (motion.tactileSnap ?? motion.effectFast),
                    value: configuration.isPressed)
         .animation(motion.effectFast, value: isHovered)
         .opacity(isEnabled ? 1 : 0.4)
@@ -846,31 +870,170 @@ extension ButtonStyle where Self == SoftButtonStyle {
 extension View {
   /// A staggered arrival, played once when the view appears.
   ///
-  /// This is where most of the liveliness comes from, and it is free: the menu
-  /// bar panel's hierarchy is built fresh every time it opens, so the sequence
-  /// plays on every click and nothing at all is running in between.
+  /// Uses crisp `-6pt` vertical settle, subtle `0.985 -> 1.0` aperture scale,
+  /// and capped stagger (`index <= 6`) at `0.0%` ongoing CPU.
   func entrance(index: Int) -> some View {
     modifier(Entrance(index: index))
+  }
+
+  /// Single-shot diagonal specular glint sweep across a surface and its top 1px rim
+  /// whenever `trigger` changes. Zero background timers (`0.0%` idle CPU).
+  func specularGlintSweep<T: Equatable>(
+    trigger: T,
+    accent: Color,
+    cornerRadius: CGFloat = Layout.radiusCard,
+    delay: Double = 0
+  ) -> some View {
+    modifier(SpecularGlintSweep(trigger: trigger, accent: accent, cornerRadius: cornerRadius, delay: delay))
+  }
+
+  /// Single-shot expanding sonar circle overlay when `trigger` changes,
+  /// leaving zero active timers or loops at rest (`0.0%` idle CPU).
+  func sonarRingOnTrigger<T: Equatable>(
+    trigger: T,
+    color: Color,
+    lineWidth: CGFloat = 2,
+    maxScale: CGFloat = 1.65
+  ) -> some View {
+    modifier(SonarRingModifier(trigger: trigger, color: color, lineWidth: lineWidth, maxScale: maxScale))
   }
 }
 
 extension View {
-  /// A pulse of the display's own colour, running along a column of cards.
-  ///
-  /// For the moments when one action changes several displays at once — the
-  /// master brightness slider, and applying a preset. The problem it solves is
-  /// that those moments are invisible: the values update instantly and
-  /// correctly, and nothing on screen says they belong to the same gesture.
-  ///
-  /// Crucially it is **light, not movement**. The obvious idea — animating the
-  /// follower sliders so their handles glide into place — is unavailable and
-  /// should stay that way: `ExpressiveSlider` pins `.animation(nil, value: x)`
-  /// on its handle, because a handle that lags is a handle that is lying about
-  /// where the display is. Any transaction opened above it would reach in and
-  /// undo that. So the numbers jump, which is the truth, and the *cards* light
-  /// up in sequence, which is the part worth staging.
+  /// A pulse of the display's own colour plus a diagonal specular glint sweep,
+  /// running along a column of cards.
   func accentWave(index: Int, trigger: Int, accent: Color) -> some View {
     modifier(AccentWave(index: index, trigger: trigger, accent: accent))
+  }
+}
+
+private struct SpecularGlintOverlay: View {
+  let phase: Int
+  let accent: Color
+  let cornerRadius: CGFloat
+  let isDark: Bool
+
+  var body: some View {
+    GeometryReader { geo in
+      let bandWidth = max(48, geo.size.width * 0.42)
+      let travel = geo.size.width + bandWidth * 1.6
+      let xOffset: CGFloat = switch phase {
+      case 1: travel * 0.52
+      case 2: travel * 0.56
+      default: -travel * 0.52
+      }
+      let isVisible = phase == 1
+
+      ZStack {
+        LinearGradient(
+          colors: [
+            .clear,
+            accent.opacity(isDark ? 0.14 : 0.10),
+            Color.white.opacity(isDark ? 0.24 : 0.40),
+            accent.opacity(isDark ? 0.14 : 0.10),
+            .clear,
+          ],
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        )
+        .frame(width: bandWidth, height: max(geo.size.height * 1.5, 80))
+        .rotationEffect(.degrees(18))
+        .offset(x: xOffset)
+        .opacity(isVisible ? 1 : 0)
+
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+          .strokeBorder(
+            LinearGradient(
+              colors: [
+                Color.white.opacity(isDark ? 0.42 : 0.68),
+                accent.opacity(0.42),
+                .clear,
+              ],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            ),
+            lineWidth: 1
+          )
+          .opacity(isVisible ? 1 : 0)
+      }
+      .frame(width: geo.size.width, height: geo.size.height)
+    }
+    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    .allowsHitTesting(false)
+  }
+}
+
+private struct SpecularGlintSweep<T: Equatable>: ViewModifier {
+  let trigger: T
+  let accent: Color
+  let cornerRadius: CGFloat
+  let delay: Double
+
+  @Environment(\.motion) private var motion
+  @Environment(\.theme) private var theme
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if motion.isReduced {
+      content
+    } else {
+      content.overlay {
+        Color.clear
+          .phaseAnimator([0, 1, 2], trigger: trigger) { _, phase in
+            SpecularGlintOverlay(
+              phase: phase,
+              accent: accent,
+              cornerRadius: cornerRadius,
+              isDark: theme.isDark
+            )
+          } animation: { phase in
+            switch phase {
+            case 1: .easeOut(duration: 0.40).delay(delay)
+            case 2: .easeIn(duration: 0.10)
+            default: .linear(duration: 0.005)
+            }
+          }
+          .allowsHitTesting(false)
+      }
+    }
+  }
+}
+
+private struct SonarRingModifier<T: Equatable>: ViewModifier {
+  let trigger: T
+  let color: Color
+  let lineWidth: CGFloat
+  let maxScale: CGFloat
+
+  @Environment(\.motion) private var motion
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if motion.isReduced {
+      content
+    } else {
+      content.overlay {
+        Circle()
+          .strokeBorder(color, lineWidth: lineWidth)
+          .phaseAnimator([0, 1, 2], trigger: trigger) { ring, phase in
+            let scale: CGFloat = switch phase {
+            case 1: 0.72
+            case 2: maxScale
+            default: 0.30
+            }
+            ring
+              .scaleEffect(scale)
+              .opacity(phase == 1 ? 0.78 : 0.0)
+          } animation: { phase in
+            switch phase {
+            case 1: .easeOut(duration: 0.09)
+            case 2: .easeOut(duration: 0.28)
+            default: .linear(duration: 0.005)
+            }
+          }
+          .allowsHitTesting(false)
+      }
+    }
   }
 }
 
@@ -887,21 +1050,20 @@ private struct AccentWave: ViewModifier {
     if motion.isReduced {
       content
     } else {
-      content.phaseAnimator([0, 1, 2], trigger: trigger) { view, phase in
-        view
-          .shadow(color: theme.glow(for: accent, active: phase == 1), radius: phase == 1 ? 18 : 0)
-          .brightness(phase == 1 ? 0.045 : 0)
-      } animation: { phase in
-        switch phase {
-        // The same capped-index arithmetic as `Entrance`, for the same reason:
-        // past the eighth card the last one lights up late enough to look like
-        // a hitch rather than a rhythm. Doubled, because a wave wants to be
-        // read as travelling where an entrance only wants to feel unhurried.
-        case 1: motion.effectFast.delay(Double(min(index, 8)) * motion.stagger * 2)
-        case 2: .linear(duration: 0.01)
-        default: motion.effectDefault
+      let stepDelay = Double(min(max(index, 0), 8)) * motion.stagger * 2
+      content
+        .phaseAnimator([0, 1, 2], trigger: trigger) { view, phase in
+          view
+            .shadow(color: theme.glow(for: accent, active: phase == 1), radius: phase == 1 ? 18 : 0)
+            .brightness(phase == 1 ? 0.04 : 0)
+        } animation: { phase in
+          switch phase {
+          case 1: motion.effectFast.delay(stepDelay)
+          case 2: .linear(duration: 0.01)
+          default: motion.effectDefault
+          }
         }
-      }
+        .specularGlintSweep(trigger: trigger, accent: accent, delay: stepDelay)
     }
   }
 }
@@ -910,9 +1072,19 @@ private struct Entrance: ViewModifier {
   let index: Int
 
   @Environment(\.motion) private var motion
+  @State private var hasArrived = false
 
   func body(content: Content) -> some View {
-    // Native macOS HIG: views appear immediately without a staggered waterfall lag.
+    let delay = Double(min(max(index, 0), 6)) * motion.stagger
+    let curve = motion.spatialDefault.delay(delay)
     content
+      .offset(y: motion.isReduced || hasArrived ? 0 : -6)
+      .scaleEffect(motion.isReduced || hasArrived ? 1.0 : 0.985)
+      .opacity(motion.isReduced || hasArrived ? 1.0 : 0.0)
+      .animation(motion.isReduced ? nil : curve, value: hasArrived)
+      .onAppear {
+        guard !motion.isReduced, !hasArrived else { return }
+        hasArrived = true
+      }
   }
 }

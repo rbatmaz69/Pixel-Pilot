@@ -23,6 +23,10 @@ struct DisplayPage: View {
   @State private var padDragPoint: CGPoint? = nil
   @State private var lastPadBrightnessDetent: Double? = nil
   @State private var lastPadKelvinDetent: Double? = nil
+  @State private var lightPadRippleCount = 0
+  @State private var lightPadRipplePoint: CGPoint? = nil
+  @State private var paperWaveCount = 0
+  @State private var quickActionWaveCount = 0
   @State private var heroHoverNorm: CGPoint? = nil
   @State private var heroCardSize: CGSize = .init(width: 560, height: 180)
 
@@ -34,7 +38,11 @@ struct DisplayPage: View {
       VStack(alignment: .leading, spacing: Layout.section) {
         card(0) { studioHeroCard }
         card(1) { controls }
-          .accentWave(index: 0, trigger: groupChangeTick, accent: display.accent)
+          .accentWave(
+            index: 0,
+            trigger: groupChangeTick + quickActionWaveCount,
+            accent: display.accent
+          )
         card(2) { ColorSection(display: display) }
         card(3) { FinishSection(display: display) }
         card(4) { HealthSection(model: model, display: display) }
@@ -217,6 +225,9 @@ struct DisplayPage: View {
     let shadowRadius: CGFloat = isScrubbing ? 15 : 12
     let shadowX: CGFloat = heroHoverNorm == nil ? 0 : -hoverDx * 7
     let shadowY: CGFloat = heroHoverNorm == nil ? 3 : 3 - hoverDy * 4
+    let tiltMultiplier = (heroHoverNorm != nil && !motion.isReduced) ? (isScrubbing ? 0.3 : 1.0) : 0.0
+    let tiltY = Double(hoverDx * 7.0) * tiltMultiplier
+    let tiltX = Double(-hoverDy * 5.0) * tiltMultiplier
 
     return ZStack {
       StudioWallpaperCanvas(
@@ -232,8 +243,20 @@ struct DisplayPage: View {
         specularGlassGlint(at: hoverNorm, size: screenSize)
       }
 
+      Color.clear
+        .frame(width: 34, height: 34)
+        .sonarRingOnTrigger(
+          trigger: lightPadRippleCount,
+          color: theme.studioAccent.opacity(0.95),
+          lineWidth: 2,
+          maxScale: 2.1
+        )
+        .position(lightPadRipplePoint ?? CGPoint(x: screenSize.width / 2, y: screenSize.height / 2))
+        .allowsHitTesting(false)
+
       if let pt = padDragPoint {
         lightPadCrosshair(at: pt, size: screenSize)
+          .transition(.scale(scale: 1.25).combined(with: .opacity))
       }
 
       if display.isBuiltin {
@@ -244,9 +267,18 @@ struct DisplayPage: View {
     }
     .frame(width: screenSize.width, height: screenSize.height)
     .clipShape(bezelShape)
+    .specularGlintSweep(
+      trigger: paperWaveCount,
+      accent: Color.white.opacity(0.85),
+      cornerRadius: 6
+    )
     .overlay(bezelShape.strokeBorder(bezelStroke, lineWidth: 2))
     .overlay(bezelShape.strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5))
     .shadow(color: shadowColor, radius: shadowRadius, x: shadowX, y: shadowY)
+    .rotation3DEffect(.degrees(tiltX), axis: (x: 1, y: 0, z: 0), perspective: 0.45)
+    .rotation3DEffect(.degrees(tiltY), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
+    .animation(motion.spatialFast, value: heroHoverNorm)
+    .animation(motion.tactileSnap ?? motion.spatialFast, value: isScrubbing)
     .contentShape(.rect)
     .onTapGesture(count: 2) {
       cyclePaperFinish()
@@ -363,8 +395,10 @@ struct DisplayPage: View {
           among: SliderDetents.quarters,
           tolerance: 0.03
         )
+        var hitDetent = false
         if let bDetent, bDetent != lastPadBrightnessDetent {
           Haptics.detent()
+          hitDetent = true
         }
         lastPadBrightnessDetent = bDetent
 
@@ -372,8 +406,14 @@ struct DisplayPage: View {
         let kDetent = kDetents.first { abs(kelvin - $0) <= 130 }
         if let kDetent, kDetent != lastPadKelvinDetent {
           Haptics.detent()
+          hitDetent = true
         }
         lastPadKelvinDetent = kDetent
+
+        if hitDetent {
+          lightPadRipplePoint = CGPoint(x: clampedX, y: clampedY)
+          lightPadRippleCount += 1
+        }
 
         display.setBrightness(normY)
         display.setColorTemperature(kelvin >= 6450 ? nil : kelvin)
@@ -395,6 +435,7 @@ struct DisplayPage: View {
     default: nil
     }
     display.setToneCurve(next)
+    paperWaveCount += 1
     Haptics.confirm()
   }
 
@@ -460,6 +501,8 @@ struct DisplayPage: View {
           Button(percent(level)) {
             display.setBrightness(level)
             display.commitBrightness()
+            quickActionWaveCount += 1
+            Haptics.detent()
           }
           .buttonStyle(.soft(isCurrent ? display.accent : .secondary))
           .controlSize(.small)

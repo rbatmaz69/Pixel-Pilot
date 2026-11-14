@@ -70,7 +70,7 @@ struct FinishSection: View {
         }
       }
       .animation(motion.spatialDefault, value: isFinished)
-      .animation(motion.spatialDefault, value: showsDetail)
+      .animation(motion.tactileSnap ?? motion.spatialDefault, value: showsDetail)
     }
   }
 
@@ -83,6 +83,8 @@ struct FinishSection: View {
         .font(TypeScale.detail.weight(.semibold))
         .monospacedDigit()
         .foregroundStyle(display.accent)
+        .contentTransition(.numericText())
+        .animation(motion.effectFast, value: value)
     }
     .padding(.horizontal, 8)
     .padding(.vertical, 3)
@@ -123,6 +125,7 @@ struct FinishSection: View {
         readout: percent(curve.blackLift),
         set: { ToneCurve(blackLift: $0, whiteCeiling: curve.whiteCeiling, softness: curve.softness) }
       )
+      .entrance(index: 0)
       slider(
         title: "Weißpunkt-Decke",
         value: curve.whiteCeiling,
@@ -130,6 +133,7 @@ struct FinishSection: View {
         readout: percent(curve.whiteCeiling),
         set: { ToneCurve(blackLift: curve.blackLift, whiteCeiling: $0, softness: curve.softness) }
       )
+      .entrance(index: 1)
       slider(
         title: "Weichzeichnung",
         value: curve.softness,
@@ -137,6 +141,7 @@ struct FinishSection: View {
         readout: String(format: "%.2f", curve.softness),
         set: { ToneCurve(blackLift: curve.blackLift, whiteCeiling: curve.whiteCeiling, softness: $0) }
       )
+      .entrance(index: 2)
     }
   }
 

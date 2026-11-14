@@ -66,6 +66,7 @@ struct DayArc: View {
         sun(in: size)
       }
       .frame(width: size.width, height: size.height)
+      .animation(motion.effectFast, value: scrubbed == nil)
       .clipShape(RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous))
       .overlay(
         RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous)
@@ -232,6 +233,13 @@ struct DayArc: View {
         .allowsHitTesting(false)
 
       // Tactile stop pin head
+      if isSelected || isDragging {
+        Circle()
+          .strokeBorder(stopTint.opacity(0.45), lineWidth: 1.5)
+          .frame(width: diameter + 6, height: diameter + 6)
+          .position(position)
+      }
+
       Circle()
         .fill(theme.fill(for: stopTint))
         .frame(width: diameter, height: diameter)
@@ -247,7 +255,8 @@ struct DayArc: View {
     // The knob's size springs; its position does not, for the same reason the
     // slider handle's does not — while it is being dragged it has to be under
     // the pointer, not on its way there.
-    .animation(motion.spatialFast, value: isDragging)
+    .animation(motion.tactileSnap ?? motion.spatialFast, value: isDragging)
+    .animation(motion.tactileSnap ?? motion.spatialFast, value: isSelected)
     .animation(isDragging ? nil : motion.spatialDefault, value: fraction)
     .gesture(
       DragGesture(minimumDistance: 0)
@@ -279,17 +288,38 @@ struct DayArc: View {
   private func scrubHead(in size: CGSize) -> some View {
     if let scrubbed, dragging == nil {
       let position = point(at: scrubbed, in: size)
+      let beamHeight = max(0, size.height - position.y)
+
+      // Soft vertical horizon light-cone gradient tracking the pointer across the landscape
+      Rectangle()
+        .fill(
+          LinearGradient(
+            colors: [
+              .clear,
+              theme.studioAccent.opacity(0.22),
+              .clear,
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+          )
+        )
+        .frame(width: 28, height: beamHeight)
+        .position(x: position.x, y: (position.y + size.height) / 2)
+        .transition(.opacity)
+        .allowsHitTesting(false)
 
       Rectangle()
         .fill(theme.rim(for: theme.tone))
-        .frame(width: 1, height: max(0, size.height - position.y))
+        .frame(width: 1, height: beamHeight)
         .position(x: position.x, y: (position.y + size.height) / 2)
+        .transition(.opacity)
         .allowsHitTesting(false)
 
       Circle()
         .strokeBorder(theme.fill(for: theme.tone), lineWidth: 2)
         .frame(width: 13, height: 13)
         .position(position)
+        .transition(.opacity)
         .allowsHitTesting(false)
     }
   }

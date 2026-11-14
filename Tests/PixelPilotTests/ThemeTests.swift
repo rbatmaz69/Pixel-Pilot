@@ -422,13 +422,31 @@ struct ThemeTests {
     #expect(AmbientDaylightMood.resolve(for: .auto, date: eveningDate, calendar: calendar) == .evening)
   }
 
-  @Test("Control Center Pill Slider uses 26pt pill track and circular 20pt thumb")
+  @Test("Tactile pill slider expands smoothly across rest, hovered, and dragging states and magnifies nearby deciles")
   func controlCenterPillSliderGeometry() {
     #expect(KnobGeometry.rest.trackHeight == 26)
-    #expect(KnobGeometry.hovered.trackHeight == 26)
-    #expect(KnobGeometry.dragging.trackHeight == 26)
+    #expect(KnobGeometry.hovered.trackHeight == 27)
+    #expect(KnobGeometry.dragging.trackHeight == 28)
     #expect(KnobGeometry.rest.width == 20)
     #expect(KnobGeometry.rest.cornerRadius == 10)
+    #expect(KnobGeometry.hovered.width == 21)
+    #expect(KnobGeometry.hovered.cornerRadius == 10.5)
+    #expect(KnobGeometry.dragging.width == 23)
+    #expect(KnobGeometry.dragging.cornerRadius == 11.5)
+
+    // Aperture Lens Loupe magnifies active marks within ±36pt and rests at 1.0 elsewhere.
+    let center = ExpressiveSlider.loupeScale(
+      tickFraction: 0.5, knobFraction: 0.5, trackWidth: 200, isActive: true
+    )
+    let far = ExpressiveSlider.loupeScale(
+      tickFraction: 0.9, knobFraction: 0.5, trackWidth: 200, isActive: true
+    )
+    let inactive = ExpressiveSlider.loupeScale(
+      tickFraction: 0.5, knobFraction: 0.5, trackWidth: 200, isActive: false
+    )
+    #expect(center > 1.7 && center <= 1.86)
+    #expect(far == 1.0)
+    #expect(inactive == 1.0)
   }
 
   @Test("Warm Studio Craft semantic tokens provide distinct light paper and dark walnut values")
@@ -447,13 +465,17 @@ struct ThemeTests {
     #expect(light.sliderGlyphInk.contrastRatio(to: light.sliderFill) >= 4.5)
   }
 
-  @Test("Critically damped macOS motion tokens eliminate stagger and background ambient periods")
-  func criticallyDampedMotionTokens() {
-    #expect(MotionTokens.standard.stagger == 0)
+  @Test("Studio motion tokens calibrate tactile aperture springs while preserving zero idle drift")
+  func studioMotionTokensAndZeroIdleDrift() {
+    #expect(MotionTokens.standard.stagger == 0.022)
     #expect(MotionTokens.standard.ambientPeriod == 0)
+    #expect(MotionTokens.standard.tactileSnap != nil)
     #expect(MotionTokens.reduced.stagger == 0)
     #expect(MotionTokens.reduced.ambientPeriod == 0)
-    #expect(MotionTokens.unfoldSpring == Spring(response: 0.18, dampingRatio: 0.96))
+    #expect(MotionTokens.reduced.tactileSnap == nil)
+    #expect(MotionTokens.unfoldSpring == Spring(response: 0.20, dampingRatio: 1.0))
+    #expect(MotionTokens.collapseSpring == Spring(duration: 0.14, bounce: 0.0))
+    #expect(MotionTokens.drawerSpring == Spring(response: 0.22, dampingRatio: 0.88))
   }
 
   @Test("Onboarding steps provide both titles and warm editorial subtitles")

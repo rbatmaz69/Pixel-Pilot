@@ -95,6 +95,21 @@ final class SettingsRouter {
     // looked at was about displays, and that page lists the one that just left.
     route = ids.first.map(SettingsRoute.display) ?? .remembered
   }
+
+  /// Monotonic top-to-bottom order of sidebar routes for directional page transitions.
+  static func routeOrderIndex(
+    for route: SettingsRoute,
+    displayIDs: [DisplayViewModel.ID]
+  ) -> Int {
+    switch route {
+    case let .display(id):
+      displayIDs.firstIndex(of: id) ?? 0
+    case .remembered:
+      displayIDs.count
+    case let .app(app):
+      displayIDs.count + 1 + (AppPage.allCases.firstIndex(of: app) ?? 0)
+    }
+  }
 }
 
 /// Every setting in the application, in one window.
@@ -116,17 +131,38 @@ struct SettingsWindow: View {
 
   @Environment(\.motion) private var motion
   @Environment(\.theme) private var theme
+  @State private var navigationDirection: Int = 1
 
   var body: some View {
     NavigationSplitView {
       sidebar
     } detail: {
-      page
+      ZStack {
+        page
+          .id(router.route)
+          .transition(pageTransition)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .animation(motion.spatialDefault, value: router.route)
     }
     .onAppear { router.repair(against: model.displays.map(\.id)) }
     .onChange(of: model.displays.map(\.id)) { _, ids in
       router.repair(against: ids)
     }
+    .onChange(of: router.route) { oldRoute, newRoute in
+      let ids = model.displays.map(\.id)
+      let oldIndex = SettingsRouter.routeOrderIndex(for: oldRoute, displayIDs: ids)
+      let newIndex = SettingsRouter.routeOrderIndex(for: newRoute, displayIDs: ids)
+      navigationDirection = newIndex >= oldIndex ? 1 : -1
+    }
+  }
+
+  private var pageTransition: AnyTransition {
+    if motion.isReduced { return .opacity }
+    return .asymmetric(
+      insertion: .offset(y: CGFloat(navigationDirection) * 10).combined(with: .opacity),
+      removal: .offset(y: CGFloat(-navigationDirection) * 8).combined(with: .opacity)
+    )
   }
 
   // MARK: - Sidebar
@@ -165,11 +201,13 @@ struct SettingsWindow: View {
       List(selection: listSelection) {
         Section("Displays") {
           ForEach(model.displays) { display in
+            let route = SettingsRoute.display(display.id)
             SidebarRow(
               title: display.name,
               summary: display.isBuiltin ? "Integriert" : display.routeDescription,
-              trailingText: "\(Int((display.brightness * 100).rounded()))%"
-            ) {
+              trailingText: "\(Int((display.brightness * 100).rounded()))%",
+              isSelected: router.route == route
+            ) { isHovered in
               ZStack {
                 RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
                   .fill(theme.wash(for: display.accent))
@@ -181,27 +219,32 @@ struct SettingsWindow: View {
 
                 AccentDot(accent: display.accent, isReady: display.isReady, size: 8)
               }
+              .scaleEffect(isHovered && !motion.isReduced ? 1.08 : 1.0)
+              .animation(motion.spatialFast, value: isHovered)
             }
-            .tag(SettingsRoute.display(display.id))
+            .tag(route)
           }
 
           SidebarRow(
             title: "Bekannte Displays",
             summary: "Früher verbundene Monitore",
-            symbolName: "externaldrive.badge.checkmark"
+            symbolName: "externaldrive.badge.checkmark",
+            isSelected: router.route == .remembered
           )
           .tag(SettingsRoute.remembered)
         }
 
         Section("Studio") {
           ForEach(AppPage.allCases, id: \.self) { app in
+            let route = SettingsRoute.app(app)
             SidebarRow(
               title: app.title,
               summary: app.summary,
               symbolName: app.symbolName,
-              tint: app.badgeTint
+              tint: app.badgeTint,
+              isSelected: router.route == route
             )
-            .tag(SettingsRoute.app(app))
+            .tag(route)
           }
         }
       }
@@ -323,11 +366,15 @@ private struct SidebarRow<Leading: View>: View {
   let title: String
   let summary: String
   var trailingText: String? = nil
-  @ViewBuilder var leading: Leading
+  var isSelected: Bool = false
+  @ViewBuilder var leading: (Bool) -> Leading
+
+  @Environment(\.motion) private var motion
+  @State private var isHovered = false
 
   var body: some View {
     HStack(spacing: Layout.tight) {
-      leading
+      leading(isHovered)
       VStack(alignment: .leading, spacing: 1) {
         HStack(spacing: 4) {
           Text(title)
@@ -338,6 +385,8 @@ private struct SidebarRow<Leading: View>: View {
             Text(trailingText)
               .font(.caption2.weight(.semibold).monospacedDigit())
               .foregroundStyle(.secondary)
+              .contentTransition(.numericText())
+              .animation(motion.effectFast, value: trailingText)
           }
         }
         Text(summary)
@@ -347,6 +396,7 @@ private struct SidebarRow<Leading: View>: View {
       }
     }
     .padding(.vertical, 2)
+    .onHover { isHovered = $0 }
   }
 }
 
@@ -355,10 +405,16 @@ extension SidebarRow {
     title: String,
     summary: String,
     symbolName: String,
-    tint: Color? = nil
+    tint: Color? = nil,
+    isSelected: Bool = false
   ) where Leading == SidebarSymbol {
-    self.init(title: title, summary: summary) {
-      SidebarSymbol(systemImage: symbolName, tint: tint)
+    self.init(title: title, summary: summary, isSelected: isSelected) { isHovered in
+      SidebarSymbol(
+        systemImage: symbolName,
+        tint: tint,
+        isSelected: isSelected,
+        isHovered: isHovered
+      )
     }
   }
 }
@@ -367,7 +423,10 @@ extension SidebarRow {
 private struct SidebarSymbol: View {
   let systemImage: String
   var tint: Color?
+  var isSelected: Bool = false
+  var isHovered: Bool = false
 
+  @Environment(\.motion) private var motion
   @Environment(\.theme) private var theme
 
   private var tone: Color { tint ?? theme.tone }
@@ -376,6 +435,7 @@ private struct SidebarSymbol: View {
     Image(systemName: systemImage)
       .font(.caption.weight(.semibold))
       .foregroundStyle(theme.ink(for: tone))
+      .symbolEffect(.bounce, value: isSelected)
       .frame(width: 20, height: 20)
       .background(
         RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
@@ -385,5 +445,7 @@ private struct SidebarSymbol: View {
         RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
           .strokeBorder(theme.rim(for: tone).opacity(0.45), lineWidth: 0.75)
       )
+      .scaleEffect(isHovered && !motion.isReduced ? 1.08 : 1.0)
+      .animation(motion.spatialFast, value: isHovered)
   }
 }

@@ -41,12 +41,14 @@ struct KeyLearningSheet: View {
 
       Group {
         if let press = model.pendingLearnedPress {
-          captured(press).transition(.blurReplace)
+          captured(press)
+            .modifier(CaptureStageTransition(isReduced: motion.isReduced))
         } else {
-          waiting.transition(.blurReplace)
+          waiting
+            .modifier(CaptureStageTransition(isReduced: motion.isReduced))
         }
       }
-      .animation(motion.spatialDefault, value: model.pendingLearnedPress?.signature)
+      .animation(motion.tactileSnap ?? motion.spatialDefault, value: model.pendingLearnedPress?.signature)
 
       Spacer(minLength: 0)
 
@@ -138,7 +140,20 @@ struct KeyLearningSheet: View {
           .font(TypeScale.detail.weight(.medium))
       }
     }
-    .animation(motion.effectDefault, value: press.signature)
+    .animation(motion.tactileSnap ?? motion.effectDefault, value: press.signature)
+  }
+
+  private struct CaptureStageTransition: ViewModifier {
+    let isReduced: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+      if isReduced {
+        content.transition(.opacity)
+      } else {
+        content.transition(.blurReplace.combined(with: .scale(0.97, anchor: .center)))
+      }
+    }
   }
 
   private func verdict(for press: HIDMediaKeyMonitor.RawPress) -> KeyBindability {

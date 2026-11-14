@@ -43,7 +43,7 @@ struct SystemVolumeRow: View {
 
       if isDevicePickerOpen {
         deviceList
-          .transition(.blurReplace)
+          .transition(.blurReplace.combined(with: .scale(0.98, anchor: .top)))
       }
 
       if let reason = audio.unavailableReason {
@@ -59,7 +59,7 @@ struct SystemVolumeRow: View {
       }
     }
     .animation(motion.spatialDefault, value: audio.unavailableReason)
-    .animation(motion.spatialDefault, value: isDevicePickerOpen)
+    .animation(motion.tactileSnap ?? motion.spatialDefault, value: isDevicePickerOpen)
     .onAppear { audio.refresh() }
   }
 

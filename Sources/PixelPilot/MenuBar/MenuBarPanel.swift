@@ -38,7 +38,6 @@ struct MenuBarPanel: View {
       } else {
         if model.canSyncBrightness {
           masterRow
-            .entrance(index: 0)
         }
 
         ForEach(Array(model.displays.enumerated()), id: \.element.id) { index, display in
@@ -48,29 +47,24 @@ struct MenuBarPanel: View {
               trigger: model.groupChangeTick,
               accent: display.accent
             )
-            .entrance(index: index + (model.canSyncBrightness ? 1 : 0))
         }
       }
 
       SystemVolumeRow(audio: model.systemAudio)
         .padding(Layout.snug)
         .cardSurface(accent: theme.tone)
-        .entrance(index: trailingIndex)
 
       if !model.presetList.isEmpty {
         presetRow
-          .entrance(index: trailingIndex + 1)
       }
 
       if model.needsAccessibilityPermission {
         permissionNotice
           .transition(.blurReplace.combined(with: .scale(0.96, anchor: .top)))
-          .entrance(index: trailingIndex + 2)
       }
 
       Divider().padding(.top, Layout.hair)
       footer
-        .entrance(index: trailingIndex + 3)
     }
     .padding(Layout.normal)
     .frame(width: 332)
@@ -84,7 +78,8 @@ struct MenuBarPanel: View {
       .allowsHitTesting(false)
     }
     .animation(motion.spatialDefault, value: model.needsAccessibilityPermission)
-    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _, _ in
+    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { oldHeight, newHeight in
+      guard oldHeight > 0, abs(newHeight - oldHeight) > 0.5 else { return }
       fitPanelHeight()
     }
     .onAppear { model.refreshPermissions() }
@@ -113,11 +108,6 @@ struct MenuBarPanel: View {
       guard !Task.isCancelled else { return }
       previewed = preset
     }
-  }
-
-  /// Where the cascade has got to by the time the per-display cards are done.
-  private var trailingIndex: Int {
-    model.displays.count + (model.canSyncBrightness ? 1 : 0)
   }
 
   /// One slider for every display at once.
@@ -197,7 +187,6 @@ struct MenuBarPanel: View {
     .padding(Layout.normal)
     .frame(maxWidth: .infinity, alignment: .leading)
     .cardSurface(accent: Status.warn)
-    .entrance(index: 0)
   }
 
   /// Presets as a row of buttons rather than a list.
@@ -414,8 +403,8 @@ private struct DisplayControlGroup: View {
     .cardSurface(accent: display.accent)
     .opacity(isUnaffected ? 0.5 : 1)
     .animation(motion.effectDefault, value: isUnaffected)
-    .animation(motion.spatialDefault, value: isStudioExpanded)
-    .animation(motion.effectFast, value: pendingAction)
+    .animation(motion.tactileSnap ?? motion.spatialDefault, value: isStudioExpanded)
+    .animation(motion.tactileSnap ?? motion.effectFast, value: pendingAction)
   }
 
   private var header: some View {
@@ -678,7 +667,7 @@ private struct DisplayControlGroup: View {
           RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
             .fill(Status.warn.opacity(theme.isDark ? 0.16 : 0.10))
         )
-        .transition(.blurReplace)
+        .transition(.blurReplace.combined(with: .scale(0.95, anchor: .bottom)))
       }
     }
     .padding(.top, 2)
@@ -724,7 +713,8 @@ private struct MoodSceneCard: View {
 
   @Environment(\.theme) private var theme
   @Environment(\.motion) private var motion
-  @State private var isPressed = false
+  @State private var isHovered = false
+  @State private var applyPulse = 0
 
   private var averageBrightness: Double? {
     let values = preset.entries.values.compactMap(\.brightness)
@@ -769,11 +759,15 @@ private struct MoodSceneCard: View {
   }
 
   var body: some View {
-    Button(action: action) {
+    Button {
+      applyPulse += 1
+      action()
+    } label: {
       HStack(spacing: 8) {
         Image(systemName: preset.symbolName)
           .font(.system(size: 11, weight: .semibold))
           .foregroundStyle(moodTint)
+          .symbolEffect(.bounce, value: applyPulse)
           .frame(width: 24, height: 24)
           .background(
             RoundedRectangle(cornerRadius: Layout.radiusSegment, style: .continuous)
@@ -816,16 +810,55 @@ private struct MoodSceneCard: View {
       .overlay {
         RoundedRectangle(cornerRadius: 7, style: .continuous)
           .strokeBorder(
-            isPreviewed ? moodTint.opacity(0.75) : theme.groupBorder,
-            lineWidth: isPreviewed ? 1.25 : 1
+            LinearGradient(
+              colors: [
+                isPreviewed || isHovered
+                  ? moodTint.opacity(0.85)
+                  : Color.white.opacity(theme.isDark ? 0.16 : 0.35),
+                isPreviewed ? moodTint.opacity(0.65) : theme.groupBorder,
+              ],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            ),
+            lineWidth: isPreviewed || isHovered ? 1.25 : 1
           )
       }
+      .specularGlintSweep(trigger: applyPulse, accent: moodTint, cornerRadius: 7)
       .contentShape(.rect)
     }
-    .buttonStyle(.plain)
+    .buttonStyle(MoodCardButtonStyle(isHovered: isHovered, motion: motion))
     .help("Licht-Szene „\(preset.name)“ anwenden")
-    .onHover(perform: onHoverChange)
+    .onHover { hovering in
+      isHovered = hovering
+      onHoverChange(hovering)
+    }
     .animation(motion.effectFast, value: isPreviewed)
+    .animation(motion.effectFast, value: isHovered)
+  }
+}
+
+private struct MoodCardButtonStyle: ButtonStyle {
+  let isHovered: Bool
+  let motion: MotionTokens
+
+  func makeBody(configuration: Configuration) -> some View {
+    let scale: CGFloat = if motion.isReduced {
+      1.0
+    } else if configuration.isPressed {
+      0.97
+    } else if isHovered {
+      1.015
+    } else {
+      1.0
+    }
+
+    configuration.label
+      .scaleEffect(scale)
+      .animation(
+        configuration.isPressed ? nil : (motion.tactileSnap ?? motion.expressive),
+        value: configuration.isPressed
+      )
+      .animation(motion.spatialFast, value: isHovered)
   }
 }
 
@@ -849,6 +882,7 @@ private struct DrawerChip: View {
         Image(systemName: systemImage)
           .font(.system(size: 11, weight: .semibold))
           .symbolRenderingMode(.hierarchical)
+          .symbolEffect(.bounce, value: isSelected || isHighlighted)
         Text(title)
           .font(.system(size: 11, weight: .semibold, design: .rounded))
           .lineLimit(1)
@@ -877,7 +911,8 @@ private struct DrawerChip: View {
     .buttonStyle(.plain)
     .onHover { isHovered = $0 }
     .animation(motion.effectFast, value: isHovered)
-    .animation(motion.effectFast, value: isHighlighted)
+    .animation(motion.tactileSnap ?? motion.effectFast, value: isHighlighted)
+    .animation(motion.tactileSnap ?? motion.effectFast, value: isSelected)
     .accessibilityLabel(title)
     .accessibilityAddTraits(isSelected ? .isSelected : [])
   }

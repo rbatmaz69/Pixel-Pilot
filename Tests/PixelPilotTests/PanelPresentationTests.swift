@@ -121,14 +121,18 @@ struct PanelPresentationTests {
     #expect(abs(start.maxY - end.maxY) < 1e-9)
   }
 
-  @Test("HIG motion tokens use critically damped springs and zero idle drift")
-  func higMotionTokensAreCriticallyDamped() {
-    #expect(MotionTokens.standard.stagger == 0)
+  @Test("Studio aperture motion tokens preserve zero idle drift and critically damped unfold")
+  func studioApertureMotionTokensAndUnfoldDamping() {
+    #expect(MotionTokens.standard.stagger == 0.022)
     #expect(MotionTokens.standard.ambientPeriod == 0)
-    // Critically damped unfoldSpring must not overshoot past 1.005
-    for t in stride(from: 0.0, through: 0.5, by: 0.02) {
+    #expect(MotionTokens.reduced.stagger == 0)
+    #expect(MotionTokens.reduced.ambientPeriod == 0)
+
+    for t in stride(from: 0.0, through: 0.5, by: 0.01) {
       let val = MotionTokens.unfoldSpring.value(target: 1.0, time: t)
       #expect(val <= 1.005, "unfoldSpring overshot to \(val) at t=\(t)")
     }
+    let settled = MotionTokens.unfoldSpring.value(target: 1.0, time: 0.8)
+    #expect(abs(settled - 1.0) < 0.002)
   }
 }

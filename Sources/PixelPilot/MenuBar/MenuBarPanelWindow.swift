@@ -35,6 +35,7 @@ final class MenuBarPanelWindow: NSObject {
   private let onClose: () -> Void
 
   private let driver = PanelSpringDriver()
+  private let heightSpringDriver = PanelSpringDriver()
   /// Where the panel comes to rest. Its top edge is also where it unrolls from,
   /// which is why no separate anchor is kept: `place` already puts that edge
   /// just under the status item.
@@ -240,6 +241,7 @@ final class MenuBarPanelWindow: NSObject {
     // From here it is on its way out: it must stop taking clicks, stop
     // reporting itself open, and stop being told about key changes it can no
     // longer act on.
+    heightSpringDriver.cancel()
     panel.delegate = nil
     isClosing = true
 
@@ -289,6 +291,8 @@ final class MenuBarPanelWindow: NSObject {
     //
     // Changing the size here instead is exactly the SwiftUI layout pass this
     // arrangement exists to avoid.
+    // Reset transform before reading frame.height so origin isn't affected by a prior frame's scale.
+    hosting.layer?.transform = CATransform3DIdentity
     hosting.setFrameOrigin(CGPoint(
       x: 0,
       y: clip.bounds.height - PopoverShape.arrowHeight - hosting.frame.height
@@ -314,11 +318,11 @@ final class MenuBarPanelWindow: NSObject {
     guard let panel else { return }
     apply(progress: 1)
     panel.alphaValue = 1
-    fitContentHeight()
   }
 
-  /// Resizes the open panel smoothly when inline Studio drawers expand or collapse
-  /// inside `MenuBarPanel`, keeping the top edge pinned below the menu bar icon.
+  /// Resizes the open panel smoothly at 120 Hz via `PanelSpringDriver` when
+  /// inline Studio drawers expand or collapse inside `MenuBarPanel`, keeping
+  /// the width constant and the top edge pinned below the menu bar icon.
   func fitContentHeight() {
     guard let panel, !isClosing, !driver.isRunning, let hosting = hostingView else { return }
     hosting.layoutSubtreeIfNeeded()
@@ -327,38 +331,81 @@ final class MenuBarPanelWindow: NSObject {
 
     let topY = restingFrame.maxY
     let windowHeight = newSize.height + PopoverShape.arrowHeight
+    let lockedWidth = restingFrame.width > 0 ? restingFrame.width : newSize.width
     let updatedFrame = CGRect(
       x: restingFrame.minX,
       y: topY - windowHeight,
-      width: newSize.width,
+      width: lockedWidth,
       height: windowHeight
     )
     guard abs(updatedFrame.height - restingFrame.height) > 0.5
-      || abs(updatedFrame.width - restingFrame.width) > 0.5 else { return }
+      || abs(panel.frame.height - updatedFrame.height) > 0.5 else { return }
 
-    let widthChanged = abs(updatedFrame.width - restingFrame.width) > 0.5
     restingFrame = updatedFrame
+
+    guard !OverlayPanel.reduceMotion,
+          panel.isVisible,
+          panel.alphaValue > 0.5,
+          let background = panel.contentView
+    else {
+      heightSpringDriver.cancel()
+      hosting.frame = CGRect(
+        origin: CGPoint(x: 0, y: updatedFrame.height - PopoverShape.arrowHeight - newSize.height),
+        size: newSize
+      )
+      panel.setFrame(updatedFrame, display: true)
+      return
+    }
+
+    let startHeight = panel.frame.height
+    let targetHeight = updatedFrame.height
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
     hosting.frame = CGRect(
-      origin: CGPoint(x: 0, y: updatedFrame.height - PopoverShape.arrowHeight - newSize.height),
+      origin: CGPoint(x: 0, y: startHeight - PopoverShape.arrowHeight - newSize.height),
       size: newSize
     )
-    if widthChanged, let background = panel.contentView as? NSVisualEffectView,
-       let clip = hosting.superview as? PopoverClipView {
-      applyShape(to: background, clip: clip)
-    }
+    CATransaction.commit()
 
-    if OverlayPanel.reduceMotion {
-      panel.setFrame(updatedFrame, display: true)
-    } else {
-      NSAnimationContext.runAnimationGroup { context in
-        context.duration = 0.22
-        context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        panel.animator().setFrame(updatedFrame, display: true)
+    heightSpringDriver.run(
+      in: background,
+      spring: MotionTokens.drawerSpring,
+      reversed: false,
+      onFrame: { [weak self] progress in
+        guard let self, let panel = self.panel, let hosting = self.hostingView else { return }
+        let minHeight = PopoverShape.arrowHeight + 40
+        let currentHeight = max(minHeight, startHeight + (targetHeight - startHeight) * progress)
+        let frame = CGRect(
+          x: updatedFrame.minX,
+          y: topY - currentHeight,
+          width: lockedWidth,
+          height: currentHeight
+        )
+        panel.setFrame(frame, display: false)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        hosting.setFrameOrigin(CGPoint(
+          x: 0,
+          y: frame.height - PopoverShape.arrowHeight - newSize.height
+        ))
+        CATransaction.commit()
+      },
+      onFinish: { [weak self] in
+        guard let self, let panel = self.panel, let hosting = self.hostingView else { return }
+        panel.setFrame(updatedFrame, display: false)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        hosting.setFrameOrigin(CGPoint(
+          x: 0,
+          y: updatedFrame.height - PopoverShape.arrowHeight - newSize.height
+        ))
+        CATransaction.commit()
       }
-    }
+    )
   }
 
   private func teardown() {
+    heightSpringDriver.cancel()
     driver.cancel()
     panel?.orderOut(nil)
     panel?.contentView = nil
@@ -381,6 +428,7 @@ final class MenuBarPanelWindow: NSObject {
     _ panel: NSPanel, hosting: NSView, under anchor: NSStatusBarButton
   ) -> CGRect {
     panel.layoutIfNeeded()
+    hosting.layoutSubtreeIfNeeded()
     let size = hosting.fittingSize == .zero
       ? CGSize(width: 320, height: 200)
       : hosting.fittingSize

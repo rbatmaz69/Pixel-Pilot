@@ -51,7 +51,7 @@ struct MorphToggleStyle: ToggleStyle {
     private static let padding: CGFloat = 2
 
     private var knobWidth: CGFloat {
-      isPressed ? 18 : 16
+      isPressed ? 19 : 16
     }
 
     var body: some View {
@@ -103,7 +103,7 @@ struct MorphToggleStyle: ToggleStyle {
         .frame(width: knobWidth, height: Self.trackHeight - Self.padding * 2)
         .shadow(color: .black.opacity(isPressed ? 0.24 : 0.16), radius: isPressed ? 3 : 2, y: 1)
         .offset(x: knobOffset)
-        .animation(motion.spatialDefault, value: configuration.isOn)
+        .animation(motion.tactileSnap ?? motion.spatialDefault, value: configuration.isOn)
         .animation(motion.spatialFast, value: knobWidth)
     }
 
@@ -166,7 +166,7 @@ struct SegmentedMorphPicker<Value: Hashable>: View {
         }
     }
     .opacity(isEnabled ? 1 : 0.4)
-    .animation(motion.spatialDefault, value: selection)
+    .animation(motion.tactileSnap ?? motion.expressiveSpring, value: selection)
     .accessibilityElement(children: .contain)
   }
 
@@ -267,6 +267,7 @@ struct SymbolChipPicker: View {
         Image(systemName: symbol)
           .font(.callout)
           .foregroundStyle(isSelected ? AnyShapeStyle(tone) : AnyShapeStyle(.secondary))
+          .symbolEffect(.bounce, value: isSelected)
           .frame(width: 30, height: 28)
           .background {
             // One highlight for the whole row, so it slides to the chip you
@@ -288,7 +289,7 @@ struct SymbolChipPicker: View {
       }
       Spacer(minLength: 0)
     }
-    .animation(motion.spatialDefault, value: selection)
+    .animation(motion.tactileSnap ?? motion.expressiveSpring, value: selection)
     .accessibilityElement(children: .contain)
     .accessibilityLabel(accessibilityLabel)
   }

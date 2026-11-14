@@ -36,13 +36,34 @@ struct ExpressiveSlider: View {
   @State private var isHovered = false
   @State private var pop = 0
   @State private var tick = 0
+  @State private var pluckedDetent: Double?
+  @State private var pluckSequence = 0
   @State private var isAtEnd = false
+  @State private var boundarySquashTrigger = 0
+  @State private var boundaryDirection: BoundarySquashDirection = .trailing
   @State private var latchedDetent: Double?
 
   /// How wide a detent feels, in points.
   private static let detentReach: Double = 4
+  /// Optical Leica lens loupe influence radius around the thumb center.
+  private static let loupeRadius: CGFloat = 36
   /// Engraved Leica-style decile scale marks across the pill track.
   private static let scaleDeciles: [Double] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+  /// Optical aperture lens magnification factor (`1.0 ... 1.85`) for engraved
+  /// ticks within `±36pt` of the active thumb position.
+  static func loupeScale(
+    tickFraction: Double,
+    knobFraction: Double,
+    trackWidth: CGFloat,
+    isActive: Bool
+  ) -> CGFloat {
+    guard isActive, trackWidth > 0 else { return 1.0 }
+    let dx = abs(CGFloat(tickFraction - knobFraction) * trackWidth)
+    guard dx <= loupeRadius else { return 1.0 }
+    let sigma: CGFloat = 14
+    return 1.0 + 0.85 * exp(-(dx * dx) / (2 * sigma * sigma))
+  }
 
   private var fraction: Double { fraction(of: value) }
 
@@ -86,9 +107,14 @@ struct ExpressiveSlider: View {
         knob(centeredAt: handleX, height: geometry.size.height)
       }
       .frame(height: geometry.size.height)
+      .directionalBoundarySquash(
+        trigger: boundarySquashTrigger,
+        direction: boundaryDirection,
+        motion: motion
+      )
       .contentShape(.rect)
       .gesture(dragGesture(width: width))
-      .animation(motion.effectDefault, value: ghost)
+      .animation(motion.expressiveSpring, value: ghost)
     }
     .frame(height: KnobGeometry.rest.trackHeight)
     .onHover { hovering in
@@ -147,12 +173,14 @@ struct ExpressiveSlider: View {
           )
           .rotationEffect(.degrees(rotatesGlyph ? fraction * 180 : 0))
           .scaleEffect(rotatesGlyph ? (0.92 + 0.16 * fraction) : 1.0)
+          .tickOnChange(tick, motion: motion)
           .padding(.leading, 8)
           .allowsHitTesting(false)
       }
     }
     .frame(width: width, height: metrics.trackHeight)
     .clipShape(pillShape)
+    .animation(motion.spatialFast, value: metrics)
   }
 
   private var resolvedFillStyle: AnyShapeStyle {
@@ -178,25 +206,35 @@ struct ExpressiveSlider: View {
     let coveredMarkInk = accent.relativeLuminance > 0.40
       ? AppTheme.warmEspressoInk
       : Color.white
+    let isLoupeActive = !motion.isReduced && (isDragging || isHovered)
     ZStack(alignment: .leading) {
-      // Fine decile scale ticks along bottom edge
+      // Fine decile scale ticks along bottom edge with Leica optical loupe near the thumb
       ForEach(Self.scaleDeciles, id: \.self) { mark in
         let markX = knobX(for: mark, width: width)
         let isCovered = markX < fillWidth
+        let loupe = Self.loupeScale(
+          tickFraction: mark,
+          knobFraction: fraction,
+          trackWidth: width,
+          isActive: isLoupeActive
+        )
+        let tickHeight = 3.5 * loupe
+        let boostOpacity = Double(loupe - 1.0) * 0.35
         Rectangle()
           .fill(
             isCovered
-              ? coveredMarkInk.opacity(isDragging || isHovered ? 0.30 : 0.16)
-              : Color.primary.opacity(isDragging || isHovered ? 0.26 : 0.12)
+              ? coveredMarkInk.opacity(min(0.85, (isDragging || isHovered ? 0.30 : 0.16) + boostOpacity))
+              : Color.primary.opacity(min(0.80, (isDragging || isHovered ? 0.26 : 0.12) + boostOpacity))
           )
-          .frame(width: 1, height: 3.5)
-          .offset(x: markX - 0.5, y: metrics.trackHeight / 2 - 3.5)
+          .frame(width: loupe > 1.25 ? 1.25 : 1, height: tickHeight)
+          .offset(x: markX - 0.5, y: metrics.trackHeight / 2 - tickHeight / 2 - 1.75)
       }
 
-      // Prominent quarter detent marks (25% / 50% / 75%)
+      // Prominent quarter detent marks (25% / 50% / 75%) with vertical pluck when crossed
       ForEach(interiorDetents, id: \.self) { detent in
         let detentX = knobX(for: detent, width: width)
         let isSnapped = abs(fraction - detent) <= 0.015 || (latchedDetent == detent && isDragging)
+        let isPluckTarget = !motion.isReduced && pluckedDetent == detent
         let isCovered = detentX < fillWidth
         Capsule(style: .continuous)
           .fill(
@@ -207,6 +245,15 @@ struct ExpressiveSlider: View {
                 : Color.primary.opacity(isDragging || isHovered ? 0.42 : 0.22))
           )
           .frame(width: isSnapped ? 2 : 1.25, height: isSnapped ? 8.5 : 5.5)
+          .phaseAnimator([0, 1, 2], trigger: pluckSequence) { mark, phase in
+            mark.scaleEffect(y: isPluckTarget && phase == 1 ? 1.35 : 1.0, anchor: .bottom)
+          } animation: { phase in
+            switch phase {
+            case 1: .spring(duration: 0.10, bounce: 0.28)
+            case 2: motion.tactileSnap ?? motion.effectFast
+            default: .linear(duration: 0.005)
+            }
+          }
           .shadow(color: isSnapped ? theme.studioAccent.opacity(0.55) : .clear, radius: 3)
           .offset(x: detentX - (isSnapped ? 1 : 0.625), y: metrics.trackHeight / 2 - (isSnapped ? 6 : 4.5))
       }
@@ -214,7 +261,7 @@ struct ExpressiveSlider: View {
     .frame(width: width, height: metrics.trackHeight, alignment: .leading)
     .allowsHitTesting(false)
     .animation(motion.effectFast, value: isDragging || isHovered)
-    .animation(motion.effectFast, value: latchedDetent)
+    .animation(motion.tactileSnap ?? motion.effectFast, value: latchedDetent)
   }
 
   /// Ghost preview bridge & hollow target ring when hovering a scene card.
@@ -236,7 +283,7 @@ struct ExpressiveSlider: View {
     }
     .frame(width: width, height: height)
     .allowsHitTesting(false)
-    .transition(.opacity)
+    .transition(.scale(scale: 0.72).combined(with: .opacity))
   }
 
   /// Native circular Control Center thumb (`20×20pt`) that reveals on hover/drag.
@@ -297,8 +344,12 @@ struct ExpressiveSlider: View {
     // Arriving at either end is worth feeling, so you can tell you have bottomed
     // out without reading the number. Latched, because the pointer usually keeps
     // going once it gets there.
-    let reachedEnd = position <= 0 || position >= 1
+    let atLowEnd = position <= 0
+    let atHighEnd = position >= 1
+    let reachedEnd = atLowEnd || atHighEnd
     if reachedEnd, !isAtEnd {
+      boundaryDirection = atLowEnd ? .leading : .trailing
+      boundarySquashTrigger += 1
       pop += 1
       Haptics.endStop()
     }
@@ -316,6 +367,8 @@ struct ExpressiveSlider: View {
       tolerance: SliderDetents.tolerance(points: Self.detentReach, travel: travel)
     )
     if let detent, detent != latchedDetent, !reachedEnd {
+      pluckedDetent = detent
+      pluckSequence += 1
       tick += 1
       Haptics.detent()
     }

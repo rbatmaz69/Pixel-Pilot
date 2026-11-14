@@ -13,6 +13,7 @@ struct ColorSection: View {
   @Bindable var display: DisplayViewModel
 
   @Environment(\.motion) private var motion
+  @State private var presetGlintCount = 0
 
   private static let neutralCutoff: Double = 6450
 
@@ -36,6 +37,7 @@ struct ColorSection: View {
       }
       .animation(motion.spatialDefault, value: display.isFightingSomethingOverColor)
     }
+    .specularGlintSweep(trigger: presetGlintCount, accent: display.accent)
   }
 
   private var slider: some View {
@@ -104,6 +106,7 @@ struct ColorSection: View {
           }
           Button(preset.1) {
             display.setColorTemperature(preset.0 >= Self.neutralCutoff ? nil : preset.0)
+            presetGlintCount += 1
             Haptics.detent()
           }
           .buttonStyle(.soft(isSelected ? display.accent : .secondary))

@@ -17,6 +17,7 @@ struct ShortcutRecorder: View {
   @State private var isRecording = false
   @State private var monitor: Any?
   @State private var isHovered = false
+  @State private var captureCount = 0
 
   var body: some View {
     Button {
@@ -52,7 +53,14 @@ struct ShortcutRecorder: View {
           )
           .modifier(RecordingPulse(isRecording: isRecording, isReduced: motion.isReduced))
       }
-      .animation(motion.spatialFast, value: isRecording)
+      .specularGlintSweep(
+        trigger: captureCount,
+        accent: Status.ok,
+        cornerRadius: Layout.radiusControl
+      )
+      .scaleEffect(isHovered && !isRecording && !motion.isReduced ? 1.02 : 1.0)
+      .animation(motion.tactileSnap ?? motion.spatialFast, value: isRecording)
+      .animation(motion.tactileSnap ?? motion.spatialFast, value: isHovered)
     }
     .buttonStyle(.plain)
     .onHover { isHovered = $0 }
@@ -83,6 +91,7 @@ struct ShortcutRecorder: View {
         // ordinary keystroke system wide. Stay in recording mode and let the
         // user try again.
         if let recorded = Shortcut(event: event) {
+          captureCount += 1
           onChange(recorded)
           stopRecording()
         }

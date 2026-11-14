@@ -129,6 +129,7 @@ final class OSDController {
   private func setHeld(_ held: Bool) {
     guard isHeld != held, current != nil else { return }
     isHeld = held
+    hostingView?.rootView = content()
 
     guard held else {
       scheduleDismiss()
@@ -155,7 +156,8 @@ final class OSDController {
         displayName: current.displayName,
         detail: current.detail,
         adjust: current.adjust,
-        commit: current.commit
+        commit: current.commit,
+        isHeld: isHeld
       )
       .withMotionTokens()
       .withAppTheme(paintsWindow: false)

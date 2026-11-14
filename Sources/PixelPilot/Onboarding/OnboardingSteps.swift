@@ -19,6 +19,7 @@ struct OnboardingFlow: View {
   @State private var step: Step = .welcome
   @State private var presetName = ""
   @State private var presetSymbol = "sun.max.fill"
+  @State private var stepDirection = 1
 
   enum Step: Int, CaseIterable {
     case welcome, permissions, displays, preset
@@ -58,9 +59,22 @@ struct OnboardingFlow: View {
         case .preset: preset
         }
       }
-      // Already the app's idiom for swapping content in place.
-      .transition(.blurReplace.combined(with: .scale(0.96, anchor: .top)))
+      .id(step)
+      // Directional horizontal flow reinforces forward/backward progression.
+      .transition(
+        motion.isReduced
+          ? AnyTransition.opacity
+          : .asymmetric(
+            insertion: .move(edge: stepDirection >= 0 ? .trailing : .leading)
+              .combined(with: .opacity)
+              .combined(with: .scale(scale: 0.96)),
+            removal: .move(edge: stepDirection >= 0 ? .leading : .trailing)
+              .combined(with: .opacity)
+              .combined(with: .scale(scale: 0.96))
+          )
+      )
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+      .clipped()
 
       footer
     }
@@ -73,7 +87,7 @@ struct OnboardingFlow: View {
         .frame(height: 300)
         .frame(maxHeight: .infinity, alignment: .top)
     }
-    .animation(motion.spatialDefault, value: step)
+    .animation(motion.tactileSnap ?? motion.spatialDefault, value: step)
     .onAppear { model.refreshPermissions() }
   }
 
@@ -100,6 +114,7 @@ struct OnboardingFlow: View {
 
       if step != .welcome {
         Button("Zurück") {
+          stepDirection = -1
           step = Step(rawValue: step.rawValue - 1) ?? .welcome
         }
         .buttonStyle(.soft)
@@ -107,6 +122,7 @@ struct OnboardingFlow: View {
 
       Button(step == .preset ? "Fertig" : "Weiter") {
         if let next = Step(rawValue: step.rawValue + 1) {
+          stepDirection = 1
           step = next
         } else {
           onFinish()
@@ -299,7 +315,7 @@ private struct OnboardingProgress: View {
           }
       }
     }
-    .animation(motion.spatialDefault, value: current)
+    .animation(motion.tactileSnap ?? motion.spatialDefault, value: current)
     .accessibilityElement()
     .accessibilityLabel("Step \(current.rawValue + 1) of \(OnboardingFlow.Step.allCases.count)")
   }

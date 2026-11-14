@@ -72,6 +72,7 @@ final class StatusItemController: NSObject {
     if NSApp.currentEvent?.modifierFlags.contains(.option) == true {
       Haptics.confirm()
       model.stepPreset(forward: true)
+      pulseStatusButton()
       updateStatusButtonTitle()
       return
     }
@@ -84,6 +85,8 @@ final class StatusItemController: NSObject {
       lastAutoDismiss = .distantPast
     } else {
       guard let button = statusItem?.button else { return }
+      model.refreshPermissions()
+      model.systemAudio.refresh()
       panel.show(
         anchoredTo: button,
         content: MenuBarPanel(
@@ -166,7 +169,10 @@ final class StatusItemController: NSObject {
     let value = model.adjustScrolledBrightness(by: delta, on: display)
 
     let atEnd = value <= 0.001 || value >= 0.999
-    if atEnd, !scrollAtBoundary { Haptics.endStop() }
+    if atEnd, !scrollAtBoundary {
+      Haptics.endStop()
+      pulseStatusButton()
+    }
     scrollAtBoundary = atEnd
 
     let detent = SliderDetents.nearest(
@@ -178,6 +184,24 @@ final class StatusItemController: NSObject {
     latchedScrollDetent = detent
 
     updateStatusButtonTitle()
+  }
+
+  /// Single-shot confirmation pulse on the menu bar status icon for zero-click
+  /// actions (Option-click scene step or scroll boundary), costing zero idle CPU.
+  private func pulseStatusButton() {
+    guard !OverlayPanel.reduceMotion, let button = statusItem?.button else { return }
+    NSAnimationContext.runAnimationGroup { ctx in
+      ctx.duration = 0.08
+      button.animator().alphaValue = 0.55
+    } completionHandler: { [weak self] in
+      Task { @MainActor [weak self] in
+        guard let button = self?.statusItem?.button else { return }
+        NSAnimationContext.runAnimationGroup { ctx in
+          ctx.duration = 0.16
+          button.animator().alphaValue = 1.0
+        }
+      }
+    }
   }
 
   /// Updates the optional monospaced `%` readout next to the sun icon in the menu bar.

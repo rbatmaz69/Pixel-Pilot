@@ -92,6 +92,8 @@ struct DisplayMap: View {
 
         ZStack(alignment: .topLeading) {
           if mode == .arrange {
+            blueprintGridOverlay(in: geometry.size)
+              .transition(.opacity)
             alignmentGuideOverlay(for: entries, in: geometry.size)
           }
 
@@ -118,7 +120,8 @@ struct DisplayMap: View {
       .frame(height: mode == .arrange ? 148 : 112)
       .animation(dragging == nil ? motion.spatialDefault : nil, value: selection)
       .animation(dragging == nil ? motion.spatialDefault : nil, value: arrangeSnapshot)
-      .animation(motion.effectFast, value: mode)
+      .animation(motion.tactileSnap ?? motion.spatialDefault, value: mode)
+      .animation(motion.tactileSnap ?? motion.effectFast, value: menuBarDropTarget)
       .accessibilityElement(children: .contain)
       .accessibilityLabel("Display-Anordnung")
 
@@ -227,8 +230,8 @@ struct DisplayMap: View {
       )
       tileStand(display, width: rect.width)
     }
-    .scaleEffect(isDragging && mode == .arrange ? 1.04 : 1.0)
-    .animation(motion.effectFast, value: isDragging)
+    .scaleEffect(isDragging && mode == .arrange && !motion.isReduced ? 1.06 : 1.0)
+    .animation(motion.tactileSnap ?? motion.spatialFast, value: isDragging)
     .frame(width: rect.width, height: rect.height)
     .offset(x: rect.minX, y: rect.minY - (isHovered && !motion.isReduced && mode == .light ? 1 : 0))
     .animation(dragging == nil ? motion.spatialFast : nil, value: isHovered)
@@ -285,8 +288,11 @@ struct DisplayMap: View {
       ? theme.studioAccent
       : (isSelected ? display.accent : theme.rim(for: display.accent))
     let strokeWidth: CGFloat = (isDropTarget || isSelected) ? 2 : 1.25
-    let shadowColor = display.accent.opacity(isDragging ? 0.55 : (0.14 + 0.36 * level))
-    let shadowRadius: CGFloat = isDragging ? 14 : (5 + 9 * level)
+    let shadowColor = isDropTarget
+      ? theme.studioAccent.opacity(0.55)
+      : display.accent.opacity(isDragging ? 0.58 : (0.14 + 0.36 * level))
+    let shadowRadius: CGFloat = isDragging ? 18 : (5 + 9 * level)
+    let shadowY: CGFloat = (isDragging && mode == .arrange) ? 5 : 1
 
     return ZStack {
       Color(.sRGB, red: 0.11, green: 0.095, blue: 0.085)
@@ -331,7 +337,7 @@ struct DisplayMap: View {
       }
     }
     .overlay { badge(display, isDragging: isDragging, isPrimary: isPrimary) }
-    .shadow(color: shadowColor, radius: shadowRadius, y: 1)
+    .shadow(color: shadowColor, radius: shadowRadius, y: shadowY)
   }
 
   @ViewBuilder
@@ -466,6 +472,26 @@ struct DisplayMap: View {
     return (desktop, scale, originX, originY)
   }
 
+  private func blueprintGridOverlay(in size: CGSize) -> some View {
+    Path { path in
+      let step: CGFloat = 16
+      var x = step
+      while x < size.width {
+        path.move(to: CGPoint(x: x, y: 0))
+        path.addLine(to: CGPoint(x: x, y: size.height))
+        x += step
+      }
+      var y = step
+      while y < size.height {
+        path.move(to: CGPoint(x: 0, y: y))
+        path.addLine(to: CGPoint(x: size.width, y: y))
+        y += step
+      }
+    }
+    .stroke(theme.separator.opacity(0.35), lineWidth: 0.5)
+    .allowsHitTesting(false)
+  }
+
   @ViewBuilder
   private func alignmentGuideOverlay(
     for entries: [DisplayLayout.ArrangementEntry],
@@ -473,7 +499,7 @@ struct DisplayMap: View {
   ) -> some View {
     if let vp = viewport(for: entries, in: size) {
       ForEach(arrangeGuides, id: \.self) { guide in
-        Path { path in
+        let guidePath = Path { path in
           switch guide.axis {
           case .horizontal:
             let y = vp.originY + (guide.position - vp.desktop.minY) * vp.scale
@@ -485,10 +511,16 @@ struct DisplayMap: View {
             path.addLine(to: CGPoint(x: x, y: size.height))
           }
         }
-        .stroke(
-          theme.studioAccent.opacity(0.9),
-          style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-        )
+        ZStack {
+          guidePath
+            .stroke(theme.studioAccent.opacity(0.32), lineWidth: 4)
+          guidePath
+            .stroke(
+              theme.studioAccent.opacity(0.95),
+              style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+            )
+        }
+        .allowsHitTesting(false)
       }
     }
   }

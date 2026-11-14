@@ -131,6 +131,9 @@ struct OSDView: View {
   var adjust: ((Double) -> Void)?
   /// The verified write, once, when the drag ends.
   var commit: (() -> Void)?
+  var isHeld: Bool = false
+
+  @State private var atHighEnd = true
 
   @Environment(\.motion) private var motion
   @Environment(\.theme) private var theme
@@ -248,13 +251,24 @@ struct OSDView: View {
     .padding(.vertical, 12)
     .frame(width: 296)
     .heroSurface()
-    .scaleEffect(hasArrived ? 1 : 0.96)
+    .scaleEffect(hasArrived || motion.isReduced ? (isHeld && !motion.isReduced ? 1.015 : 1.0) : 0.94)
     .opacity(hasArrived ? 1 : 0)
-    .animation(motion.expressive, value: hasArrived)
-    .modifier(EndStopNudge(trigger: endStop, isReduced: motion.isReduced, settle: motion.expressive))
+    .animation(motion.expressiveSpring, value: hasArrived)
+    .animation(motion.tactileSnap ?? motion.spatialFast, value: isHeld)
+    .modifier(
+      EndStopNudge(
+        trigger: endStop,
+        isReduced: motion.isReduced,
+        atHighEnd: atHighEnd,
+        settle: motion.expressiveSpring
+      )
+    )
     .onAppear { hasArrived = true }
     .onChange(of: level) { _, updated in
-      if updated <= 0.001 || updated >= 0.999 { endStop += 1 }
+      if updated <= 0.001 || updated >= 0.999 {
+        atHighEnd = updated >= 0.999
+        endStop += 1
+      }
     }
     .onChange(of: value) { _, _ in scrubbed = nil }
     .accessibilityElement(children: .ignore)
@@ -339,9 +353,24 @@ struct OSDView: View {
 private struct EndStopNudge: ViewModifier {
   let trigger: Int
   let isReduced: Bool
+  let atHighEnd: Bool
   let settle: Animation
 
   func body(content: Content) -> some View {
-    content
+    if isReduced {
+      content
+    } else {
+      content.phaseAnimator([0, 1, 2], trigger: trigger) { view, phase in
+        view
+          .offset(x: phase == 1 ? (atHighEnd ? 3.5 : -3.5) : 0)
+          .scaleEffect(
+            x: phase == 1 ? 1.02 : 1.0,
+            y: phase == 1 ? 0.985 : 1.0,
+            anchor: atHighEnd ? .trailing : .leading
+          )
+      } animation: { phase in
+        phase == 1 ? .spring(duration: 0.09, bounce: 0.0) : settle
+      }
+    }
   }
 }

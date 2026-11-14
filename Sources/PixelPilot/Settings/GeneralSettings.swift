@@ -12,11 +12,16 @@ struct GeneralSettings: View {
 
   @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
   @State private var launchAtLoginError: String?
+  @State private var paletteWaveCount = 0
 
   var body: some View {
     CardStack {
-      appearanceCard.entrance(index: 0)
-      startupAndGuideCard.entrance(index: 1)
+      appearanceCard
+        .accentWave(index: 0, trigger: paletteWaveCount, accent: theme.theme.studioAccent)
+        .entrance(index: 0)
+      startupAndGuideCard
+        .accentWave(index: 1, trigger: paletteWaveCount, accent: theme.theme.studioAccent)
+        .entrance(index: 1)
     }
   }
 
@@ -52,7 +57,11 @@ struct GeneralSettings: View {
           TripletThemePicker(
             selection: Binding(
               get: { theme.triplet },
-              set: { theme.triplet = $0 }
+              set: {
+                guard theme.triplet != $0 else { return }
+                theme.triplet = $0
+                paletteWaveCount += 1
+              }
             )
           )
         }

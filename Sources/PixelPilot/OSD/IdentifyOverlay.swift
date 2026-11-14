@@ -13,6 +13,7 @@ struct IdentifyOverlay: View {
   @Environment(\.motion) private var motion
   @Environment(\.theme) private var theme
   @State private var hasArrived = false
+  @State private var sonarTrigger = 0
 
   var body: some View {
     VStack(spacing: Layout.tight) {
@@ -20,6 +21,13 @@ struct IdentifyOverlay: View {
         .font(TypeScale.identityNumeral)
         .foregroundStyle(theme.fill(for: accent))
         .shadow(color: theme.glow(for: accent, active: true), radius: 24)
+        .padding(.horizontal, Layout.tight)
+        .sonarRingOnTrigger(
+          trigger: sonarTrigger,
+          color: accent,
+          lineWidth: 2.5,
+          maxScale: 1.45
+        )
 
       HStack(spacing: Layout.tight) {
         AccentDot(accent: accent, isReady: true, size: 10)
@@ -36,10 +44,16 @@ struct IdentifyOverlay: View {
     // top of each other, and the numeral is the part meant to be read from
     // across a desk.
     .heroSurface()
-    .scaleEffect(hasArrived ? 1 : 0.96)
+    .scaleEffect(hasArrived || motion.isReduced ? 1 : 0.88)
+    .blur(radius: hasArrived || motion.isReduced ? 0 : 8)
     .opacity(hasArrived ? 1 : 0)
-    .animation(motion.expressive, value: hasArrived)
-    .onAppear { hasArrived = true }
+    .animation(motion.expressiveSpring, value: hasArrived)
+    .onAppear {
+      hasArrived = true
+      if !motion.isReduced {
+        sonarTrigger += 1
+      }
+    }
     .accessibilityElement(children: .combine)
     .accessibilityLabel("Display \(number), \(name)")
   }

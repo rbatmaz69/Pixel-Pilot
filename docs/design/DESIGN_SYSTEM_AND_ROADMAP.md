@@ -61,15 +61,19 @@ Pixel Pilot verbindet **100 % treue Apple Human Interface Guidelines (HIG)** in 
 | Push-Buttons (`NSButton`), Textfelder, Popups, Sidebar-Zeilen | `6pt` | `radiusControl = 6` | Keinerlei Schrumpfen (`scaleEffect`) beim Klick |
 | Aktives Innensegment in `SegmentedMorphPicker` | `5pt` | `radiusSegment = 5` | Innerhalb einer `6pt`-Wanne mit `2pt` Padding |
 
-### Motion & Interaktions-Physik (`Motion.swift`)
+### Motion & Interaktions-Physik („Tactile Aperture & Kinetic Light Physics“, `Motion.swift` – implementiert in M10)
 
-- **Sofortiger Button-Press (`0ms`)**: Push-Buttons (`SoftButtonStyle`) wechseln bei `configuration.isPressed` verzögerungsfrei ihre Helligkeit/Füllung wie ein nativer `NSButton` – **kein** `scaleEffect(0.94)`.
-- **Kritisch gedämpfte Kurven ohne Toy-Bounce**:
-  - `fastSpring`: `duration: 0.14, bounce: 0.0`
-  - `expressiveSpring`: `duration: 0.18, bounce: 0.0`
-  - `slowSpring`: `duration: 0.22, bounce: 0.0` (analog `cubic-bezier(0.2, 0.9, 0.25, 1)`)
-  - `unfoldSpring`: `response: 0.18, dampingFraction: 0.96`
-- **Keine Zahlen-Stauchung & kein Stagger-Wasserfall**: `SquashOnChange` nutzt nur noch `.contentTransition(.numericText())` ohne `scaleEffect`; `entrance(index:)` verzögert das Erscheinen von Einstellungsseiten nicht mehr.
+- **Signature-Gimmick „Tactile Aperture & Kinetic Light Physics“**: Alle Bedienelemente teilen sich eine präzise optisch-mechanische Blenden-Physik kombiniert mit gerichteten Licht-Reflexen – reaktionsschnell im Alltag (`0ms` Drag-Tracking) und strikt ereignisgesteuert (**`0,0 %` CPU im Leerlauf**, `ambientPeriod = 0`).
+- **Taktiles Press- & Einrast-Feedback (`0ms` Startlatenz)**: Push-Buttons (`SoftButtonStyle`) reagieren verzögerungsfrei beim Antippen (`scaleEffect(0.97)`) mit federndem Release; `MorphToggleStyle`, `SegmentedMorphPicker` und `MoodSceneCard` nutzen differenzierte `KnobGeometry`-Zustände (`.rest`, `.hovered`, `.dragging`) und velocity-gestützte Kapsel-Morphs.
+- **Präzise abgestimmte Studio-Federn**:
+  - `spatialFast` / `fastSpring`: `duration: 0.14, bounce: 0.0` (sofortiges direktes Feedback)
+  - `expressiveSpring`: `duration: 0.20, bounce: 0.12` bzw. `tactileSnap`: `duration: 0.20, bounce: 0.18` (satte Blenden-Rasten & Picker-Pills)
+  - `slowSpring`: `duration: 0.24, bounce: 0.08` (gerichtete Seiten- & Map-Übergänge)
+  - `unfoldSpring`: `response: 0.20, dampingRatio: 1.0` (kritisch gedämpftes Popover-Shutter-Unroll ohne Nachspringen bei konstanter Breite)
+  - `collapseSpring`: `duration: 0.14, bounce: 0.0` (knackiges Einziehen)
+  - `drawerSpring`: `response: 0.22, dampingRatio: 0.88` (120 Hz `PanelSpringDriver` für Schubladen & Höhenänderungen)
+- **Aperture Lens Loupe, Detent-Pluck & End-Stop-Squash**: `ExpressiveSlider` vergrößert die gravierten Skalenstriche (`±36pt` um den Griff) per Gauß-Lupe (`3.5pt → 6.5pt`), zupft Detent-Kerben beim Passieren (`SquashOnChange` / `tickOnChange`) und staucht den Track bei `0 %` / `100 %` richtungstreu (`directionalBoundarySquash`); `OSDView` nutzt `EndStopNudge`.
+- **Choreografierte Entrances & Specular Glint Sweep**: `entrance(index:)` staffelt Settings-Karten knapp und zügig (`stagger = 0.022`, gedeckelt auf max. 6 Schritte); `AccentWave` / `SpecularGlintSweep` schickt bei Aktionen einmalig einen schrägen Glas-Lichtreflex über betroffene Karten (`Reduce Motion` setzt `stagger = 0` und deaktiviert räumliche Federn/Glints).
 
 ---
 
@@ -86,7 +90,7 @@ Pixel Pilot verbindet **100 % treue Apple Human Interface Guidelines (HIG)** in 
 
 ## 5. GitHub Meilensteine & Issues (Implementierungs-Reihenfolge)
 
-> **Aktueller Stand:** Phase 1 (`M1–M5`, Issues `#2–#17`) sowie Phase 2 (`M6–M9`, Issues `#34–#45`) sind vollständig umgesetzt und gemerged.
+> **Aktueller Stand:** Phase 1 (`M1–M5`, Issues `#2–#17`) sowie Phase 2 (`M6–M9`, Issues `#34–#45`) sind vollständig umgesetzt und gemerged. Phase 3 (`M10`, Issues `#58–#64`) ist geplant und auf GitHub angelegt.
 
 ### Phase 1 — Basis-Redesign (Abgeschlossen, PRs `#18–#33` gemerged)
 
@@ -139,3 +143,16 @@ Pixel Pilot verbindet **100 % treue Apple Human Interface Guidelines (HIG)** in 
 - **[Issue #43](https://github.com/rbatmaz69/Pixel-Pilot/issues/43)**: `[Gimmick: 2D Studio Light Pad]` Interaktives 2D-Licht-Pad direkt im Studio-Hero-Monitor (`X = Kelvin`, `Y = Helligkeit`) & Pointer-Parallax-Glasreflexion ✔︎
 - **[Issue #44](https://github.com/rbatmaz69/Pixel-Pilot/issues/44)**: `[Gimmick: Menu Bar Scroll & Status Readout]` Zero-Click-Dimming per Scrollrad/Trackpad auf dem Menüleisten-Icon & Option-Klick-Szenenwechsel ✔︎
 - **[Issue #45](https://github.com/rbatmaz69/Pixel-Pilot/issues/45)**: `[Animations & Studio Polish]` Analoge Sonnen-Rotation (`0°–180°`) im Slider, leuchtende Detent-Kerben, Companion-Orb-Stimmungswechsel & Tests ✔︎
+
+---
+
+### Phase 3 — „Tactile Aperture & Kinetic Light Physics“ (M10 ✔︎)
+
+#### [M10: Tactile Aperture & Kinetic Light — Signature Studio Motion](https://github.com/rbatmaz69/Pixel-Pilot/milestone/10) ✔︎
+- **[Issue #58](https://github.com/rbatmaz69/Pixel-Pilot/issues/58)**: `[Motion Foundation] „Tactile Aperture & Kinetic Light“ Tokens, Squash-Physik & Specular Glint Sweep` ✔︎
+- **[Issue #59](https://github.com/rbatmaz69/Pixel-Pilot/issues/59)**: `[Menu Bar & Popover] Elastisches Shutter-Unroll, 120 Hz Spring-Drawers & LED-Ignition` ✔︎
+- **[Issue #60](https://github.com/rbatmaz69/Pixel-Pilot/issues/60)**: `[Slider & Controls] Leica-Skalen-Lupe, Magnetischer Detent-Pluck & Lebendige Schalter-Physik` ✔︎
+- **[Issue #61](https://github.com/rbatmaz69/Pixel-Pilot/issues/61)**: `[Settings Navigation & Studio Hero] Gerichtete Seiten-Übergänge, Lebendige Sidebar & 2D-Licht-Pad-Wellen` ✔︎
+- **[Issue #62](https://github.com/rbatmaz69/Pixel-Pilot/issues/62)**: `[Studio Desk & Tageshorizont] Physische 2D-Monitor-Anordnung (DisplayMap) & Lebendiger DayArc` ✔︎
+- **[Issue #63](https://github.com/rbatmaz69/Pixel-Pilot/issues/63)**: `[HUD, Sheets & Onboarding] Elastische OSD-Pill, Kamera-Fokus-Identify & Geführte Tour-Choreografie` ✔︎
+- **[Issue #64](https://github.com/rbatmaz69/Pixel-Pilot/issues/64)**: `[Verification & Documentation] Motion- & Physik-Test-Suite & Design-System-Dokumentation (M10)` ✔︎

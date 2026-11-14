@@ -72,11 +72,10 @@ struct MorphingKnob: Shape, Animatable {
   }
 }
 
-/// Knob and track geometry for the native macOS Control Center Pill Slider.
+/// Knob and track geometry for the Tactile Aperture Pill Slider.
 ///
-/// Uses a consistent `26pt` Control Center pill track height (`13pt` capsule
-/// radius) and a circular `20×20pt` thumb (`10pt` radius) that reveals on
-/// hover and drag without Material 3 squircle morphing.
+/// Differentiates `.rest`, `.hovered`, and `.dragging` states cleanly while the
+/// outer row slot remains anchored at `.rest.trackHeight` (`26pt`).
 enum KnobGeometry {
   struct Metrics: Equatable {
     let width: CGFloat
@@ -85,8 +84,8 @@ enum KnobGeometry {
   }
 
   static let rest = Metrics(width: 20, cornerRadius: 10, trackHeight: 26)
-  static let hovered = Metrics(width: 20, cornerRadius: 10, trackHeight: 26)
-  static let dragging = Metrics(width: 20, cornerRadius: 10, trackHeight: 26)
+  static let hovered = Metrics(width: 21, cornerRadius: 10.5, trackHeight: 27)
+  static let dragging = Metrics(width: 23, cornerRadius: 11.5, trackHeight: 28)
 
   static func metrics(isDragging: Bool, isHovered: Bool) -> Metrics {
     if isDragging { return KnobGeometry.dragging }

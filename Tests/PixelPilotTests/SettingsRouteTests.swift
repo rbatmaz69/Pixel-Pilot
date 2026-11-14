@@ -77,4 +77,20 @@ struct SettingsRouteTests {
       #expect(!page.symbolName.isEmpty)
     }
   }
+
+  @Test("Route order index strictly follows top-to-bottom sidebar geometry for directional navigation")
+  func routeOrderFollowsSidebar() {
+    let displays = ["d1", "d2"]
+    let indices = [
+      SettingsRouter.routeOrderIndex(for: .display("d1"), displayIDs: displays),
+      SettingsRouter.routeOrderIndex(for: .display("d2"), displayIDs: displays),
+      SettingsRouter.routeOrderIndex(for: .remembered, displayIDs: displays),
+    ] + AppPage.allCases.map {
+      SettingsRouter.routeOrderIndex(for: .app($0), displayIDs: displays)
+    }
+
+    for i in 1 ..< indices.count {
+      #expect(indices[i] > indices[i - 1])
+    }
+  }
 }

@@ -24,6 +24,7 @@ struct HealthSection: View {
 
   @State private var isRepairing = false
   @State private var isClearingMarks = false
+  @State private var sealGlintCount = 0
 
   private var marks: [PixelDefect] { display.pixelDefects }
 
@@ -152,6 +153,17 @@ struct HealthSection: View {
       RoundedRectangle(cornerRadius: Layout.radiusCard, style: .continuous)
         .strokeBorder(sealTint.opacity(scheme == .dark ? 0.26 : 0.20), lineWidth: 1)
     )
+    .specularGlintSweep(
+      trigger: sealGlintCount,
+      accent: sealTint,
+      cornerRadius: Layout.radiusCard
+    )
+    .onAppear {
+      sealGlintCount += 1
+    }
+    .onChange(of: display.healthReport?.date) { _, _ in
+      sealGlintCount += 1
+    }
   }
 
   private var neverChecked: some View {
