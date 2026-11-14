@@ -26,8 +26,10 @@ REPO_URL="https://github.com/rbatmaz69/Pixel-Pilot"
 DERIVED_DATA=".build/release"
 BUILD_LOG="/tmp/pixelpilot-release-build.log"
 
-# The one place the distribution signature is decided. Swapping in a Developer
-# ID identity and a notarisation step means changing this and step 6.
+# The one place the distribution signature is decided. Uses "Developer ID
+# Application" automatically when present, `--dev-signed` for a personal
+# Apple Development build, or ad-hoc (`-`) for public unsigned distribution.
+SIGN_MODE="adhoc"
 SIGNING_ARGS=(
   CODE_SIGN_STYLE=Manual
   CODE_SIGN_IDENTITY=-
@@ -40,19 +42,42 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 VERSION="${1:-}"
 DRY_RUN=0
-if [[ "${2:-}" == "--dry-run" ]]; then
-  DRY_RUN=1
-elif [[ -n "${2:-}" ]]; then
-  echo "error: unknown argument '$2'" >&2
-  exit 1
+DEV_SIGNED=0
+shift || true
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=1 ;;
+    --dev-signed) DEV_SIGNED=1 ;;
+    *)
+      echo "error: unknown argument '$arg'" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ $DEV_SIGNED -eq 1 ]]; then
+  if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "Apple Development"; then
+    echo "error: --dev-signed requested, but no 'Apple Development' identity found." >&2
+    exit 1
+  fi
+  SIGN_MODE="dev"
+  SIGNING_ARGS=()
+elif security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application"; then
+  DEV_ID_NAME="$(security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)"
+  SIGN_MODE="developer-id"
+  SIGNING_ARGS=(
+    CODE_SIGN_STYLE=Manual
+    "CODE_SIGN_IDENTITY=$DEV_ID_NAME"
+  )
 fi
 
 if [[ -z "$VERSION" ]]; then
   cat >&2 <<'USAGE'
-usage: Scripts/release.sh <version> [--dry-run]
+usage: Scripts/release.sh <version> [--dry-run] [--dev-signed]
 
-  Scripts/release.sh 0.2.0            build, package, tag, publish
-  Scripts/release.sh 0.2.0 --dry-run  build and package only
+  Scripts/release.sh 0.2.0               build, package, tag, publish
+  Scripts/release.sh 0.2.0 --dry-run     build and package only
+  Scripts/release.sh 0.2.0 --dev-signed  sign with Apple Development (personal Mac only)
 USAGE
   exit 1
 fi
@@ -143,13 +168,13 @@ fi
 # signed one — and installing that would drop the Accessibility grant on the
 # copy actually in daily use.
 
-echo "==> Building (Release, ad-hoc signed, arm64)"
+echo "==> Building (Release, $SIGN_MODE signed, arm64)"
 xcodebuild \
   -project PixelPilot.xcodeproj \
   -scheme PixelPilot \
   -configuration Release \
   -derivedDataPath "$DERIVED_DATA" \
-  "${SIGNING_ARGS[@]}" \
+  ${SIGNING_ARGS[@]+"${SIGNING_ARGS[@]}"} \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   ARCHS=arm64 \
   ONLY_ACTIVE_ARCH=NO \
@@ -169,30 +194,35 @@ fi
 
 # MARK: - 6. Verify the signature
 #
-# The point of this step: catch a build that was signed with the development
-# certificate after all. That app looks fine here and refuses to launch on
-# every other Mac, which is exactly the failure a release must not ship.
+# In ad-hoc mode, catch a build that accidentally used the development cert
+# (which would refuse to launch on other Macs). In dev/developer-id mode,
+# verify a real team signature is present so permissions survive updates.
 
-echo "==> Verifying the signature"
+echo "==> Verifying the signature ($SIGN_MODE)"
 codesign --verify --strict "$BUILT" || {
   echo "error: the built app does not pass codesign --verify." >&2
   exit 1
 }
 
 SIGNATURE="$(codesign -dvvv "$BUILT" 2>&1)"
-
-if ! grep -q "Signature=adhoc" <<<"$SIGNATURE"; then
-  echo "error: the app is not signed ad-hoc — this build would not run on other Macs." >&2
-  grep -E "Authority|Signature|TeamIdentifier" <<<"$SIGNATURE" | sed 's/^/  /' >&2
-  exit 1
-fi
-
-# An ad-hoc signature reports "TeamIdentifier=not set". Anything else means a
-# certificate was involved, whatever the line above said.
 TEAM="$(grep -E "^TeamIdentifier=" <<<"$SIGNATURE" | head -1 | cut -d= -f2-)"
-if [[ -n "$TEAM" && "$TEAM" != "not set" ]]; then
-  echo "error: the app carries the team identifier '$TEAM', so it was not signed ad-hoc." >&2
-  exit 1
+
+if [[ "$SIGN_MODE" == "adhoc" ]]; then
+  if ! grep -q "Signature=adhoc" <<<"$SIGNATURE"; then
+    echo "error: the app is not signed ad-hoc — this build would not run on other Macs." >&2
+    grep -E "Authority|Signature|TeamIdentifier" <<<"$SIGNATURE" | sed 's/^/  /' >&2
+    exit 1
+  fi
+  if [[ -n "$TEAM" && "$TEAM" != "not set" ]]; then
+    echo "error: the app carries the team identifier '$TEAM', so it was not signed ad-hoc." >&2
+    exit 1
+  fi
+else
+  if grep -q "Signature=adhoc" <<<"$SIGNATURE" || [[ -z "$TEAM" || "$TEAM" == "not set" ]]; then
+    echo "error: expected a signed certificate build ($SIGN_MODE), but got ad-hoc." >&2
+    grep -E "Authority|Signature|TeamIdentifier" <<<"$SIGNATURE" | sed 's/^/  /' >&2
+    exit 1
+  fi
 fi
 
 if ! grep -q "Identifier=$BUNDLE_ID" <<<"$SIGNATURE"; then
